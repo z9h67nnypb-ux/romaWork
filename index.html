@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rozvrh – PoraDys osobní výuka</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Přihlášení -->
+  <div id="loginScreen" class="login-screen hidden">
+    <form id="loginForm" class="login-card">
+      <h1>Rozvrh PoraDys</h1>
+      <p class="login-sub">Přihlaste se ke svému účtu</p>
+      <label>E-mail<input type="email" id="loginEmail" autocomplete="username" required /></label>
+      <label>Heslo<input type="password" id="loginPassword" autocomplete="current-password" required /></label>
+      <button type="submit" class="save" id="loginBtn">Přihlásit se</button>
+      <div id="loginError" class="login-error"></div>
+      <div id="loginHint" class="login-hint hidden"></div>
+    </form>
+  </div>
+
+  <div id="banner" class="banner hidden">
+    Ukázkový režim (mock data). Až vyplníš klíče v <code>config.js</code> a nastavíš
+    <code>USE_SUPABASE = true</code>, appka začne číst z tvojí databáze.
+  </div>
+
+  <header class="topbar">
+    <div class="title-block">
+      <h1>Rozvrh pro PoraDys – osobní výuka</h1>
+      <p>Klikněte na jakoukoli rezervaci, abyste viděli detaily.</p>
+    </div>
+    <div id="legend" class="legend"></div>
+    <div id="miniCalendar" class="mini-calendar"></div>
+  </header>
+
+  <nav class="toolbar">
+    <button id="prevDay">◀</button>
+    <span id="navDate" class="nav-date"></span>
+    <button id="nextDay">▶</button>
+    <button id="todayBtn">Dnes</button>
+    <button id="newLessonBtn" class="primary-btn hidden">+ Nová lekce</button>
+    <button id="selectAllBtn" class="hidden">Vybrat vše</button>
+
+    <span id="userBadge" class="user-badge"></span>
+    <button id="logoutBtn">Odhlásit</button>
+
+    <div class="view-tabs">
+      <button data-view="den" class="active">Den</button>
+      <button data-view="agenda">Agenda</button>
+      <button data-view="tyden">Týden</button>
+      <button data-view="mesic">Měsíc</button>
+    </div>
+  </nav>
+
+  <div id="adminHint" class="admin-hint hidden">
+    Tip: táhnutím myši vyberte lekce (nebo <b>Vybrat vše</b> / <b>Ctrl/⌘+A</b>) · <b>Ctrl/⌘+C</b> zkopíruje výběr · přepněte den a <b>Ctrl/⌘+V</b> vloží · <b>dvojklik</b> upraví lekci · <b>Delete</b> smaže výběr.
+  </div>
+
+  <main id="viewContainer"></main>
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Detail rezervace -->
+  <div id="overlay" class="overlay hidden"></div>
+  <aside id="detailPanel" class="detail-panel hidden">
+    <div class="detail-head">
+      <button id="detailClose" class="close">×</button>
+      <h2 id="detailTitle"></h2>
+    </div>
+    <div class="detail-body" id="detailBody"></div>
+    <div class="detail-foot">
+      <button id="detailSave" class="save">Uložit</button>
+      <button id="detailDelete" class="delete hidden">Smazat</button>
+      <span id="detailSaved" class="saved"></span>
+    </div>
+  </aside>
+
+  <!-- Supabase klient (použije se až po přepnutí USE_SUPABASE = true) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="mockData.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

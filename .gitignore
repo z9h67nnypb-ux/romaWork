@@ -1,0 +1,5 @@
+# osobní/lokální nastavení Claude Code (per-uživatel)
+.claude/settings.local.json
+
+# macOS
+.DS_Store
