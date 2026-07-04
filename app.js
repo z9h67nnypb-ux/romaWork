@@ -44,6 +44,26 @@ const MockProvider = {
     const i = this._all.findIndex((x) => x.id === id);
     if (i >= 0) this._all.splice(i, 1);
   },
+  // Součet potvrzených (done) lekcí za měsíc po lektorech.
+  // Nejdřív doseje všechny dny měsíce, aby výkaz nezávisel na tom,
+  // které dny už uživatel navštívil. month je 0-based (jako v JS Date).
+  async getMonthlyHours(year, month) {
+    const days = new Date(year, month + 1, 0).getDate();
+    for (let d = 1; d <= days; d++) await this.getLessons(new Date(year, month, d));
+    const map = new Map();
+    this._all.forEach((l) => {
+      if (!l.done) return;
+      if (l.starts_at.getFullYear() !== year || l.starts_at.getMonth() !== month) return;
+      const key = l.lector_name || "(bez lektora)";
+      const cur = map.get(key) || { hours: 0, lessons: 0 };
+      cur.hours += (l.ends_at - l.starts_at) / 3600000;
+      cur.lessons += 1;
+      map.set(key, cur);
+    });
+    return [...map.entries()]
+      .map(([name, v]) => ({ lector_name: name, lessons: v.lessons, hours: Math.round(v.hours * 100) / 100 }))
+      .sort((a, b) => b.hours - a.hours);
+  },
 };
 
 // ---------- Data provider: SUPABASE ----------
@@ -137,6 +157,18 @@ const SupabaseProvider = {
     const { error } = await this._init().from("lessons").delete().eq("id", id);
     if (error) throw error;
   },
+  // Čte pohled lector_monthly_hours (plněný triggerem z work_log).
+  // month je 0-based (JS Date), pohled používá 1-based.
+  async getMonthlyHours(year, month) {
+    const { data, error } = await this._init()
+      .from("lector_monthly_hours")
+      .select("*")
+      .eq("year", year)
+      .eq("month", month + 1)
+      .order("hours", { ascending: false });
+    if (error) throw error;
+    return data;
+  },
 };
 
 const provider = CFG.USE_SUPABASE ? SupabaseProvider : MockProvider;
@@ -187,6 +219,9 @@ const state = {
   miniMonth: new Date(),
   view: "den",
   roomFilter: null, // null = vše
+  // Vždy se zobrazuje jen jeden režim, ať se online a prezenční lekce
+  // nemíchají v jednom sloupci ("all" z dřívějška spadne na 'offline').
+  modeFilter: sessionStorage.getItem("poradys_mode") === "online" ? "online" : "offline",
   user: null, // { email, name, role }
   rooms: [],
   lessons: [],
@@ -198,7 +233,10 @@ const state = {
 function isAdmin() { return state.user && state.user.role === "admin"; }
 
 // ---------- Pomocné funkce ----------
-function dayKey(d) { return d.toISOString().slice(0, 10); }
+// Klíč dne z lokálních složek data. Dřívější toISOString() převádělo na UTC,
+// takže v letním čase (UTC+2) nesla buňka mini kalendáře datum o den posunuté
+// a klik vybíral jiný den, než na který uživatel mířil.
+function dayKey(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
 function pad(n) { return String(n).padStart(2, "0"); }
 function fmtTime(d) { return d.getHours() + ":" + pad(d.getMinutes()); }
 function fmtRange(a, b) { return fmtTime(a) + " – " + fmtTime(b); }
@@ -327,6 +365,7 @@ function renderToolbar() {
   document.getElementById("navDate").textContent = fmtDateLong(state.date);
   document.getElementById("newLessonBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("selectAllBtn").classList.toggle("hidden", !isAdmin());
+  document.getElementById("hoursBtn").classList.toggle("hidden", !isAdmin());
   document.querySelectorAll(".view-tabs button").forEach((b) => {
     b.classList.toggle("active", b.dataset.view === state.view);
   });
@@ -341,6 +380,11 @@ function renderView() {
 
 function visibleRooms() {
   return state.roomFilter ? state.rooms.filter((r) => r.id === state.roomFilter) : state.rooms;
+}
+
+// Filtr podle dropdownu Prezenční/Online v toolbaru.
+function matchesMode(l) {
+  return (l.mode || "offline") === state.modeFilter;
 }
 
 function buildDayView() {
@@ -389,7 +433,7 @@ function buildDayView() {
     body.style.background = lineCss;
 
     state.lessons
-      .filter((l) => l.room_id === room.id)
+      .filter((l) => l.room_id === room.id && matchesMode(l))
       .forEach((l) => body.appendChild(buildEvent(l, room)));
 
     col.appendChild(body);
@@ -456,9 +500,10 @@ function clearSelection() {
 }
 
 // Vybere všechny lekce zobrazeného dne (jen admin).
+// Bere jen lekce aktuálního režimu (Prezenční/Online), ať se nekopíruje nic skrytého.
 function selectAllDay() {
   if (!isAdmin()) return;
-  state.selection = new Set(state.lessons.map((l) => l.id));
+  state.selection = new Set(state.lessons.filter(matchesMode).map((l) => l.id));
   renderView();
   toast("Vybráno " + state.selection.size + " lekcí.");
 }
@@ -512,7 +557,7 @@ function buildAgenda() {
   const wrap = document.createElement("div");
   wrap.className = "agenda";
   const lessons = state.lessons
-    .filter((l) => !state.roomFilter || l.room_id === state.roomFilter)
+    .filter((l) => (!state.roomFilter || l.room_id === state.roomFilter) && matchesMode(l))
     .slice()
     .sort((a, b) => a.starts_at - b.starts_at);
 
@@ -767,6 +812,54 @@ function onKeyDown(e) {
   else if (e.key === "Escape") { state.selection.clear(); renderView(); }
 }
 
+// ---------- Výkaz hodin (admin) ----------
+// Šéfová na konci měsíce otevře výkaz a vidí u každého lektora součet
+// potvrzených hodin – podle toho vyplácí.
+const hoursState = { month: new Date() };
+
+async function openHoursReport() {
+  if (!isAdmin()) return;
+  hoursState.month = new Date(state.date.getFullYear(), state.date.getMonth(), 1);
+  document.getElementById("hoursModal").classList.remove("hidden");
+  await renderHoursReport();
+}
+
+function closeHoursReport() {
+  document.getElementById("hoursModal").classList.add("hidden");
+}
+
+function shiftHoursMonth(delta) {
+  const m = hoursState.month;
+  hoursState.month = new Date(m.getFullYear(), m.getMonth() + delta, 1);
+  renderHoursReport();
+}
+
+async function renderHoursReport() {
+  const m = hoursState.month;
+  document.getElementById("hoursMonth").textContent = MONTHS[m.getMonth()] + " " + m.getFullYear();
+  const body = document.getElementById("hoursBody");
+  body.innerHTML = '<div class="placeholder">Načítám…</div>';
+  try {
+    const rows = await provider.getMonthlyHours(m.getFullYear(), m.getMonth());
+    if (!rows.length) {
+      body.innerHTML = '<div class="placeholder">Žádné potvrzené lekce v tomto měsíci.</div>';
+      return;
+    }
+    let totH = 0, totL = 0;
+    let html = '<table class="hours-table"><tr><th>Lektor</th><th>Lekcí</th><th>Hodin</th></tr>';
+    rows.forEach((r) => {
+      totH += Number(r.hours);
+      totL += Number(r.lessons);
+      html += "<tr><td>" + escapeHtml(r.lector_name) + "</td><td>" + r.lessons + "</td><td><b>" + r.hours + "</b></td></tr>";
+    });
+    html += '<tr class="total"><td>Celkem</td><td>' + totL + "</td><td><b>" + (Math.round(totH * 100) / 100) + "</b></td></tr></table>";
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = '<div class="placeholder">Chyba: ' + escapeHtml(e.message || e) + "</div>";
+    console.error(e);
+  }
+}
+
 // ---------- Přihlašovací obrazovka ----------
 function showLogin() {
   document.getElementById("loginScreen").classList.remove("hidden");
@@ -846,6 +939,21 @@ async function startApp(user) {
     document.getElementById("detailDelete").onclick = deleteDetail;
     document.getElementById("newLessonBtn").onclick = openCreate;
     document.getElementById("selectAllBtn").onclick = selectAllDay;
+
+    const modeSel = document.getElementById("modeSelect");
+    modeSel.value = state.modeFilter;
+    modeSel.onchange = () => {
+      state.modeFilter = modeSel.value;
+      sessionStorage.setItem("poradys_mode", state.modeFilter);
+      clearSelection();
+      renderView();
+    };
+    document.getElementById("diagBtn").onclick = () => { location.href = "diagnostika.html"; };
+    document.getElementById("hoursBtn").onclick = openHoursReport;
+    document.getElementById("hoursClose").onclick = closeHoursReport;
+    document.getElementById("hoursPrev").onclick = () => shiftHoursMonth(-1);
+    document.getElementById("hoursNext").onclick = () => shiftHoursMonth(1);
+    document.getElementById("hoursModal").onclick = (e) => { if (e.target.id === "hoursModal") closeHoursReport(); };
     document.addEventListener("keydown", onKeyDown);
   }
 

@@ -61,6 +61,106 @@ create table if not exists attendance (
   primary key (lesson_id, student_id)
 );
 
+-- ---------------------------------------------------------------------------
+-- EVIDENCE ODPRACOVANÝCH HODIN (podklad pro výplaty)
+-- ---------------------------------------------------------------------------
+-- Princip: když lektor v appce "odmáčkne" lekci jako Odučeno (done = true),
+-- trigger zapíše řádek do work_log. Šéfová pak na konci měsíce čte pohled
+-- lector_monthly_hours – u každého lektora vidí součet hodin (a případnou
+-- částku podle hodinové sazby). work_log se NIKDY nemaže (drží se 10+ let),
+-- takže hodiny přežijí i úklid starých lekcí.
+
+-- Lektoři = pracovníci; sazba a datumy nástupu/odchodu kvůli výplatám.
+alter table lectors add column if not exists hourly_rate numeric(8,2);
+alter table lectors add column if not exists hired_at date;
+alter table lectors add column if not exists left_at date;
+
+create table if not exists work_log (
+  id         uuid primary key default gen_random_uuid(),
+  lesson_id  uuid unique references lessons(id) on delete set null, -- lekce se po roce smaže, záznam o práci zůstane
+  lector_id  uuid not null references lectors(id),
+  work_date  date not null,
+  minutes    int  not null check (minutes > 0),
+  subject    text,
+  created_at timestamptz not null default now()
+);
+create index if not exists work_log_lector_date_idx on work_log (lector_id, work_date);
+
+-- Trigger: potvrzení lekce zapíše/aktualizuje práci, odškrtnutí ji odebere.
+create or replace function log_lesson_work() returns trigger
+language plpgsql security definer as $$
+begin
+  if new.done then
+    if new.lector_id is null then return new; end if; -- bez lektora není komu hodiny připsat
+    insert into work_log (lesson_id, lector_id, work_date, minutes, subject)
+    values (new.id, new.lector_id,
+            (new.starts_at at time zone 'Europe/Prague')::date,
+            greatest(1, round(extract(epoch from (new.ends_at - new.starts_at)) / 60)::int),
+            new.subject)
+    on conflict (lesson_id) do update
+      set lector_id = excluded.lector_id,
+          work_date = excluded.work_date,
+          minutes   = excluded.minutes,
+          subject   = excluded.subject;
+  elsif tg_op = 'UPDATE' and old.done then
+    delete from work_log where lesson_id = new.id;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists lessons_work_log on lessons;
+create trigger lessons_work_log
+  after insert or update on lessons
+  for each row execute function log_lesson_work();
+
+-- Měsíční výkaz: tohle čte tlačítko "Výkaz hodin" v appce.
+create or replace view lector_monthly_hours as
+select
+  w.lector_id,
+  lec.name as lector_name,
+  extract(year  from w.work_date)::int as year,
+  extract(month from w.work_date)::int as month,
+  count(*)                              as lessons,
+  round(sum(w.minutes) / 60.0, 2)       as hours,
+  round(sum(w.minutes) / 60.0 * coalesce(lec.hourly_rate, 0), 0) as payout_czk
+from work_log w
+join lectors lec on lec.id = w.lector_id
+group by w.lector_id, lec.name, 3, 4;
+
+-- ---------------------------------------------------------------------------
+-- RETENCE: lekce ~1 rok zpět, pracovníci/žáci/hodiny se nemažou.
+-- ---------------------------------------------------------------------------
+-- Spouštět 1x měsíčně; hodiny ve work_log zůstávají (FK je "on delete set null").
+create or replace function purge_old_lessons() returns int
+language plpgsql security definer as $$
+declare n int;
+begin
+  delete from lessons where starts_at < now() - interval '13 months';
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+-- Automatické spouštění (v Supabase: Database -> Extensions -> zapni pg_cron,
+-- pak odkomentuj):
+-- select cron.schedule('purge-lessons', '15 3 1 * *', $$select purge_old_lessons()$$);
+
+-- ---------------------------------------------------------------------------
+-- DIAGNOSTICKÉ TESTY (výsledky + vygenerovaný plán přípravy)
+-- ---------------------------------------------------------------------------
+create table if not exists diagnostics (
+  id           uuid primary key default gen_random_uuid(),
+  student_id   uuid references students(id),  -- vazba na žáka, pokud existuje
+  student_name text not null,                 -- jméno i textem (žák nemusí být v DB)
+  grade        text,
+  taken_at     date not null default current_date,
+  scores       jsonb not null,                -- {"cteni": 12, "pravopis": 8, ...}
+  strengths    text[],
+  weaknesses   text[],
+  plan         text,                          -- vygenerovaný plán (text/markdown)
+  note         text,
+  created_at   timestamptz not null default now()
+);
+
 -- Log odeslaných notifikací (audit, ochrana proti dvojímu odeslání)
 create table if not exists notifications (
   id          uuid primary key default gen_random_uuid(),
@@ -104,22 +204,28 @@ group by l.id, r.name, r.color, lec.name;
 -- s anon klíčem číst i zapisovat. PŘED OSTRÝM PROVOZEM je nahraď přihlášením
 -- (auth) a politikami, které čtení/zápis povolí jen přihlášeným lektorům.
 -- ===========================================================================
-alter table rooms      enable row level security;
-alter table lectors    enable row level security;
-alter table students   enable row level security;
-alter table lessons    enable row level security;
-alter table attendance enable row level security;
+alter table rooms       enable row level security;
+alter table lectors     enable row level security;
+alter table students    enable row level security;
+alter table lessons     enable row level security;
+alter table attendance  enable row level security;
+alter table work_log    enable row level security;
+alter table diagnostics enable row level security;
 
 drop policy if exists proto_all on rooms;
-create policy proto_all on rooms      for all using (true) with check (true);
+create policy proto_all on rooms       for all using (true) with check (true);
 drop policy if exists proto_all on lectors;
-create policy proto_all on lectors    for all using (true) with check (true);
+create policy proto_all on lectors     for all using (true) with check (true);
 drop policy if exists proto_all on students;
-create policy proto_all on students   for all using (true) with check (true);
+create policy proto_all on students    for all using (true) with check (true);
 drop policy if exists proto_all on lessons;
-create policy proto_all on lessons    for all using (true) with check (true);
+create policy proto_all on lessons     for all using (true) with check (true);
 drop policy if exists proto_all on attendance;
-create policy proto_all on attendance for all using (true) with check (true);
+create policy proto_all on attendance  for all using (true) with check (true);
+drop policy if exists proto_all on work_log;
+create policy proto_all on work_log    for all using (true) with check (true);
+drop policy if exists proto_all on diagnostics;
+create policy proto_all on diagnostics for all using (true) with check (true);
 
 -- ===========================================================================
 -- UKÁZKOVÁ DATA (seed) – ať po spuštění hned něco vidíš

@@ -52,6 +52,15 @@ Po přihlášení uvidíš žlutý pruh „Ukázkový režim" – běžíš na m
 - **Lektor** – klik na lekci → může jen **zapsat popis** a potvrdit **„Lekce
   proběhla"**. Rozvrh nemění.
 - **Agenda** – seznamový pohled na daný den.
+- **Dropdown „Výuka"** – přepíná zobrazení: prezenční / online (vždy jen jeden
+  režim, ať se lekce nemíchají v jednom sloupci).
+- **Výkaz hodin** (admin) – měsíční součet potvrzených hodin po lektorech,
+  podklad pro výplaty. Detail návrhu v [`DATABASE.md`](DATABASE.md).
+- **🧪 Diagnostika** – stránka [`diagnostika.html`](diagnostika.html): zadají se
+  body žáka z diagnostického testu a vygeneruje se plán přípravy na 8 týdnů
+  (silné/slabé stránky, cvičení, tisk).
+- V mock režimu jsou v období **13.–26. 7. 2026** vygenerovaná náhodná
+  testovací data (každý den jiná).
 - (Týden/Měsíc jsou zatím jen náhledové záložky – hlavní je denní rozvrh.)
 
 ---
@@ -137,5 +146,9 @@ Plán automatizace (mimo tento prototyp):
 | `styles.css` | Vzhled |
 | `config.js` | Přepínač mock/Supabase + klíče |
 | `mockData.js` | Ukázková data |
-| `app.js` | Logika (vykreslování, detail, ukládání) |
-| `schema.sql` | Databázové schéma pro Supabase |
+| `app.js` | Logika (vykreslování, detail, ukládání, výkaz hodin) |
+| `schema.sql` | Databázové schéma pro Supabase (vč. work_log a diagnostics) |
+| `test_databaze.sql` | Ověřovací scénář počítání hodin (krok za krokem) |
+| `diagnostika.html` + `diagnostika.js` | Diagnostický test a plán přípravy |
+| `DATABASE.md` | Návrh databáze: retence, hodiny lektorů, hosting a zálohy |
+| `NASAZENI.md` | Krok-za-krokem postup nasazení do ostrého provozu |

@@ -42,6 +42,15 @@
     <button id="newLessonBtn" class="primary-btn hidden">+ Nová lekce</button>
     <button id="selectAllBtn" class="hidden">Vybrat vše</button>
 
+    <label class="role-switch" for="modeSelect">Výuka:
+      <select id="modeSelect">
+        <option value="offline">Prezenční</option>
+        <option value="online">Online</option>
+      </select>
+    </label>
+    <button id="diagBtn" title="Diagnostický test – plán přípravy žáka">🧪 Diagnostika</button>
+    <button id="hoursBtn" class="hidden" title="Odpracované hodiny lektorů za měsíc">Výkaz hodin</button>
+
     <span id="userBadge" class="user-badge"></span>
     <button id="logoutBtn">Odhlásit</button>
 
@@ -59,6 +68,27 @@
 
   <main id="viewContainer"></main>
   <div id="toast" class="toast hidden"></div>
+
+  <!-- Výkaz hodin lektorů (admin) -->
+  <div id="hoursModal" class="hours-modal hidden">
+    <div class="hours-card">
+      <div class="hours-head">
+        <h2>Výkaz hodin lektorů</h2>
+        <button id="hoursClose" class="close">×</button>
+      </div>
+      <div class="hours-controls">
+        <button id="hoursPrev">◀</button>
+        <span id="hoursMonth"></span>
+        <button id="hoursNext">▶</button>
+      </div>
+      <div id="hoursBody" class="hours-body"></div>
+      <p class="hours-note">
+        Počítají se jen lekce potvrzené jako <b>Odučeno</b>. V ostré verzi se hodiny
+        ukládají do tabulky <code>work_log</code> a drží se i po smazání starých lekcí
+        (viz <code>DATABASE.md</code>).
+      </p>
+    </div>
+  </div>
 
   <!-- Detail rezervace -->
   <div id="overlay" class="overlay hidden"></div>
