@@ -49,6 +49,12 @@ Celkový čas: ~1 hodina. Postupuj po krocích, nic nepřeskakuj.
    **Table Editor → lectors** → u každého vyplň `hourly_rate` (např. 250).
    Lektoři, které založí až appka, se doplní stejně – kdykoli později.
 
+> **Chyba „Database error creating new user"?** Máš v databázi starší verzi
+> funkce `handle_new_user` (bez `set search_path`). Spusť v SQL Editoru znovu
+> blok „PŘIHLÁŠENÍ A ROLE" z aktuálního [`schema.sql`](schema.sql) – tj. část
+> od `create table if not exists profiles` po funkci `is_admin` – a založ
+> uživatele znovu.
+
 ## KROK 4: Zabezpeč databázi (RLS) – 5 min
 
 `schema.sql` nechává kvůli prototypování **otevřené** politiky – kdokoli se

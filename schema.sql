@@ -296,10 +296,13 @@ create table if not exists profiles (
 );
 
 -- Profil se založí automaticky po vytvoření uživatele (default role 'lektor').
-create or replace function handle_new_user() returns trigger
-language plpgsql security definer as $$
+-- POZOR: trigger volá Supabase Auth, který nevidí schéma public – proto musí
+-- být tabulka plně kvalifikovaná a search_path přibitý, jinak založení
+-- uživatele spadne na "Database error creating new user".
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
 begin
-  insert into profiles (id, name, role)
+  insert into public.profiles (id, name, role)
   values (new.id, coalesce(new.raw_user_meta_data->>'name', new.email), 'lektor')
   on conflict (id) do nothing;
   return new;
@@ -308,7 +311,7 @@ end $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
-  for each row execute function handle_new_user();
+  for each row execute function public.handle_new_user();
 
 -- Každý smí číst svůj profil (appka z něj zjistí roli a jméno).
 alter table profiles enable row level security;
@@ -316,8 +319,9 @@ drop policy if exists read_own_profile on profiles;
 create policy read_own_profile on profiles for select using (auth.uid() = id);
 
 -- Pomocná funkce: je přihlášený uživatel administrátor?
-create or replace function is_admin() returns boolean language sql stable as $$
-  select exists (select 1 from profiles where id = auth.uid() and role = 'admin');
+create or replace function public.is_admin() returns boolean
+language sql stable set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin');
 $$;
 
 -- ➜ PO ZALOŽENÍ administrátorského účtu nastav jeho roli (doplň jeho e-mail):
