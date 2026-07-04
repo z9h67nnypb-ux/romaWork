@@ -2,9 +2,81 @@
 -- OVĚŘENÍ DATABÁZE PoraDys – testovací scénář počítání hodin
 -- ---------------------------------------------------------------------------
 -- Předpoklad: v Supabase už proběhl celý schema.sql.
--- Spouštěj po JEDNOTLIVÝCH KROCÍCH (označ blok myší -> Run) a porovnávej
--- výsledek s komentářem "OČEKÁVÁNÍ". Krok 9 po sobě všechno uklidí,
--- takže si testem nic nerozbiješ.
+--
+-- DŮLEŽITÉ: SQL Editor v Supabase zobrazí jen výsledek POSLEDNÍHO příkazu.
+-- Proto jsou tu dvě varianty:
+--   VARIANTA A – spusť celou najednou, na konci vyjde tabulka OK/CHYBA.
+--   VARIANTA B – ruční krokování (označ blok myší -> Run) s vysvětlením.
+-- ===========================================================================
+
+-- ===========================================================================
+-- VARIANTA A: VŠE NAJEDNOU – označ tenhle celý blok (po "select * from _vysledky")
+-- a dej Run. Vyjde tabulka; ve sloupci "vysledek" musí být všude OK.
+-- Test po sobě uklidí, v databázi nic nezůstane.
+-- ===========================================================================
+drop table if exists _vysledky;
+create temp table _vysledky (krok text, ocekavani text, skutecnost text, vysledek text);
+
+do $test$
+declare
+  v_lector uuid;
+  v_lesson uuid;
+  n int; m int; h numeric; p numeric;
+begin
+  -- úklid případných zbytků z dřívějšího testu
+  delete from work_log where lector_id in (select id from lectors where name = 'TEST Lektorka');
+  delete from lessons  where lector_id in (select id from lectors where name = 'TEST Lektorka');
+  delete from lectors  where name = 'TEST Lektorka';
+
+  -- testovací lektorka (250 Kč/h) + lekce včera 14:00–15:30, zatím nepotvrzená
+  insert into lectors (name, hourly_rate) values ('TEST Lektorka', 250) returning id into v_lector;
+  insert into lessons (starts_at, ends_at, subject, lector_id, mode)
+  values ((current_date - 1 + time '14:00') at time zone 'Europe/Prague',
+          (current_date - 1 + time '15:30') at time zone 'Europe/Prague',
+          'MAT', v_lector, 'offline')
+  returning id into v_lesson;
+
+  -- 1) před potvrzením se hodiny nepočítají
+  select count(*) into n from work_log where lector_id = v_lector;
+  insert into _vysledky values ('1. Před potvrzením lekce', '0 záznamů', n || ' záznamů',
+                                case when n = 0 then 'OK' else 'CHYBA' end);
+
+  -- 2) "odmáčknutí" lekce připíše 90 minut
+  update lessons set done = true where id = v_lesson;
+  select coalesce(min(minutes), -1) into m from work_log where lector_id = v_lector;
+  insert into _vysledky values ('2. Po potvrzení (lekce 90 min)', '90 minut', m || ' minut',
+                                case when m = 90 then 'OK' else 'CHYBA' end);
+
+  -- 3) měsíční výkaz: 1.5 h × 250 Kč = 375 Kč
+  select hours, payout_czk into h, p from lector_monthly_hours where lector_name = 'TEST Lektorka';
+  insert into _vysledky values ('3. Měsíční výkaz', '1.50 h / 375 Kč',
+                                coalesce(h::text, 'nic') || ' h / ' || coalesce(p::text, 'nic') || ' Kč',
+                                case when h = 1.5 and p = 375 then 'OK' else 'CHYBA' end);
+
+  -- 4) zrušení potvrzení hodiny zase odebere
+  update lessons set done = false where id = v_lesson;
+  select count(*) into n from work_log where lector_id = v_lector;
+  insert into _vysledky values ('4. Po zrušení potvrzení', '0 záznamů', n || ' záznamů',
+                                case when n = 0 then 'OK' else 'CHYBA' end);
+
+  -- 5) hodiny přežijí smazání lekce (roční úklid nesmí sáhnout na výplaty)
+  update lessons set done = true where id = v_lesson;
+  delete from lessons where id = v_lesson;
+  select count(*) into n from work_log where lector_id = v_lector and lesson_id is null;
+  insert into _vysledky values ('5. Hodiny přežijí smazání lekce', '1 záznam (lesson_id = NULL)', n || ' záznamů',
+                                case when n = 1 then 'OK' else 'CHYBA' end);
+
+  -- úklid po testu
+  delete from work_log where lector_id = v_lector;
+  delete from lectors  where id = v_lector;
+end $test$;
+
+select * from _vysledky;
+
+-- ===========================================================================
+-- VARIANTA B: RUČNÍ KROKOVÁNÍ – spouštěj po JEDNOTLIVÝCH KROCÍCH
+-- (označ blok myší -> Run) a porovnávej výsledek s komentářem "OČEKÁVÁNÍ".
+-- Krok 9 po sobě všechno uklidí, takže si testem nic nerozbiješ.
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------

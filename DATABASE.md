@@ -88,9 +88,17 @@ Krok za krokem:
 
 ### b) V Supabase (ostrá verze) – připravený skript
 
-V repu je [`test_databaze.sql`](test_databaze.sql) – testovací scénář na
-9 kroků. V Supabase **SQL Editoru** spouštěj bloky po jednom (označ blok →
-Run) a porovnávej s komentářem `OČEKÁVÁNÍ`. Skript projde celý životní cyklus:
+V repu je [`test_databaze.sql`](test_databaze.sql). Pozor: SQL Editor
+v Supabase zobrazuje jen výsledek **posledního** příkazu, proto má skript
+dvě varianty:
+
+- **Varianta A (doporučená):** označ celý blok „VARIANTA A" → Run. Vyjde
+  tabulka s 5 kontrolami a sloupcem `vysledek` – všude musí být **OK**.
+  Test po sobě uklidí.
+- **Varianta B:** ruční krokování po blocích (označ blok → Run) s komentáři
+  `OČEKÁVÁNÍ` – vhodné, když chceš vidět, co se děje uvnitř.
+
+Testuje se celý životní cyklus:
 
 | Krok | Co dělá | Co má vyjít |
 |---|---|---|

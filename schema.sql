@@ -116,7 +116,7 @@ create trigger lessons_work_log
 -- Měsíční výkaz: tohle čte tlačítko "Výkaz hodin" v appce.
 create or replace view lector_monthly_hours as
 select
-  w.lector_id,
+  lec.id   as lector_id,
   lec.name as lector_name,
   extract(year  from w.work_date)::int as year,
   extract(month from w.work_date)::int as month,
@@ -125,7 +125,7 @@ select
   round(sum(w.minutes) / 60.0 * coalesce(lec.hourly_rate, 0), 0) as payout_czk
 from work_log w
 join lectors lec on lec.id = w.lector_id
-group by w.lector_id, lec.name, 3, 4;
+group by lec.id, lec.name, lec.hourly_rate, 3, 4;
 
 -- ---------------------------------------------------------------------------
 -- RETENCE: lekce ~1 rok zpět, pracovníci/žáci/hodiny se nemažou.
