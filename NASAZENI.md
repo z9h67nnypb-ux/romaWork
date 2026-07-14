@@ -92,6 +92,10 @@ create policy admin_work_log on work_log for select to authenticated using (is_a
 drop policy if exists proto_all on diagnostics;
 create policy read_diagnostics  on diagnostics for select to authenticated using (true);
 create policy write_diagnostics on diagnostics for insert to authenticated with check (true);
+
+-- Pohledy musí RLS respektovat (jinak běží s právy vlastníka a obcházejí ji):
+alter view lesson_details set (security_invoker = on);
+alter view lector_monthly_hours set (security_invoker = on);
 ```
 
 > Poznámka: lektor teoreticky může přes API změnit u lekce i čas (appka mu to

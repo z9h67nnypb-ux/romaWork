@@ -114,7 +114,9 @@ create trigger lessons_work_log
   for each row execute function log_lesson_work();
 
 -- Měsíční výkaz: tohle čte tlačítko "Výkaz hodin" v appce.
-create or replace view lector_monthly_hours as
+-- security_invoker: pohled respektuje RLS politiky toho, kdo se ptá
+-- (jinak by běžel s právy vlastníka a RLS obcházel).
+create or replace view lector_monthly_hours with (security_invoker = on) as
 select
   lec.id   as lector_id,
   lec.name as lector_name,
@@ -175,7 +177,8 @@ create table if not exists notifications (
 
 -- ---------- Pohled, který čte front-end ----------
 -- Spojí lekci s místností a lektorem a slepí jména žáků do jednoho textu.
-create or replace view lesson_details as
+-- security_invoker: respektuje RLS politiky přihlášeného uživatele.
+create or replace view lesson_details with (security_invoker = on) as
 select
   l.id,
   l.starts_at,

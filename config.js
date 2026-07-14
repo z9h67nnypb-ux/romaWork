@@ -11,10 +11,11 @@
 //   4) přepni USE_SUPABASE na true a obnov stránku.
 // ---------------------------------------------------------------------------
 window.APP_CONFIG = {
-  USE_SUPABASE: false,
+  USE_SUPABASE: true,
 
-  SUPABASE_URL: "https://TVUJ-PROJEKT.supabase.co",
-  SUPABASE_ANON_KEY: "TVUJ-ANON-KLIC",
+  // Jen čistá adresa projektu – BEZ /rest/v1/ na konci (cesty si klient přidává sám).
+  SUPABASE_URL: "https://smdcqnankroajubawqng.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_Z7mTsl_KRP55dyYrJdlY3w_RZwy79Gq",
 
   // Rozsah denního rozvrhu a výška jedné hodiny v pixelech
   DAY_START_HOUR: 8,
