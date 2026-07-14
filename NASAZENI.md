@@ -64,32 +64,47 @@ Editoru tohle (zamkne data jen pro přihlášené):
 ```sql
 -- Čtení: jen přihlášení. Zápis: admin vše; lektor smí upravovat lekce
 -- (appka ho pouští jen k popisu a potvrzení).
+-- Blok je znovu-spustitelný: každou politiku nejdřív odstraní, pak založí.
 drop policy if exists proto_all on rooms;
+drop policy if exists read_rooms on rooms;
+drop policy if exists admin_rooms on rooms;
 create policy read_rooms  on rooms for select to authenticated using (true);
 create policy admin_rooms on rooms for all    to authenticated using (is_admin()) with check (is_admin());
 
 drop policy if exists proto_all on lectors;
+drop policy if exists read_lectors on lectors;
+drop policy if exists admin_lectors on lectors;
 create policy read_lectors  on lectors for select to authenticated using (true);
 create policy admin_lectors on lectors for all    to authenticated using (is_admin()) with check (is_admin());
 
 drop policy if exists proto_all on students;
+drop policy if exists read_students on students;
+drop policy if exists admin_students on students;
 create policy read_students  on students for select to authenticated using (true);
 create policy admin_students on students for all    to authenticated using (is_admin()) with check (is_admin());
 
 drop policy if exists proto_all on lessons;
+drop policy if exists read_lessons on lessons;
+drop policy if exists admin_lessons on lessons;
+drop policy if exists lector_update on lessons;
 create policy read_lessons   on lessons for select to authenticated using (true);
 create policy admin_lessons  on lessons for all    to authenticated using (is_admin()) with check (is_admin());
 create policy lector_update  on lessons for update to authenticated using (true) with check (true);
 
 drop policy if exists proto_all on attendance;
+drop policy if exists read_attendance on attendance;
+drop policy if exists admin_attendance on attendance;
 create policy read_attendance  on attendance for select to authenticated using (true);
 create policy admin_attendance on attendance for all    to authenticated using (is_admin()) with check (is_admin());
 
 drop policy if exists proto_all on work_log;
+drop policy if exists admin_work_log on work_log;
 create policy admin_work_log on work_log for select to authenticated using (is_admin());
 -- (zápis do work_log dělá jen trigger, uživatelské politiky nepotřebuje)
 
 drop policy if exists proto_all on diagnostics;
+drop policy if exists read_diagnostics on diagnostics;
+drop policy if exists write_diagnostics on diagnostics;
 create policy read_diagnostics  on diagnostics for select to authenticated using (true);
 create policy write_diagnostics on diagnostics for insert to authenticated with check (true);
 
@@ -97,6 +112,10 @@ create policy write_diagnostics on diagnostics for insert to authenticated with 
 alter view lesson_details set (security_invoker = on);
 alter view lector_monthly_hours set (security_invoker = on);
 ```
+
+> ⚠️ **Celý `schema.sql` spouštěj jen JEDNOU při prvním zřízení databáze.**
+> Opakované spuštění zduplikuje ukázková data (seed). Pozdější úpravy dělej
+> vždy jen malými bloky.
 
 > Poznámka: lektor teoreticky může přes API změnit u lekce i čas (appka mu to
 > nedovolí, databáze ano). Pro rodinnou firmu rozumný kompromis. Kdyby to
