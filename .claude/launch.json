@@ -4,8 +4,15 @@
     {
       "name": "rozvrh",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "5051"],
-      "port": 5051,
+      "runtimeArgs": ["-m", "http.server", "5050"],
+      "port": 5050,
+      "autoPort": false
+    },
+    {
+      "name": "roma-mapa",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5052", "--directory", "C:/Users/kurro/dney"],
+      "port": 5052,
       "autoPort": false
     }
   ]
