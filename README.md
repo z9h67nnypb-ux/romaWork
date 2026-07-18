@@ -54,11 +54,18 @@ Po přihlášení uvidíš žlutý pruh „Ukázkový režim" – běžíš na m
 - **Agenda** – seznamový pohled na daný den.
 - **Dropdown „Výuka"** – přepíná zobrazení: prezenční / online (vždy jen jeden
   režim, ať se lekce nemíchají v jednom sloupci).
+- **Protáhnout týden →** (admin) – zkopíruje všechny lekce aktuálního týdne do
+  týdne následujícího (zrušené se vynechají, kolize přeskočí).
 - **Výkaz hodin** (admin) – měsíční součet potvrzených hodin po lektorech,
-  podklad pro výplaty. Detail návrhu v [`DATABASE.md`](DATABASE.md).
-- **🧪 Diagnostika** – stránka [`diagnostika.html`](diagnostika.html): zadají se
-  body žáka z diagnostického testu a vygeneruje se plán přípravy na 8 týdnů
-  (silné/slabé stránky, cvičení, tisk).
+  podklad pro výplaty. Smazání lekce hodiny odebere; roční úklid je zachová.
+  Detail návrhu v [`DATABASE.md`](DATABASE.md).
+- **🧪 Diagnostika** – stránka [`diagnostika.html`](diagnostika.html) se
+  záložkami **Matematika / Čeština**: body z testu → plán přípravy na 8 týdnů
+  (silné/slabé stránky, cvičení, tisk). Výsledky se ukládají k žákovi
+  (Supabase, jinak prohlížeč) a u žáka je vidět **graf vývoje** mezi testy.
+  Kategorie testů se upravují v `diagnostika.js` (konstanta `SUBJECTS`).
+- Přidáním `?mock=1` do adresy se appka přepne na ukázková data (testování
+  bez zápisu do ostré databáze).
 - V mock režimu jsou v období **13.–26. 7. 2026** vygenerovaná náhodná
   testovací data (každý den jiná).
 - (Týden/Měsíc jsou zatím jen náhledové záložky – hlavní je denní rozvrh.)

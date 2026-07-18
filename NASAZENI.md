@@ -105,8 +105,10 @@ create policy admin_work_log on work_log for select to authenticated using (is_a
 drop policy if exists proto_all on diagnostics;
 drop policy if exists read_diagnostics on diagnostics;
 drop policy if exists write_diagnostics on diagnostics;
-create policy read_diagnostics  on diagnostics for select to authenticated using (true);
-create policy write_diagnostics on diagnostics for insert to authenticated with check (true);
+drop policy if exists delete_diagnostics on diagnostics;
+create policy read_diagnostics   on diagnostics for select to authenticated using (true);
+create policy write_diagnostics  on diagnostics for insert to authenticated with check (true);
+create policy delete_diagnostics on diagnostics for delete to authenticated using (true);
 
 -- Pohledy musí RLS respektovat (jinak běží s právy vlastníka a obcházejí ji):
 alter view lesson_details set (security_invoker = on);

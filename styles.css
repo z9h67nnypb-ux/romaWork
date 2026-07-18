@@ -23,39 +23,39 @@ body {
 /* ---------- Topbar ---------- */
 .topbar {
   display: flex;
-  gap: 24px;
+  gap: 16px;
   align-items: flex-start;
-  padding: 14px 20px;
+  padding: 8px 16px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
 .title-block h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--title);
 }
 .title-block p {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 /* ---------- Legenda učeben ---------- */
 .legend {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  gap: 5px;
+  grid-template-columns: repeat(3, minmax(105px, 1fr));
+  gap: 4px;
   flex: 1;
-  min-width: 380px;
-  max-width: 560px;
+  min-width: 330px;
+  max-width: 520px;
   margin-left: auto;
 }
 .legend .chip {
-  font-size: 11px;
+  font-size: 10px;
   color: #fff;
-  padding: 4px 8px;
+  padding: 3px 6px;
   border-radius: 4px;
   cursor: pointer;
   text-align: center;
@@ -70,17 +70,18 @@ body {
 
 /* ---------- Mini kalendář ---------- */
 .mini-calendar {
-  width: 230px;
+  width: 208px;
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 8px;
+  padding: 6px;
+  font-size: 12px;
 }
 .mini-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .mini-head .m-title { font-weight: 600; color: var(--title); }
 .mini-head button {
@@ -92,11 +93,11 @@ body {
   padding: 2px 6px;
 }
 .mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.mini-grid .dow { font-size: 11px; color: var(--muted); text-align: center; padding: 2px 0; }
+.mini-grid .dow { font-size: 10px; color: var(--muted); text-align: center; padding: 1px 0; }
 .mini-grid .day {
   text-align: center;
-  font-size: 12px;
-  padding: 5px 0;
+  font-size: 11px;
+  padding: 2px 0;
   border-radius: 4px;
   cursor: pointer;
   background: #2b2b2b;
@@ -111,18 +112,19 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 8px 20px;
+  gap: 10px;
+  padding: 5px 16px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
 }
 .toolbar button {
   border: 1px solid var(--line-strong);
   background: #fff;
   border-radius: 4px;
-  padding: 5px 10px;
+  padding: 4px 8px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
 }
 .toolbar button:hover { background: #f2f2f2; }
 .nav-date { font-weight: 600; min-width: 150px; text-transform: capitalize; }
@@ -141,15 +143,15 @@ body {
 /* ---------- Denní rozvrh ---------- */
 .day-scroll {
   overflow: auto;
-  max-height: calc(100vh - 200px);
+  max-height: calc(100vh - 148px);
   background: var(--bg);
   border-top: 1px solid var(--line);
 }
 .day-grid { display: inline-flex; min-width: 100%; }
-.col { flex: 0 0 150px; width: 150px; border-right: 1px solid var(--line); }
-.col.time { flex: 0 0 56px; width: 56px; position: sticky; left: 0; z-index: 3; background: var(--bg); }
+.col { flex: 0 0 122px; width: 122px; border-right: 1px solid var(--line); }
+.col.time { flex: 0 0 48px; width: 48px; position: sticky; left: 0; z-index: 3; background: var(--bg); }
 .col-head {
-  height: 38px;
+  height: 26px;
   position: sticky;
   top: 0;
   z-index: 2;
@@ -167,8 +169,8 @@ body {
 
 .time-label {
   position: absolute;
-  right: 6px;
-  font-size: 11px;
+  right: 5px;
+  font-size: 10px;
   color: var(--muted);
   transform: translateY(-6px);
 }
@@ -179,8 +181,8 @@ body {
   right: 2px;
   border-radius: 4px;
   color: #fff;
-  padding: 3px 5px;
-  font-size: 11px;
+  padding: 2px 4px;
+  font-size: 10.5px;
   line-height: 1.15;
   overflow: hidden;
   cursor: pointer;
@@ -394,8 +396,8 @@ body {
   background: #eef3fb;
   border-bottom: 1px solid #d9e3f4;
   color: #34507e;
-  font-size: 12px;
-  padding: 5px 20px;
+  font-size: 11px;
+  padding: 3px 16px;
 }
 .toast {
   position: fixed;

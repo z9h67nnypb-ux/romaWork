@@ -49,6 +49,10 @@ Krok za krokem:
      `work_log` se automaticky **přepočítá** (upsert přes `lesson_id`);
    - když lektor potvrzení **zruší** (`done` zpět na `false`): řádek se
      z `work_log` **smaže** – hodiny nikdy nesedí „navíc";
+   - když admin lekci **smaže z rozvrhu**, smažou se i její hodiny
+     (smazaná lekce = omyl, práce za ni nenáleží);
+   - **roční úklid** starých lekcí hodiny naopak **zachová** – funkce
+     `purge_old_lessons()` je před mazáním od lekcí odpojí;
    - lekce **bez lektora** se ignoruje (není komu hodiny připsat).
 3. `work_log` je tedy **účetní kniha odpracované práce**: jeden řádek = jedna
    potvrzená lekce. Nikdo do ní nezapisuje ručně, plní se výhradně triggerem –
@@ -93,7 +97,7 @@ v Supabase zobrazuje jen výsledek **posledního** příkazu, proto má skript
 dvě varianty:
 
 - **Varianta A (doporučená):** označ celý blok „VARIANTA A" → Run. Vyjde
-  tabulka s 5 kontrolami a sloupcem `vysledek` – všude musí být **OK**.
+  tabulka s 6 kontrolami a sloupcem `vysledek` – všude musí být **OK**.
   Test po sobě uklidí.
 - **Varianta B:** ruční krokování po blocích (označ blok → Run) s komentáři
   `OČEKÁVÁNÍ` – vhodné, když chceš vidět, co se děje uvnitř.
@@ -107,11 +111,11 @@ Testuje se celý životní cyklus:
 | 4–5 | „odmáčknutí" lekce (`done = true`) | ve `work_log` řádek s **90 minutami** |
 | 6 | pohled `lector_monthly_hours` | **1.50 h, 375 Kč** |
 | 7 | zrušení potvrzení | řádek z `work_log` zmizel |
-| 8 | potvrdit a **smazat lekci** | hodiny **zůstaly** (`lesson_id` = NULL) |
+| 8 | potvrdit a **smazat lekci** | hodiny se smazaly také (omyl v rozvrhu) |
 | 9 | úklid testovacích dat | databáze jako předtím |
 
-Krok 8 je ta nejdůležitější pojistka: dokazuje, že roční mazání lekcí
-nesáhne na podklady pro výplaty.
+Roční úklid (`purge_old_lessons`) hodiny naopak **zachovává** – před mazáním
+starých lekcí je odpojí. Ověřuje to kontrola č. 6 ve Variantě A.
 
 ### c) Ověření z appky proti Supabase
 

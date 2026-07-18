@@ -365,6 +365,7 @@ function renderToolbar() {
   document.getElementById("navDate").textContent = fmtDateLong(state.date);
   document.getElementById("newLessonBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("selectAllBtn").classList.toggle("hidden", !isAdmin());
+  document.getElementById("extendWeekBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("hoursBtn").classList.toggle("hidden", !isAdmin());
   document.querySelectorAll(".view-tabs button").forEach((b) => {
     b.classList.toggle("active", b.dataset.view === state.view);
@@ -812,6 +813,55 @@ function onKeyDown(e) {
   else if (e.key === "Escape") { state.selection.clear(); renderView(); }
 }
 
+// ---------- Protažení týdne (admin) ----------
+// Zkopíruje všechny lekce z týdne, ve kterém je zobrazený den, do týdne
+// následujícího. Zrušené lekce se nekopírují; kolize v cílovém týdnu se
+// přeskočí. Kopie vzniknou jako naplánované (nepotvrzené).
+async function extendWeekToNext() {
+  if (!isAdmin()) return;
+  const monday = new Date(state.date);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // pondělí týdne
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmtD = (d) => d.getDate() + ". " + (d.getMonth() + 1) + ".";
+  if (!confirm("Zkopírovat všechny lekce z týdne " + fmtD(monday) + " – " + fmtD(sunday) +
+    " do týdne následujícího?\n(Zrušené lekce se vynechají, kolize se přeskočí.)")) return;
+
+  const btn = document.getElementById("extendWeekBtn");
+  btn.disabled = true;
+  let added = 0, skipped = 0;
+  try {
+    for (let i = 0; i < 7; i++) {
+      const srcDay = new Date(monday); srcDay.setDate(monday.getDate() + i);
+      const tgtDay = new Date(monday); tgtDay.setDate(monday.getDate() + i + 7);
+      const src = await provider.getLessons(srcDay);
+      const placed = [...await provider.getLessons(tgtDay)];
+      for (const l of src) {
+        if (l.status === "cancelled") continue;
+        const starts = new Date(tgtDay); starts.setHours(l.starts_at.getHours(), l.starts_at.getMinutes(), 0, 0);
+        const ends = new Date(tgtDay); ends.setHours(l.ends_at.getHours(), l.ends_at.getMinutes(), 0, 0);
+        if (findConflict(placed, l.room_id, starts, ends, null)) { skipped++; continue; }
+        const res = await provider.saveLesson({
+          starts_at: starts, ends_at: ends, room_id: l.room_id,
+          student_names: l.student_names, lector_name: l.lector_name,
+          subject: l.subject, mode: l.mode, status: "planned", done: false, description: "",
+        }, null);
+        placed.push({ id: (res && res.id) || "tmp", room_id: l.room_id, starts_at: starts, ends_at: ends });
+        added++;
+      }
+    }
+    await refresh();
+    toast("Do dalšího týdne zkopírováno " + added + " lekcí" +
+      (skipped ? ", " + skipped + " přeskočeno kvůli kolizi" : "") + ".");
+  } catch (e) {
+    toast("Chyba při kopírování: " + (e.message || e));
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // ---------- Výkaz hodin (admin) ----------
 // Šéfová na konci měsíce otevře výkaz a vidí u každého lektora součet
 // potvrzených hodin – podle toho vyplácí.
@@ -939,6 +989,7 @@ async function startApp(user) {
     document.getElementById("detailDelete").onclick = deleteDetail;
     document.getElementById("newLessonBtn").onclick = openCreate;
     document.getElementById("selectAllBtn").onclick = selectAllDay;
+    document.getElementById("extendWeekBtn").onclick = extendWeekToNext;
 
     const modeSel = document.getElementById("modeSelect");
     modeSel.value = state.modeFilter;

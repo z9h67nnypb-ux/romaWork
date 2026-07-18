@@ -59,11 +59,24 @@ begin
   insert into _vysledky values ('4. Po zrušení potvrzení', '0 záznamů', n || ' záznamů',
                                 case when n = 0 then 'OK' else 'CHYBA' end);
 
-  -- 5) hodiny přežijí smazání lekce (roční úklid nesmí sáhnout na výplaty)
+  -- 5) ruční smazání lekce odebere i hodiny z výkazu
   update lessons set done = true where id = v_lesson;
   delete from lessons where id = v_lesson;
+  select count(*) into n from work_log where lector_id = v_lector;
+  insert into _vysledky values ('5. Smazání lekce smaže i hodiny', '0 záznamů', n || ' záznamů',
+                                case when n = 0 then 'OK' else 'CHYBA' end);
+
+  -- 6) roční úklid hodiny ZACHOVÁ (purge je před mazáním lekcí odpojí)
+  insert into lessons (starts_at, ends_at, subject, lector_id, mode)
+  values ((current_date - 1 + time '16:00') at time zone 'Europe/Prague',
+          (current_date - 1 + time '17:00') at time zone 'Europe/Prague',
+          'MAT', v_lector, 'offline')
+  returning id into v_lesson;
+  update lessons set done = true where id = v_lesson;
+  update work_log set lesson_id = null where lesson_id = v_lesson; -- přesně tohle dělá purge_old_lessons
+  delete from lessons where id = v_lesson;
   select count(*) into n from work_log where lector_id = v_lector and lesson_id is null;
-  insert into _vysledky values ('5. Hodiny přežijí smazání lekce', '1 záznam (lesson_id = NULL)', n || ' záznamů',
+  insert into _vysledky values ('6. Roční úklid hodiny zachová', '1 záznam (lesson_id = NULL)', n || ' záznamů',
                                 case when n = 1 then 'OK' else 'CHYBA' end);
 
   -- úklid po testu
@@ -154,8 +167,9 @@ where lector_id = (select id from lectors where name = 'TEST Lektorka');
 
 
 -- ---------------------------------------------------------------------------
--- KROK 8: Hodiny přežijí smazání lekce (tohle je celý smysl work_logu:
---         lekce se po roce mažou, podklad pro výplaty zůstává 10+ let)
+-- KROK 8: Ruční smazání lekce odebere i hodiny z výkazu.
+--         (Roční úklid purge_old_lessons hodiny naopak zachová – před
+--         smazáním lekcí je odpojí, viz kontrola č. 6 ve Variantě A.)
 -- ---------------------------------------------------------------------------
 update lessons set done = true
 where lector_id = (select id from lectors where name = 'TEST Lektorka');
@@ -163,11 +177,10 @@ where lector_id = (select id from lectors where name = 'TEST Lektorka');
 delete from lessons
 where lector_id = (select id from lectors where name = 'TEST Lektorka');
 
-select work_date, minutes, lesson_id from work_log
+select count(*) as zaznamu_ve_work_logu from work_log
 where lector_id = (select id from lectors where name = 'TEST Lektorka');
 
--- OČEKÁVÁNÍ: řádek s minutes = 90 POŘÁD EXISTUJE, jen lesson_id je NULL
---            (lekce už není, odpracovaná práce ano).
+-- OČEKÁVÁNÍ: 0 – smazaná lekce byla omyl v rozvrhu, hodiny za ni nenáleží.
 
 
 -- ---------------------------------------------------------------------------

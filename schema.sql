@@ -113,6 +113,21 @@ create trigger lessons_work_log
   after insert or update on lessons
   for each row execute function log_lesson_work();
 
+-- Ruční smazání lekce odebere i zapsané hodiny (byl to omyl v rozvrhu).
+-- Roční úklid (purge_old_lessons) hodiny naopak ZACHOVÁ – před mazáním je
+-- od lekcí odpojí (lesson_id = null), takže tenhle trigger už nic nenajde.
+create or replace function unlog_lesson_work() returns trigger
+language plpgsql security definer as $$
+begin
+  delete from work_log where lesson_id = old.id;
+  return old;
+end $$;
+
+drop trigger if exists lessons_work_unlog on lessons;
+create trigger lessons_work_unlog
+  before delete on lessons
+  for each row execute function unlog_lesson_work();
+
 -- Měsíční výkaz: tohle čte tlačítko "Výkaz hodin" v appce.
 -- security_invoker: pohled respektuje RLS politiky toho, kdo se ptá
 -- (jinak by běžel s právy vlastníka a RLS obcházel).
@@ -132,11 +147,14 @@ group by lec.id, lec.name, lec.hourly_rate, 3, 4;
 -- ---------------------------------------------------------------------------
 -- RETENCE: lekce ~1 rok zpět, pracovníci/žáci/hodiny se nemažou.
 -- ---------------------------------------------------------------------------
--- Spouštět 1x měsíčně; hodiny ve work_log zůstávají (FK je "on delete set null").
+-- Spouštět 1x měsíčně; hodiny ve work_log zůstávají – před smazáním lekcí
+-- se od nich odpojí, takže je trigger lessons_work_unlog nesmaže.
 create or replace function purge_old_lessons() returns int
 language plpgsql security definer as $$
 declare n int;
 begin
+  update work_log set lesson_id = null
+    where lesson_id in (select id from lessons where starts_at < now() - interval '13 months');
   delete from lessons where starts_at < now() - interval '13 months';
   get diagnostics n = row_count;
   return n;
@@ -153,15 +171,19 @@ create table if not exists diagnostics (
   id           uuid primary key default gen_random_uuid(),
   student_id   uuid references students(id),  -- vazba na žáka, pokud existuje
   student_name text not null,                 -- jméno i textem (žák nemusí být v DB)
+  subject      text not null default 'matematika',  -- 'matematika' | 'cestina'
   grade        text,
   taken_at     date not null default current_date,
-  scores       jsonb not null,                -- {"cteni": 12, "pravopis": 8, ...}
+  scores       jsonb not null,                -- {"pocty": 12, "zlomky": 8, ...}
   strengths    text[],
   weaknesses   text[],
   plan         text,                          -- vygenerovaný plán (text/markdown)
   note         text,
   created_at   timestamptz not null default now()
 );
+-- (pro databáze založené starší verzí schématu)
+alter table diagnostics add column if not exists subject text not null default 'matematika';
+create index if not exists diagnostics_student_idx on diagnostics (student_name, taken_at);
 
 -- Log odeslaných notifikací (audit, ochrana proti dvojímu odeslání)
 create table if not exists notifications (
