@@ -110,9 +110,20 @@ create policy read_diagnostics   on diagnostics for select to authenticated usin
 create policy write_diagnostics  on diagnostics for insert to authenticated with check (true);
 create policy delete_diagnostics on diagnostics for delete to authenticated using (true);
 
+-- Kartotéka: platby (peníze) vidí a mění jen admin; čerpání kreditu
+-- zapisují výhradně triggery, číst ho smí přihlášení.
+drop policy if exists proto_all on payments;
+drop policy if exists admin_payments on payments;
+create policy admin_payments on payments for all to authenticated using (is_admin()) with check (is_admin());
+
+drop policy if exists proto_all on credit_log;
+drop policy if exists read_credit_log on credit_log;
+create policy read_credit_log on credit_log for select to authenticated using (true);
+
 -- Pohledy musí RLS respektovat (jinak běží s právy vlastníka a obcházejí ji):
 alter view lesson_details set (security_invoker = on);
 alter view lector_monthly_hours set (security_invoker = on);
+alter view student_credit set (security_invoker = on);
 ```
 
 > ⚠️ **Celý `schema.sql` spouštěj jen JEDNOU při prvním zřízení databáze.**

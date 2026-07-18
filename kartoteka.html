@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kartotéka – PoraDys</title>
+  <link rel="stylesheet" href="styles.css?v=3" />
+  <style>
+    /* Styly jen pro kartotéku */
+    .kt-wrap { max-width: 1180px; margin: 0 auto; padding: 14px 20px 60px; }
+    .kt-top { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+    .kt-top h1 { margin: 0; font-size: 22px; color: var(--title); }
+    .kt-top a { font-size: 13px; color: var(--accent); text-decoration: none; }
+    .kt-top a:hover { text-decoration: underline; }
+    .kt-sub { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+
+    .kt-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0 12px; }
+    .kt-controls input[type="text"] {
+      border: 1px solid var(--line-strong); border-radius: 5px; padding: 7px 10px;
+      font-size: 13px; width: 240px;
+    }
+    .kt-controls button {
+      border: 1px solid var(--line-strong); background: #fff; border-radius: 5px;
+      padding: 7px 12px; cursor: pointer; font-size: 13px;
+    }
+    .kt-controls button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .kt-controls label { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+    .kt-summary { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+    .kt-summary b { color: var(--text); }
+
+    .kt-table-wrap { background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+    .kt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 980px; }
+    .kt-table th, .kt-table td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    .kt-table th { color: var(--muted); font-weight: 600; font-size: 11.5px; position: sticky; top: 0; background: #fff; }
+    .kt-table td.num, .kt-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .kt-table tbody tr { cursor: pointer; }
+    .kt-table tbody tr:hover { background: #f6f8fc; }
+    .kt-table .former td { color: #999; }
+
+    .chip-credit { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 10px; padding: 1px 9px; }
+    .chip-credit.ok { background: #e6f4ea; color: #1e6b30; }
+    .chip-credit.low { background: #fff3e0; color: #b45309; }
+    .chip-credit.out { background: #fdeaea; color: #c62828; }
+
+    /* Karta klienta v bočním panelu */
+    .kt-panel { width: 540px; max-width: 96vw; }
+    .kt-state { display: flex; gap: 10px; margin: 4px 0 14px; }
+    .kt-state .box { flex: 1; border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; text-align: center; }
+    .kt-state .box .v { font-size: 19px; font-weight: 700; }
+    .kt-state .box .k { font-size: 11px; color: var(--muted); }
+    .kt-state .box.bal-ok .v { color: #1e6b30; }
+    .kt-state .box.bal-low .v { color: #b45309; }
+    .kt-state .box.bal-out .v { color: #c62828; }
+
+    .kt-section-h { font-size: 13px; font-weight: 700; margin: 18px 0 6px; color: var(--title); text-transform: uppercase; letter-spacing: .4px; }
+    .pay-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .pay-table th, .pay-table td { text-align: left; padding: 5px 7px; border-bottom: 1px solid var(--line); }
+    .pay-table th { color: var(--muted); font-size: 11px; }
+    .pay-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .pay-table button { border: 1px solid var(--line-strong); background: #fff; border-radius: 4px; padding: 1px 7px; cursor: pointer; font-size: 11px; }
+    .pay-form { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .pay-form input, .pay-form select { border: 1px solid var(--line-strong); border-radius: 5px; padding: 6px 8px; font-size: 12.5px; width: 100%; }
+    .pay-form .full { grid-column: 1 / -1; }
+
+    .lesson-month { font-size: 12px; font-weight: 700; color: var(--muted); margin: 10px 0 3px; }
+    .lesson-row { display: flex; gap: 10px; font-size: 12.5px; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+    .lesson-row .d { width: 118px; color: var(--muted); flex: 0 0 auto; }
+    .lesson-row .s { flex: 1; }
+    .lesson-row .h { width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* Hromadný import */
+    .imp-modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; display: flex; align-items: center; justify-content: center; }
+    .imp-card { background: #fff; border-radius: 10px; width: 640px; max-width: 94vw; padding: 18px 20px; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+    .imp-card h2 { margin: 0 0 8px; font-size: 16px; }
+    .imp-card textarea { width: 100%; min-height: 180px; border: 1px solid var(--line-strong); border-radius: 6px; padding: 8px; font-size: 12.5px; font-family: Consolas, monospace; }
+    .imp-hint { font-size: 12px; color: var(--muted); margin: 6px 0 10px; }
+    .imp-actions { display: flex; gap: 10px; align-items: center; }
+
+    .kt-locked { max-width: 460px; margin: 80px auto; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 26px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="kt-wrap">
+    <div class="kt-top">
+      <h1>📇 Kartotéka</h1>
+      <a href="#" id="backLink">← Zpět na rozvrh</a>
+      <span id="storeBadge" class="store-badge" style="display:inline-block;font-size:11.5px;border-radius:10px;padding:2px 10px;background:#eee;color:#555;"></span>
+    </div>
+    <p class="kt-sub">Klienti, platby a kredit hodin. Lekce čerpají kredit automaticky z rozvrhu – tady se zapisují jen platby.</p>
+
+    <div id="lockedBox" class="kt-locked hidden">
+      <h2 style="margin:0 0 8px;">Jen pro přihlášené</h2>
+      <p style="color:#777;font-size:13.5px;">Kartotéka pracuje s platbami klientů. Přihlaste se prosím přes
+      <a href="index.html">rozvrh</a> účtem administrátora a vraťte se sem.</p>
+    </div>
+
+    <div id="mainBox">
+      <div class="kt-controls">
+        <input type="text" id="ktSearch" placeholder="Hledat klienta…" />
+        <label><input type="checkbox" id="ktShowFormer" /> zobrazit i bývalé</label>
+        <span style="flex:1"></span>
+        <button id="ktNewBtn" class="primary">+ Nový klient</button>
+        <button id="ktImportBtn">📥 Hromadný import</button>
+        <button id="ktExportBtn">⬇ Export CSV</button>
+      </div>
+      <div id="ktSummary" class="kt-summary"></div>
+      <div class="kt-table-wrap">
+        <table class="kt-table">
+          <thead>
+            <tr>
+              <th>Klient</th><th>Telefon</th><th>Kat.</th><th>Třída</th><th>Předměty</th>
+              <th>Lektor/ka</th><th class="num">Cena/hod</th><th>Platba</th>
+              <th class="num">Zaplaceno h</th><th class="num">Vyčerpáno h</th><th class="num">Zůstatek</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="ktBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Karta klienta -->
+  <div id="overlay" class="overlay hidden"></div>
+  <aside id="cardPanel" class="detail-panel kt-panel hidden">
+    <div class="detail-head">
+      <button id="cardClose" class="close">×</button>
+      <h2 id="cardTitle"></h2>
+    </div>
+    <div class="detail-body" id="cardBody"></div>
+    <div class="detail-foot">
+      <button id="cardSave" class="save">Uložit kartu</button>
+      <span id="cardSaved" class="saved"></span>
+    </div>
+  </aside>
+
+  <!-- Hromadný import -->
+  <div id="impModal" class="imp-modal hidden">
+    <div class="imp-card">
+      <h2>Hromadný import klientů z Excelu</h2>
+      <p class="imp-hint">
+        Jeden klient = jeden řádek, hodnoty oddělené středníkem:<br>
+        <code>Jméno;telefon;kategorie;třída;předměty;lektor;cena za hod;způsob platby;zůstatek hodin</code><br>
+        Zůstatek hodin se uloží jako počáteční platba („počáteční zůstatek z Excelu").
+        Prázdná pole nechte prázdná, jméno je povinné.
+      </p>
+      <textarea id="impText" placeholder="Aftanas Lukáš;777050743;ZŠ;5. třída;AJ;Štruncová;420;hotově;0&#10;Balík Petr;723111222;ZŠ;7. třída;MAT;Kunkelová;440;účet PoraDys;1"></textarea>
+      <div class="imp-actions" style="margin-top:10px;">
+        <button id="impRun" class="primary" style="background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:5px;padding:8px 14px;font-weight:600;cursor:pointer;">Importovat</button>
+        <button id="impClose" style="border:1px solid var(--line-strong);background:#fff;border-radius:5px;padding:8px 14px;cursor:pointer;">Zavřít</button>
+        <span id="impInfo" style="font-size:12.5px;color:#2e7d32;"></span>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js?v=4"></script>
+  <script src="kartoteka.js?v=1"></script>
+</body>
+</html>

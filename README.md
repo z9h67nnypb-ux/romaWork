@@ -59,6 +59,10 @@ Po přihlášení uvidíš žlutý pruh „Ukázkový režim" – běžíš na m
 - **Výkaz hodin** (admin) – měsíční součet potvrzených hodin po lektorech,
   podklad pro výplaty. Smazání lekce hodiny odebere; roční úklid je zachová.
   Detail návrhu v [`DATABASE.md`](DATABASE.md).
+- **📇 Kartotéka** (admin) – stránka [`kartoteka.html`](kartoteka.html):
+  klienti, platby a kredit hodin (nahrazuje Excel „KARTOTÉKA"). Lekce čerpají
+  kredit automaticky z rozvrhu; přehled TOTAL hlídá nízký kredit; karta
+  klienta ve stylu Excelu; export CSV; hromadný import počátečních zůstatků.
 - **🧪 Diagnostika** – stránka [`diagnostika.html`](diagnostika.html) se
   záložkami **Matematika / Čeština**: body z testu → plán přípravy na 8 týdnů
   (silné/slabé stránky, cvičení, tisk). Výsledky se ukládají k žákovi
@@ -157,5 +161,6 @@ Plán automatizace (mimo tento prototyp):
 | `schema.sql` | Databázové schéma pro Supabase (vč. work_log a diagnostics) |
 | `test_databaze.sql` | Ověřovací scénář počítání hodin (krok za krokem) |
 | `diagnostika.html` + `diagnostika.js` | Diagnostický test a plán přípravy |
+| `kartoteka.html` + `kartoteka.js` | Kartotéka: klienti, platby a kredit hodin |
 | `DATABASE.md` | Návrh databáze: retence, hodiny lektorů, hosting a zálohy |
 | `NASAZENI.md` | Krok-za-krokem postup nasazení do ostrého provozu |

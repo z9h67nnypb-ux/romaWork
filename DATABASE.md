@@ -19,8 +19,16 @@ spustit v Supabase SQL editoru.
 | `lectors` | pracovníci (jméno, kontakt, **hodinová sazba**, nástup/odchod) | **nemaže se** (požadavek 10+ let) – odchod = `left_at` + `active=false` |
 | `work_log` | **odpracované hodiny** – 1 řádek za každou potvrzenou lekci | **nemaže se** (10+ let); je maličký |
 | `attendance` | kdo byl na které lekci (žák ↔ lekce) | maže se spolu s lekcí |
+| `payments` | platby klientů (částka + kredit hodin) – kartotéka | **nemaže se** (finanční podklad) |
+| `credit_log` | čerpání kreditu (1 řádek = účast na odučené lekci) | **nemaže se**, plní se triggery |
 | `diagnostics` | výsledky diagnostických testů + vygenerovaný plán | nemaže se |
 | `profiles` | přihlašovací role (admin / lektor) | – |
+
+**Kartotéka (kreditový systém):** klient předplatí hodiny (řádek v `payments`),
+každá odučená lekce s jeho účastí kredit čerpá (`credit_log`, plní se triggery
+stejně jako `work_log`). Pohled `student_credit` počítá zaplaceno / vyčerpáno /
+zůstatek – to čte stránka **kartoteka.html** (přehled TOTAL, karta klienta,
+hlídání nízkého kreditu, export CSV, hromadný import z Excelu).
 
 ## 2) Jak se počítají hodiny (klíčová část)
 
@@ -97,8 +105,8 @@ v Supabase zobrazuje jen výsledek **posledního** příkazu, proto má skript
 dvě varianty:
 
 - **Varianta A (doporučená):** označ celý blok „VARIANTA A" → Run. Vyjde
-  tabulka s 6 kontrolami a sloupcem `vysledek` – všude musí být **OK**.
-  Test po sobě uklidí.
+  tabulka s 8 kontrolami (hodiny lektorů i kredit klientů) a sloupcem
+  `vysledek` – všude musí být **OK**. Test po sobě uklidí.
 - **Varianta B:** ruční krokování po blocích (označ blok → Run) s komentáři
   `OČEKÁVÁNÍ` – vhodné, když chceš vidět, co se děje uvnitř.
 

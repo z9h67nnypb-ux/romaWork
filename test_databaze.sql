@@ -21,12 +21,14 @@ do $test$
 declare
   v_lector uuid;
   v_lesson uuid;
-  n int; m int; h numeric; p numeric;
+  v_student uuid;
+  n int; m int; h numeric; p numeric; b numeric;
 begin
   -- úklid případných zbytků z dřívějšího testu
   delete from work_log where lector_id in (select id from lectors where name = 'TEST Lektorka');
   delete from lessons  where lector_id in (select id from lectors where name = 'TEST Lektorka');
   delete from lectors  where name = 'TEST Lektorka';
+  delete from students where name = 'TEST Žák';
 
   -- testovací lektorka (250 Kč/h) + lekce včera 14:00–15:30, zatím nepotvrzená
   insert into lectors (name, hourly_rate) values ('TEST Lektorka', 250) returning id into v_lector;
@@ -79,7 +81,29 @@ begin
   insert into _vysledky values ('6. Roční úklid hodiny zachová', '1 záznam (lesson_id = NULL)', n || ' záznamů',
                                 case when n = 1 then 'OK' else 'CHYBA' end);
 
+  -- 7) kartotéka: platba přidá kredit, odučená lekce s účastí ho čerpá
+  insert into students (name) values ('TEST Žák') returning id into v_student;
+  insert into payments (student_id, amount_czk, hours_credit, method, note)
+  values (v_student, 4200, 10, 'test', 'testovací platba');
+  insert into lessons (starts_at, ends_at, subject, lector_id, mode)
+  values ((current_date - 1 + time '10:00') at time zone 'Europe/Prague',
+          (current_date - 1 + time '11:30') at time zone 'Europe/Prague',
+          'MAT', v_lector, 'offline')
+  returning id into v_lesson;
+  insert into attendance (lesson_id, student_id) values (v_lesson, v_student);
+  update lessons set done = true where id = v_lesson;
+  select balance_hours into b from student_credit where student_id = v_student;
+  insert into _vysledky values ('7. Kredit: zaplaceno 10 h, odučeno 1,5 h', '8.50 h', coalesce(b::text, 'nic') || ' h',
+                                case when b = 8.5 then 'OK' else 'CHYBA' end);
+
+  -- 8) smazání lekce kredit zase vrátí
+  delete from lessons where id = v_lesson;
+  select balance_hours into b from student_credit where student_id = v_student;
+  insert into _vysledky values ('8. Smazání lekce kredit vrátí', '10.00 h', coalesce(b::text, 'nic') || ' h',
+                                case when b = 10 then 'OK' else 'CHYBA' end);
+
   -- úklid po testu
+  delete from students where id = v_student; -- smaže i platby a čerpání (cascade)
   delete from work_log where lector_id = v_lector;
   delete from lectors  where id = v_lector;
 end $test$;

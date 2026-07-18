@@ -155,6 +155,8 @@ declare n int;
 begin
   update work_log set lesson_id = null
     where lesson_id in (select id from lessons where starts_at < now() - interval '13 months');
+  update credit_log set lesson_id = null
+    where lesson_id in (select id from lessons where starts_at < now() - interval '13 months');
   delete from lessons where starts_at < now() - interval '13 months';
   get diagnostics n = row_count;
   return n;
@@ -163,6 +165,121 @@ end $$;
 -- Automatické spouštění (v Supabase: Database -> Extensions -> zapni pg_cron,
 -- pak odkomentuj):
 -- select cron.schedule('purge-lessons', '15 3 1 * *', $$select purge_old_lessons()$$);
+
+-- ---------------------------------------------------------------------------
+-- KARTOTÉKA: kreditový systém klientů (nahrazuje Excel "KARTOTÉKA")
+-- ---------------------------------------------------------------------------
+-- Princip: klient předplatí hodiny (tabulka payments -> kredit hodin),
+-- každá odučená lekce s jeho účastí kredit čerpá (credit_log, plní se
+-- triggery stejně jako work_log). Pohled student_credit dává přehled
+-- zaplaceno / vyčerpáno / zůstatek pro list TOTAL v appce.
+
+-- Karta klienta – sloupce podle Excel kartotéky.
+alter table students add column if not exists category   text;            -- ZŠ / SŠ / dospělý…
+alter table students add column if not exists grade      text;            -- třída / ročník
+alter table students add column if not exists subjects   text;            -- předměty doučování
+alter table students add column if not exists lector_name text;           -- výchozí lektor/ka
+alter table students add column if not exists price_hour numeric(8,2);    -- cena Kč/hod
+alter table students add column if not exists price_hour_discount numeric(8,2); -- cena s množstevní slevou
+alter table students add column if not exists payment_method text;        -- účet DR / účet PoraDys / účet jazykovka / hotově
+
+-- Platby (kredit): 1 řádek = jedna platba klienta.
+create table if not exists payments (
+  id           uuid primary key default gen_random_uuid(),
+  student_id   uuid not null references students(id) on delete cascade,
+  paid_at      date not null default current_date,
+  amount_czk   numeric(10,2) not null default 0,
+  hours_credit numeric(6,2) not null,        -- kolik hodin platba předplatila
+  method       text,                         -- účet DR / PoraDys / jazykovka / hotově
+  note         text,                         -- např. "počáteční zůstatek z Excelu"
+  created_at   timestamptz not null default now()
+);
+create index if not exists payments_student_idx on payments (student_id, paid_at);
+
+-- Čerpání kreditu: 1 řádek = účast žáka na odučené lekci. Plní se výhradně
+-- triggery; přežije roční úklid lekcí (purge je před mazáním odpojí).
+create table if not exists credit_log (
+  id          uuid primary key default gen_random_uuid(),
+  lesson_id   uuid references lessons(id) on delete set null,
+  student_id  uuid not null references students(id) on delete cascade,
+  lesson_date date not null,
+  hours       numeric(6,2) not null,
+  subject     text,
+  created_at  timestamptz not null default now(),
+  unique (lesson_id, student_id)
+);
+create index if not exists credit_log_student_idx on credit_log (student_id, lesson_date);
+
+-- Přepočítá čerpání kreditu jedné lekce podle jejího stavu a účastí.
+create or replace function sync_credit_log(p_lesson uuid) returns void
+language plpgsql security definer as $$
+declare l record;
+begin
+  delete from credit_log where lesson_id = p_lesson;
+  select * into l from lessons where id = p_lesson;
+  if l.id is null or not l.done then return; end if;
+  insert into credit_log (lesson_id, student_id, lesson_date, hours, subject)
+  select l.id, a.student_id,
+         (l.starts_at at time zone 'Europe/Prague')::date,
+         round((extract(epoch from (l.ends_at - l.starts_at)) / 3600.0)::numeric, 2),
+         l.subject
+  from attendance a where a.lesson_id = l.id;
+end $$;
+
+create or replace function trg_lessons_credit() returns trigger
+language plpgsql security definer as $$
+begin
+  if tg_op = 'DELETE' then
+    delete from credit_log where lesson_id = old.id; -- ruční smazání lekce vrací kredit
+    return old;
+  end if;
+  perform sync_credit_log(new.id);
+  return new;
+end $$;
+
+drop trigger if exists lessons_credit_sync on lessons;
+create trigger lessons_credit_sync
+  after insert or update on lessons
+  for each row execute function trg_lessons_credit();
+drop trigger if exists lessons_credit_unlog on lessons;
+create trigger lessons_credit_unlog
+  before delete on lessons
+  for each row execute function trg_lessons_credit();
+
+-- Účast se zapisuje až po uložení lekce, proto se čerpání synchronizuje
+-- i při každé změně docházky.
+create or replace function trg_attendance_credit() returns trigger
+language plpgsql security definer as $$
+begin
+  perform sync_credit_log(coalesce(new.lesson_id, old.lesson_id));
+  return coalesce(new, old);
+end $$;
+
+drop trigger if exists attendance_credit_sync on attendance;
+create trigger attendance_credit_sync
+  after insert or update or delete on attendance
+  for each row execute function trg_attendance_credit();
+
+-- Přehled TOTAL: zaplaceno / vyčerpáno / zůstatek pro každého klienta.
+create or replace view student_credit with (security_invoker = on) as
+select
+  s.id as student_id,
+  s.name, s.phone, s.email, s.school, s.status, s.note,
+  s.category, s.grade, s.subjects, s.lector_name,
+  s.price_hour, s.price_hour_discount, s.payment_method,
+  coalesce(p.paid_hours, 0)  as paid_hours,
+  coalesce(p.paid_czk, 0)    as paid_czk,
+  coalesce(u.used_hours, 0)  as used_hours,
+  coalesce(p.paid_hours, 0) - coalesce(u.used_hours, 0) as balance_hours
+from students s
+left join (
+  select student_id, sum(hours_credit) as paid_hours, sum(amount_czk) as paid_czk
+  from payments group by student_id
+) p on p.student_id = s.id
+left join (
+  select student_id, sum(hours) as used_hours
+  from credit_log group by student_id
+) u on u.student_id = s.id;
 
 -- ---------------------------------------------------------------------------
 -- DIAGNOSTICKÉ TESTY (výsledky + vygenerovaný plán přípravy)
@@ -236,6 +353,8 @@ alter table lessons     enable row level security;
 alter table attendance  enable row level security;
 alter table work_log    enable row level security;
 alter table diagnostics enable row level security;
+alter table payments    enable row level security;
+alter table credit_log  enable row level security;
 
 drop policy if exists proto_all on rooms;
 create policy proto_all on rooms       for all using (true) with check (true);
@@ -251,6 +370,10 @@ drop policy if exists proto_all on work_log;
 create policy proto_all on work_log    for all using (true) with check (true);
 drop policy if exists proto_all on diagnostics;
 create policy proto_all on diagnostics for all using (true) with check (true);
+drop policy if exists proto_all on payments;
+create policy proto_all on payments    for all using (true) with check (true);
+drop policy if exists proto_all on credit_log;
+create policy proto_all on credit_log  for all using (true) with check (true);
 
 -- ===========================================================================
 -- UKÁZKOVÁ DATA (seed) – ať po spuštění hned něco vidíš

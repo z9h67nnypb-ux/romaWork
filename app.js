@@ -366,6 +366,7 @@ function renderToolbar() {
   document.getElementById("newLessonBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("selectAllBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("extendWeekBtn").classList.toggle("hidden", !isAdmin());
+  document.getElementById("kartotekaBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("hoursBtn").classList.toggle("hidden", !isAdmin());
   document.querySelectorAll(".view-tabs button").forEach((b) => {
     b.classList.toggle("active", b.dataset.view === state.view);
@@ -999,7 +1000,8 @@ async function startApp(user) {
       clearSelection();
       renderView();
     };
-    document.getElementById("diagBtn").onclick = () => { location.href = "diagnostika.html"; };
+    document.getElementById("diagBtn").onclick = () => { location.href = "diagnostika.html" + location.search; };
+    document.getElementById("kartotekaBtn").onclick = () => { location.href = "kartoteka.html" + location.search; };
     document.getElementById("hoursBtn").onclick = openHoursReport;
     document.getElementById("hoursClose").onclick = closeHoursReport;
     document.getElementById("hoursPrev").onclick = () => shiftHoursMonth(-1);
