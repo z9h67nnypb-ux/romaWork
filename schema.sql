@@ -262,7 +262,10 @@ create trigger attendance_credit_sync
   for each row execute function trg_attendance_credit();
 
 -- Přehled TOTAL: zaplaceno / vyčerpáno / zůstatek pro každého klienta.
-create or replace view student_credit with (security_invoker = on) as
+-- DROP + CREATE (ne "create or replace") – přidání sloupce doprostřed by
+-- jinak selhalo na "cannot change name of view column".
+drop view if exists student_credit;
+create view student_credit with (security_invoker = on) as
 select
   s.id as student_id,
   s.name, s.phone, s.email, s.school, s.status, s.note, s.flag,
