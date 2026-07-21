@@ -228,6 +228,7 @@ const state = {
   openLessonId: null,
   selection: new Set(), // id vybraných lekcí (admin)
   clipboard: [], // zkopírované lekce (admin)
+  hourH: CFG.HOUR_HEIGHT, // aktuální výška hodiny (dynamicky dle výšky okna)
 };
 
 function isAdmin() { return state.user && state.user.role === "admin"; }
@@ -389,18 +390,38 @@ function matchesMode(l) {
   return (l.mode || "offline") === state.modeFilter;
 }
 
+// Výška jedné hodiny se dopočítá tak, aby se celý den (8–21) vešel do volné
+// plochy pod lištami – rozvrh se pak celý vejde na jednu obrazovku bez
+// svislého rolování. Na malých displejích má spodní mez (radši malý scroll
+// než nečitelně nízké bloky); CFG.HOUR_HEIGHT je záloha, když nejde změřit.
+function computeHourHeight() {
+  const hours = CFG.DAY_END_HOUR - CFG.DAY_START_HOUR;
+  const vc = document.getElementById("viewContainer");
+  if (!vc) return CFG.HOUR_HEIGHT;
+  // Volná výška pod lištami = od horní hrany plochy po spodek okna.
+  // Bereme pozici v okně (getBoundingClientRect), ne clientHeight – ta bývá
+  // při stavbě ještě nedopočítaná (banner/hint se teprve srovnávají).
+  const top = vc.getBoundingClientRect().top;
+  const avail = window.innerHeight - top - 10;
+  const OVERHEAD = 40; // záhlaví sloupců + okraje mřížky
+  const fit = Math.floor((avail - OVERHEAD) / hours);
+  return Math.max(24, Math.min(fit, 80));
+}
+
 function buildDayView() {
   const wrap = document.createElement("div");
   wrap.className = "day-scroll";
   const grid = document.createElement("div");
   grid.className = "day-grid";
 
+  const HH = computeHourHeight();
+  state.hourH = HH;
   const hours = CFG.DAY_END_HOUR - CFG.DAY_START_HOUR;
-  const bodyH = hours * CFG.HOUR_HEIGHT;
+  const bodyH = hours * HH;
   const lineCss =
     "repeating-linear-gradient(to bottom, transparent 0, transparent " +
-    (CFG.HOUR_HEIGHT - 1) + "px, var(--line) " + (CFG.HOUR_HEIGHT - 1) +
-    "px, var(--line) " + CFG.HOUR_HEIGHT + "px)";
+    (HH - 1) + "px, var(--line) " + (HH - 1) +
+    "px, var(--line) " + HH + "px)";
 
   // Sloupec s časy
   const timeCol = document.createElement("div");
@@ -412,7 +433,7 @@ function buildDayView() {
   for (let h = CFG.DAY_START_HOUR; h <= CFG.DAY_END_HOUR; h++) {
     const lbl = document.createElement("div");
     lbl.className = "time-label";
-    lbl.style.top = (h - CFG.DAY_START_HOUR) * CFG.HOUR_HEIGHT + "px";
+    lbl.style.top = (h - CFG.DAY_START_HOUR) * HH + "px";
     lbl.textContent = h + ":00";
     timeBody.appendChild(lbl);
   }
@@ -513,8 +534,9 @@ function selectAllDay() {
 function buildEvent(l, room) {
   const startMin = l.starts_at.getHours() * 60 + l.starts_at.getMinutes();
   const endMin = l.ends_at.getHours() * 60 + l.ends_at.getMinutes();
-  const top = ((startMin - CFG.DAY_START_HOUR * 60) / 60) * CFG.HOUR_HEIGHT;
-  const height = Math.max(18, ((endMin - startMin) / 60) * CFG.HOUR_HEIGHT - 2);
+  const HH = state.hourH || CFG.HOUR_HEIGHT;
+  const top = ((startMin - CFG.DAY_START_HOUR * 60) / 60) * HH;
+  const height = Math.max(16, ((endMin - startMin) / 60) * HH - 2);
 
   const ev = document.createElement("div");
   ev.className =
@@ -1007,6 +1029,13 @@ async function startApp(user) {
     document.getElementById("hoursPrev").onclick = () => shiftHoursMonth(-1);
     document.getElementById("hoursNext").onclick = () => shiftHoursMonth(1);
     document.getElementById("hoursModal").onclick = (e) => { if (e.target.id === "hoursModal") closeHoursReport(); };
+
+    // Při změně velikosti okna přepočítej výšku hodiny, ať se den pořád vejde.
+    let _resizeT = null;
+    window.addEventListener("resize", () => {
+      clearTimeout(_resizeT);
+      _resizeT = setTimeout(() => { if (state.view === "den") renderView(); }, 150);
+    });
     document.addEventListener("keydown", onKeyDown);
   }
 

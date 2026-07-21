@@ -169,5 +169,6 @@ Plán automatizace (mimo tento prototyp):
 | `test_databaze.sql` | Ověřovací scénář počítání hodin (krok za krokem) |
 | `diagnostika.html` + `diagnostika.js` | Diagnostický test a plán přípravy |
 | `kartoteka.html` + `kartoteka.js` | Kartotéka: klienti, platby a kredit hodin |
+| `demo_kartoteka.sql` | Ukázková data pro kartotéku (na demo) |
 | `DATABASE.md` | Návrh databáze: retence, hodiny lektorů, hosting a zálohy |
 | `NASAZENI.md` | Krok-za-krokem postup nasazení do ostrého provozu |

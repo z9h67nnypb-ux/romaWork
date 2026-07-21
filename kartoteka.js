@@ -26,16 +26,26 @@ function balanceLabel(b) { return b <= 0 ? "NÍZKÝ KREDIT" : b <= 3 ? "docház�
 
 const PAY_METHODS = ["účet DR", "účet PoraDys", "účet jazykovka", "hotově"];
 
-// Barevné označení klienta (řádek se podle něj tónuje).
+// Barevné označení klienta (řádek se podle něj tónuje; color = barva kolečka).
 const FLAGS = [
-  { key: "", label: "— bez označení —", cls: "" },
-  { key: "online", label: "online", cls: "fl-online" },
-  { key: "inperson", label: "osobně", cls: "fl-inperson" },
-  { key: "ending", label: "končí / ukončuje", cls: "fl-ending" },
-  { key: "contacted", label: "kontaktováno", cls: "fl-contacted" },
-  { key: "problem", label: "problémový", cls: "fl-problem" },
+  { key: "", label: "— bez označení —", cls: "", color: "" },
+  { key: "online", label: "online", cls: "fl-online", color: "#2563eb" },
+  { key: "inperson", label: "osobně", cls: "fl-inperson", color: "#16a34a" },
+  { key: "ending", label: "končí / ukončuje", cls: "fl-ending", color: "#6b7280" },
+  { key: "contacted", label: "kontaktováno", cls: "fl-contacted", color: "#dc2626" },
+  { key: "problem", label: "problémový", cls: "fl-problem", color: "#ea580c" },
 ];
 function flagInfo(key) { return FLAGS.find((f) => f.key === (key || "")) || FLAGS[0]; }
+
+// <option> pro výběr označení; kolečko ● i text nese barvu daného označení.
+function flagOptions(selected) {
+  return FLAGS.map((f) => {
+    const sel = f.key === (selected || "") ? " selected" : "";
+    const style = f.color ? ' style="color:' + f.color + '"' : "";
+    const txt = (f.key ? "● " : "") + f.label.replace("— bez označení —", "bez označení");
+    return '<option value="' + f.key + '"' + sel + style + ">" + escapeHtml(txt) + "</option>";
+  }).join("");
+}
 
 // ---------- Provider: MOCK (ukázková data v paměti) ----------
 const MockKt = {
@@ -217,9 +227,9 @@ function renderTable() {
     if (r.flag) classes.push("row-" + r.flag);
     tr.className = classes.join(" ");
     const band = balanceBand(Number(r.balance_hours));
-    const flagSel = '<select class="flag-select" data-id="' + r.id + '">' +
-      FLAGS.map((f) => '<option value="' + f.key + '"' + (f.key === (r.flag || "") ? " selected" : "") + ">" +
-        (f.key ? "● " : "") + escapeHtml(f.label.replace("— bez označení —", "bez označení")) + "</option>").join("") + "</select>";
+    const fc = flagInfo(r.flag).color;
+    const flagSel = '<select class="flag-select" data-id="' + r.id + '"' +
+      (fc ? ' style="color:' + fc + ';font-weight:600"' : "") + ">" + flagOptions(r.flag) + "</select>";
     tr.innerHTML =
       "<td><b>" + escapeHtml(r.name) + "</b></td>" +
       "<td>" + escapeHtml(r.phone) + "</td>" +
@@ -244,6 +254,9 @@ function renderTable() {
         await kt.saveStudent({ flag: val || null }, r.id);
         r.flag = val;
         tr.className = [r.status === "former" ? "former" : "", val ? "row-" + val : ""].filter(Boolean).join(" ");
+        const c = flagInfo(val).color;
+        sel.style.color = c || "";
+        sel.style.fontWeight = c ? "600" : "";
       } catch (err) { alert("Označení se nepodařilo uložit: " + (err.message || err)); }
     };
     tb.appendChild(tr);
@@ -319,8 +332,7 @@ function renderCard() {
     fieldHtml("Způsob platby", '<select id="kMethod">' + methodOptions(s.payment_method) + "</select>") +
     fieldHtml("Stav", '<select id="kStatus"><option value="active"' + (s.status !== "former" ? " selected" : "") + '>aktivní</option><option value="former"' + (s.status === "former" ? " selected" : "") + ">bývalý</option></select>") +
     "</div>";
-  html += fieldHtml("Označení (barva řádku)", '<select id="kFlag">' +
-    FLAGS.map((f) => '<option value="' + f.key + '"' + (f.key === (s.flag || "") ? " selected" : "") + ">" + escapeHtml(f.label) + "</option>").join("") + "</select>");
+  html += fieldHtml("Označení (barva řádku)", '<select id="kFlag">' + flagOptions(s.flag) + "</select>");
   html += fieldHtml("Poznámka", inp("kNote", s.note));
 
   if (openId) {
