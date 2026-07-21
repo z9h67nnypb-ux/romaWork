@@ -311,47 +311,52 @@ function renderCard() {
   const cr = openCard.credit;
   $("cardTitle").textContent = openId ? s.name : "Nový klient";
 
-  let html = "";
+  // Stav kreditu (celá šířka nahoře)
+  let stateHtml = "";
   if (cr) {
     const band = balanceBand(Number(cr.balance_hours));
-    html += '<div class="kt-state">' +
+    stateHtml = '<div class="kt-state">' +
       '<div class="box"><div class="v">' + fmtH(cr.paid_hours) + '</div><div class="k">zaplaceno hodin</div></div>' +
       '<div class="box"><div class="v">' + fmtH(cr.used_hours) + '</div><div class="k">vyčerpáno hodin</div></div>' +
       '<div class="box bal-' + band + '"><div class="v">' + fmtH(cr.balance_hours) + '</div><div class="k">ZŮSTATEK (kredit)</div></div>' +
       "</div>";
   }
 
-  html += '<div class="field-row">' + fieldHtml("Jméno *", inp("kName", s.name)) + fieldHtml("Telefon", inp("kPhone", s.phone)) + "</div>";
-  html += '<div class="field-row">' + fieldHtml("Kategorie", inp("kCategory", s.category, "ZŠ / SŠ…")) + fieldHtml("Třída / ročník", inp("kGrade", s.grade)) + "</div>";
-  html += '<div class="field-row">' + fieldHtml("Předměty", inp("kSubjects", s.subjects, "např. ČJ, MAT")) + fieldHtml("Lektor/ka", inp("kLector", s.lector_name)) + "</div>";
-  html += '<div class="field-row">' +
-    fieldHtml("Cena Kč/hod", '<input type="number" id="kPrice" value="' + (s.price_hour || "") + '">') +
-    fieldHtml("Cena se slevou", '<input type="number" id="kPriceD" value="' + (s.price_hour_discount || "") + '">') +
+  // Údaje klienta (levý sloupec)
+  let fieldsHtml =
+    '<div class="field-row">' + fieldHtml("Jméno *", inp("kName", s.name)) + fieldHtml("Telefon", inp("kPhone", s.phone)) + "</div>" +
+    '<div class="field-row">' + fieldHtml("Kategorie", inp("kCategory", s.category, "ZŠ / SŠ…")) + fieldHtml("Třída / ročník", inp("kGrade", s.grade)) + "</div>" +
+    '<div class="field-row">' + fieldHtml("Předměty", inp("kSubjects", s.subjects, "např. ČJ, MAT")) + fieldHtml("Lektor/ka", inp("kLector", s.lector_name)) + "</div>" +
+    '<div class="field-row">' +
+      fieldHtml("Cena Kč/hod", '<input type="number" id="kPrice" value="' + (s.price_hour || "") + '">') +
+      fieldHtml("Cena se slevou", '<input type="number" id="kPriceD" value="' + (s.price_hour_discount || "") + '">') +
+    "</div>" +
+    '<div class="field-row">' +
+      fieldHtml("Způsob platby", '<select id="kMethod">' + methodOptions(s.payment_method) + "</select>") +
+      fieldHtml("Stav", '<select id="kStatus"><option value="active"' + (s.status !== "former" ? " selected" : "") + '>aktivní</option><option value="former"' + (s.status === "former" ? " selected" : "") + ">bývalý</option></select>") +
+    "</div>" +
+    '<div class="field-row">' +
+      fieldHtml("Označení (barva řádku)", '<select id="kFlag">' + flagOptions(s.flag) + "</select>") +
+      fieldHtml("Poznámka", inp("kNote", s.note)) +
     "</div>";
-  html += '<div class="field-row">' +
-    fieldHtml("Způsob platby", '<select id="kMethod">' + methodOptions(s.payment_method) + "</select>") +
-    fieldHtml("Stav", '<select id="kStatus"><option value="active"' + (s.status !== "former" ? " selected" : "") + '>aktivní</option><option value="former"' + (s.status === "former" ? " selected" : "") + ">bývalý</option></select>") +
-    "</div>";
-  html += fieldHtml("Označení (barva řádku)", '<select id="kFlag">' + flagOptions(s.flag) + "</select>");
-  html += fieldHtml("Poznámka", inp("kNote", s.note));
 
+  // Platby + Výuka (pravý sloupec)
+  let payHtml = '<div class="kt-section-h">Platby</div>';
   if (openId) {
-    // PLATBY
-    html += '<div class="kt-section-h">Platby</div>';
     if (openCard.payments.length) {
-      html += '<table class="pay-table"><tr><th>Termín</th><th class="num">Částka Kč</th><th class="num">Kredit h</th><th>Způsob</th><th></th></tr>';
+      payHtml += '<table class="pay-table"><tr><th>Termín</th><th class="num">Částka Kč</th><th class="num">Kredit h</th><th>Způsob</th><th></th></tr>';
       openCard.payments.forEach((p) => {
-        html += "<tr><td>" + fmtDateCz(p.paid_at) + (p.note ? ' <span style="color:#999">(' + escapeHtml(p.note) + ")</span>" : "") + "</td>" +
+        payHtml += "<tr><td>" + fmtDateCz(p.paid_at) + (p.note ? ' <span style="color:#999">(' + escapeHtml(p.note) + ")</span>" : "") + "</td>" +
           '<td class="num">' + Math.round(p.amount_czk).toLocaleString("cs-CZ") + "</td>" +
           '<td class="num">' + fmtH(p.hours_credit) + "</td>" +
           "<td>" + escapeHtml(p.method) + "</td>" +
           '<td><button data-payid="' + p.id + '">Smazat</button></td></tr>';
       });
-      html += "</table>";
+      payHtml += "</table>";
     } else {
-      html += '<span class="diag-note" style="font-size:12px;color:#999;">Zatím žádné platby.</span>';
+      payHtml += '<span style="font-size:12px;color:#999;">Zatím žádné platby.</span>';
     }
-    html += '<div class="pay-form">' +
+    payHtml += '<div class="pay-form">' +
       '<input type="date" id="pDate" value="' + new Date().toISOString().slice(0, 10) + '">' +
       '<input type="number" id="pAmount" placeholder="Částka Kč">' +
       '<input type="number" id="pHours" placeholder="Kredit hodin" step="0.5">' +
@@ -359,29 +364,41 @@ function renderCard() {
       '<input type="text" id="pNote" placeholder="Poznámka">' +
       '<button id="pAdd" style="background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:5px;font-weight:600;cursor:pointer;">Přidat platbu</button>' +
       "</div>";
+  }
 
-    // VÝUKA
-    html += '<div class="kt-section-h">Výuka (z rozvrhu)</div>';
+  let lessonsHtml = '<div class="kt-section-h">Výuka (z rozvrhu)</div>';
+  if (openId) {
     if (openCard.lessons.length) {
       let lastMonth = "";
       const MONTHS = ["ledna","února","března","dubna","května","června","července","srpna","září","října","listopadu","prosince"];
+      lessonsHtml += '<div class="lessons-scroll">';
       openCard.lessons.forEach((l) => {
         const d = new Date(l.starts || l.date.replace(" ", "T"));
         const mKey = d.getFullYear() + "-" + d.getMonth();
         if (mKey !== lastMonth) {
           lastMonth = mKey;
-          html += '<div class="lesson-month">' + MONTHS[d.getMonth()].toUpperCase() + " " + d.getFullYear() + "</div>";
+          lessonsHtml += '<div class="lesson-month">' + MONTHS[d.getMonth()].toUpperCase() + " " + d.getFullYear() + "</div>";
         }
-        html += '<div class="lesson-row"><span class="d">' + d.getDate() + ". " + (d.getMonth() + 1) + ". " +
+        lessonsHtml += '<div class="lesson-row"><span class="d">' + d.getDate() + ". " + (d.getMonth() + 1) + ". " +
           String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + "</span>" +
           '<span class="s">' + escapeHtml(l.subject) + " · " + escapeHtml(l.lector) + (l.done ? " ✓" : ' <span style="color:#999">(neodučeno)</span>') + "</span>" +
           '<span class="h">' + fmtH(l.hours) + " h</span></div>";
       });
+      lessonsHtml += "</div>";
     } else {
-      html += '<span style="font-size:12px;color:#999;">Žádné lekce v rozvrhu (starší než rok jsou po úklidu – kredit je ale započtený).</span>';
+      lessonsHtml += '<span style="font-size:12px;color:#999;">Žádné lekce v rozvrhu (starší než rok jsou po úklidu – kredit je ale započtený).</span>';
     }
+  }
+
+  // Celá karta ve dvou sloupcích (údaje | platby+výuka) – ať se vejde bez rolování.
+  let html = stateHtml;
+  if (openId) {
+    html += '<div class="card-main">' +
+      '<div class="card-col">' + fieldsHtml + "</div>" +
+      '<div class="card-col">' + payHtml + lessonsHtml + "</div>" +
+      "</div>";
   } else {
-    html += '<p style="font-size:12.5px;color:#777;">Po uložení karty půjde přidat první platba (kredit hodin).</p>';
+    html += fieldsHtml + '<p style="font-size:12.5px;color:#777;">Po uložení karty půjde přidat první platba (kredit hodin).</p>';
   }
 
   $("cardBody").innerHTML = html;

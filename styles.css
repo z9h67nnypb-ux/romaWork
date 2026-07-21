@@ -168,22 +168,26 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
 }
 /* Ve flex layoutu rozvrhu ať plochu řídí flex, ne pevný strop. */
 body.app-schedule .day-scroll { max-height: none; }
-.day-grid { display: inline-flex; min-width: 100%; }
-.col { flex: 0 0 122px; width: 122px; border-right: 1px solid var(--line); }
-.col.time { flex: 0 0 48px; width: 48px; position: sticky; left: 0; z-index: 3; background: var(--bg); }
+/* Sloupce učeben se dělí o šířku okna – žádné vodorovné rolování.
+   min-width:0 dovolí sloupcům se zúžit i pod obsah. */
+.day-grid { display: flex; width: 100%; }
+.col { flex: 1 1 0; min-width: 0; border-right: 1px solid var(--line); }
+.col.time { flex: 0 0 42px; width: 42px; position: sticky; left: 0; z-index: 3; background: var(--bg); }
 .col-head {
-  height: 26px;
+  height: 30px;
   position: sticky;
   top: 0;
   z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
   color: #fff;
   text-align: center;
-  padding: 2px 4px;
-  line-height: 1.1;
+  padding: 2px 3px;
+  line-height: 1.05;
+  overflow: hidden;      /* dlouhé názvy se ořežou – učebnu pozná i podle barvy */
+  word-break: break-word;
 }
 .col.time .col-head { background: var(--bg); color: transparent; }
 .col-body { position: relative; }

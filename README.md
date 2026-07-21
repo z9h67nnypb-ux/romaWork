@@ -72,7 +72,7 @@ Po přihlášení uvidíš žlutý pruh „Ukázkový režim" – běžíš na m
   „na co se zaměřit") a plán přípravy na 8 týdnů. Čeština odpovídá
   diagnostickému testu PoraDys pro 9. třídu (Pravopisné jevy 10 b.,
   Tvarosloví 20 b., Větná stavba 10 b., Slovní zásoba 8 b., Stylistika a
-  literatura 16 b.). Výsledky se ukládají k žákovi (Supabase, jinak
+  literatura 14 b. = 62 b.). Výsledky se ukládají k žákovi (Supabase, jinak
   prohlížeč) a je vidět **graf vývoje** mezi testy. Kategorie se upravují
   v `diagnostika.js` (konstanta `SUBJECTS`); matematika je zatím orientační.
 - Přidáním `?mock=1` do adresy se appka přepne na ukázková data (testování

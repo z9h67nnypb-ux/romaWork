@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kartotéka – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="styles.css?v=6" />
   <style>
     /* Styly jen pro kartotéku */
     .kt-wrap { max-width: 1180px; margin: 0 auto; padding: 14px 20px 60px; }
@@ -72,7 +72,7 @@
     .chip-credit.out { background: #fdeaea; color: #c62828; }
 
     /* Karta klienta v bočním panelu */
-    .kt-panel { width: 540px; max-width: 96vw; }
+    .kt-panel { width: 760px; max-width: 96vw; }
     .kt-state { display: flex; gap: 10px; margin: 4px 0 14px; }
     .kt-state .box { flex: 1; border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; text-align: center; }
     .kt-state .box .v { font-size: 19px; font-weight: 700; }
@@ -87,9 +87,18 @@
     .pay-table th { color: var(--muted); font-size: 11px; }
     .pay-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .pay-table button { border: 1px solid var(--line-strong); background: #fff; border-radius: 4px; padding: 1px 7px; cursor: pointer; font-size: 11px; }
-    .pay-form { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .pay-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
     .pay-form input, .pay-form select { border: 1px solid var(--line-strong); border-radius: 5px; padding: 6px 8px; font-size: 12.5px; width: 100%; }
     .pay-form .full { grid-column: 1 / -1; }
+
+    /* Celá karta ve dvou sloupcích (Údaje | Platby+Výuka) – bez rolování */
+    .card-main { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 4px; }
+    .card-col { min-width: 0; }
+    .card-col .kt-section-h:first-child { margin-top: 4px; }
+    .card-col .field:first-child, .card-col .field-row:first-child { margin-top: 0; }
+    /* Dlouhý seznam výuky se posouvá uvnitř svého sloupce, ne celá karta */
+    .lessons-scroll { max-height: 260px; overflow-y: auto; }
+    @media (max-width: 700px) { .card-main { grid-template-columns: 1fr; } }
 
     .lesson-month { font-size: 12px; font-weight: 700; color: var(--muted); margin: 10px 0 3px; }
     .lesson-row { display: flex; gap: 10px; font-size: 12.5px; padding: 3px 0; border-bottom: 1px dashed var(--line); }
@@ -197,6 +206,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js?v=5"></script>
-  <script src="kartoteka.js?v=3"></script>
+  <script src="kartoteka.js?v=4"></script>
 </body>
 </html>

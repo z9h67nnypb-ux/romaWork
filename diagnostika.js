@@ -26,7 +26,7 @@ const SUBJECTS = {
     label: "Čeština",
     icon: "📖",
     grade: "9. třída (průběžný test)",
-    maxTotal: 64,
+    maxTotal: 62,
     areas: [
       { key: "pravopis", name: "Pravopisné jevy", max: 10, focus: [
         "psaní i/y v koncovkách",
@@ -53,7 +53,7 @@ const SUBJECTS = {
         "spisovná × nespisovná čeština",
         "citové zabarvení slov",
       ] },
-      { key: "stylistika", name: "Stylistika a literatura", max: 16, focus: [
+      { key: "stylistika", name: "Stylistika a literatura", max: 14, focus: [
         "rozlišení druhů textů",
         "obrazná pojmenování",
         "základní literární pojmy",
