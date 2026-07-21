@@ -20,10 +20,10 @@ window.APP_CONFIG = {
   SUPABASE_ANON_KEY: "sb_publishable_Z7mTsl_KRP55dyYrJdlY3w_RZwy79Gq",
 
   // Rozsah denního rozvrhu a výška jedné hodiny v pixelech
-  // (42 px = celý den 8–21 se vejde na běžnou obrazovku bez svislého rolování)
+  // (32 px = celý den 8–21 se vejde i na menší notebooky bez svislého rolování)
   DAY_START_HOUR: 8,
   DAY_END_HOUR: 21,
-  HOUR_HEIGHT: 42,
+  HOUR_HEIGHT: 32,
 
   // Demo účty pro přihlášení v ukázkovém režimu (USE_SUPABASE = false).
   // V ostré verzi (Supabase) se NEPOUŽIJÍ – účty se zakládají v Supabase Auth

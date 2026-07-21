@@ -12,6 +12,7 @@
 
 * { box-sizing: border-box; }
 
+html, body { height: 100%; }
 body {
   margin: 0;
   font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -19,6 +20,22 @@ body {
   background: #fafafa;
   font-size: 14px;
 }
+/* Rozvrh (index.html) drží celý layout ve výšce okna – hlavní plocha se
+   posouvá jen uvnitř, takže se den vejde na jednu obrazovku bez rolování
+   celé stránky. Nastavuje se jen když má body třídu "app-schedule". */
+body.app-schedule { display: flex; flex-direction: column; overflow: hidden; }
+body.app-schedule #viewContainer {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+/* Lišty si drží svou výšku, zmenšuje se jen plocha rozvrhu. */
+body.app-schedule > .banner,
+body.app-schedule > .topbar,
+body.app-schedule > .toolbar,
+body.app-schedule > .admin-hint { flex: 0 0 auto; }
 
 /* ---------- Topbar ---------- */
 .topbar {
@@ -143,10 +160,14 @@ body {
 /* ---------- Denní rozvrh ---------- */
 .day-scroll {
   overflow: auto;
-  max-height: calc(100vh - 148px);
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(100vh - 148px); /* záloha, když by flex kontext chyběl */
   background: var(--bg);
   border-top: 1px solid var(--line);
 }
+/* Ve flex layoutu rozvrhu ať plochu řídí flex, ne pevný strop. */
+body.app-schedule .day-scroll { max-height: none; }
 .day-grid { display: inline-flex; min-width: 100%; }
 .col { flex: 0 0 122px; width: 122px; border-right: 1px solid var(--line); }
 .col.time { flex: 0 0 48px; width: 48px; position: sticky; left: 0; z-index: 3; background: var(--bg); }

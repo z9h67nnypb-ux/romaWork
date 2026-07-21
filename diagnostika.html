@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Diagnostický test – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="styles.css?v=5" />
   <style>
     /* Styly jen pro stránku diagnostiky */
     .diag-wrap { max-width: 860px; margin: 0 auto; padding: 18px 20px 60px; }
@@ -64,22 +64,26 @@
 
     /* Výsledek */
     .bars { margin: 8px 0 4px; }
-    .bar-row { display: grid; grid-template-columns: 240px 1fr 60px; gap: 10px; align-items: center; margin-bottom: 7px; font-size: 13px; }
-    @media (max-width: 640px) { .bar-row { grid-template-columns: 130px 1fr 50px; } }
+    .bar-row { display: grid; grid-template-columns: 210px 1fr 168px; gap: 10px; align-items: center; margin-bottom: 7px; font-size: 13px; }
+    @media (max-width: 640px) { .bar-row { grid-template-columns: 1fr 60px; } .bar-row .bar-track { display: none; } }
     .bar-track { background: #eee; border-radius: 5px; height: 16px; overflow: hidden; }
     .bar-fill { height: 100%; border-radius: 5px; }
     .bar-fill.weak { background: #c62828; }
     .bar-fill.mid { background: #ef6c00; }
     .bar-fill.strong { background: #2e7d32; }
-    .bar-pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+    .bar-pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; white-space: nowrap; }
 
-    .sw-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    @media (max-width: 640px) { .sw-cols { grid-template-columns: 1fr; } }
-    .sw-cols h3 { margin: 0 0 8px; font-size: 14px; }
-    .sw-cols ul { margin: 0; padding-left: 18px; font-size: 13.5px; }
-    .sw-cols li { margin-bottom: 5px; }
-    .sw-strong h3 { color: #2e7d32; }
-    .sw-weak h3 { color: #c62828; }
+    /* Úroveň zvládnutí (jako v hodnotícím archu) */
+    .lvl { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 9px; padding: 0 8px; }
+    .lvl.strong { background: #e6f4ea; color: #1e6b30; }
+    .lvl.mid { background: #fff3e0; color: #b45309; }
+    .lvl.weak { background: #fdeaea; color: #c62828; }
+
+    .focus-wrap h3 { margin: 0 0 10px; font-size: 14px; }
+    .focus-block { margin-bottom: 12px; }
+    .focus-block h4 { margin: 0 0 4px; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+    .focus-block ul { margin: 0; padding-left: 20px; font-size: 13px; }
+    .focus-block li { margin-bottom: 3px; }
 
     .plan-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .plan-table th, .plan-table td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -171,7 +175,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=3"></script>
-  <script src="diagnostika.js?v=3"></script>
+  <script src="config.js?v=5"></script>
+  <script src="diagnostika.js?v=5"></script>
 </body>
 </html>

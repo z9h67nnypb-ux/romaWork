@@ -182,6 +182,7 @@ alter table students add column if not exists lector_name text;           -- vý
 alter table students add column if not exists price_hour numeric(8,2);    -- cena Kč/hod
 alter table students add column if not exists price_hour_discount numeric(8,2); -- cena s množstevní slevou
 alter table students add column if not exists payment_method text;        -- účet DR / účet PoraDys / účet jazykovka / hotově
+alter table students add column if not exists flag text;                  -- barevné označení: online/inperson/ending/contacted/problem
 
 -- Platby (kredit): 1 řádek = jedna platba klienta.
 create table if not exists payments (
@@ -264,7 +265,7 @@ create trigger attendance_credit_sync
 create or replace view student_credit with (security_invoker = on) as
 select
   s.id as student_id,
-  s.name, s.phone, s.email, s.school, s.status, s.note,
+  s.name, s.phone, s.email, s.school, s.status, s.note, s.flag,
   s.category, s.grade, s.subjects, s.lector_name,
   s.price_hour, s.price_hour_discount, s.payment_method,
   coalesce(p.paid_hours, 0)  as paid_hours,

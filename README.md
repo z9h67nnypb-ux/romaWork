@@ -63,11 +63,18 @@ Po přihlášení uvidíš žlutý pruh „Ukázkový režim" – běžíš na m
   klienti, platby a kredit hodin (nahrazuje Excel „KARTOTÉKA"). Lekce čerpají
   kredit automaticky z rozvrhu; přehled TOTAL hlídá nízký kredit; karta
   klienta ve stylu Excelu; export CSV; hromadný import počátečních zůstatků.
+  **Barevné označení klientů** (online / osobně / končí / kontaktováno /
+  problémový) a **souhrny peněz podle způsobu platby** (kolik klientů a Kč
+  platí hotově / účet PoraDys / účet jazykovka / účet DR).
 - **🧪 Diagnostika** – stránka [`diagnostika.html`](diagnostika.html) se
-  záložkami **Matematika / Čeština**: body z testu → plán přípravy na 8 týdnů
-  (silné/slabé stránky, cvičení, tisk). Výsledky se ukládají k žákovi
-  (Supabase, jinak prohlížeč) a u žáka je vidět **graf vývoje** mezi testy.
-  Kategorie testů se upravují v `diagnostika.js` (konstanta `SUBJECTS`).
+  záložkami **Čeština / Matematika**: body z testu → hodnotící arch (úroveň
+  *zvládá / částečně zvládá / nezvládá* po oblastech, celkové hodnocení,
+  „na co se zaměřit") a plán přípravy na 8 týdnů. Čeština odpovídá
+  diagnostickému testu PoraDys pro 9. třídu (Pravopisné jevy 10 b.,
+  Tvarosloví 20 b., Větná stavba 10 b., Slovní zásoba 8 b., Stylistika a
+  literatura 16 b.). Výsledky se ukládají k žákovi (Supabase, jinak
+  prohlížeč) a je vidět **graf vývoje** mezi testy. Kategorie se upravují
+  v `diagnostika.js` (konstanta `SUBJECTS`); matematika je zatím orientační.
 - Přidáním `?mock=1` do adresy se appka přepne na ukázková data (testování
   bez zápisu do ostré databáze).
 - V mock režimu jsou v období **13.–26. 7. 2026** vygenerovaná náhodná

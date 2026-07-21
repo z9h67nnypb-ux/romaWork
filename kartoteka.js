@@ -26,16 +26,27 @@ function balanceLabel(b) { return b <= 0 ? "NÍZKÝ KREDIT" : b <= 3 ? "docház�
 
 const PAY_METHODS = ["účet DR", "účet PoraDys", "účet jazykovka", "hotově"];
 
+// Barevné označení klienta (řádek se podle něj tónuje).
+const FLAGS = [
+  { key: "", label: "— bez označení —", cls: "" },
+  { key: "online", label: "online", cls: "fl-online" },
+  { key: "inperson", label: "osobně", cls: "fl-inperson" },
+  { key: "ending", label: "končí / ukončuje", cls: "fl-ending" },
+  { key: "contacted", label: "kontaktováno", cls: "fl-contacted" },
+  { key: "problem", label: "problémový", cls: "fl-problem" },
+];
+function flagInfo(key) { return FLAGS.find((f) => f.key === (key || "")) || FLAGS[0]; }
+
 // ---------- Provider: MOCK (ukázková data v paměti) ----------
 const MockKt = {
   _seq: 1,
   students: [
-    { id: "m1", name: "Aftanas Lukáš", phone: "777050743", category: "ZŠ", grade: "5. třída", subjects: "AJ", lector_name: "Štruncová", price_hour: 420, price_hour_discount: 430, payment_method: "hotově", status: "active", note: "" },
-    { id: "m2", name: "Balík Petr", phone: "723111222", category: "ZŠ", grade: "7. třída", subjects: "MAT", lector_name: "Kunkelová", price_hour: 440, price_hour_discount: 420, payment_method: "účet PoraDys", status: "active", note: "" },
-    { id: "m3", name: "Berchak Anna", phone: "605333444", category: "SŠ", grade: "2. ročník", subjects: "ČJ, MAT", lector_name: "Mužíková", price_hour: 450, price_hour_discount: 430, payment_method: "účet DR", status: "active", note: "přijímačky na VŠ" },
-    { id: "m4", name: "Bezdičková Ela", phone: "776555666", category: "ZŠ", grade: "9. tř. - přijímačky", subjects: "ČJ, MAT", lector_name: "Šíma", price_hour: 430, price_hour_discount: 420, payment_method: "účet jazykovka", status: "active", note: "" },
-    { id: "m5", name: "Vondrušková Melissa", phone: "731777888", category: "ZŠ", grade: "8. třída", subjects: "MAT", lector_name: "Machalíková", price_hour: 420, price_hour_discount: 410, payment_method: "hotově", status: "active", note: "" },
-    { id: "m6", name: "Zvonař František", phone: "702999000", category: "SŠ", grade: "3. roč.", subjects: "ČJ, NAT", lector_name: "Tampír", price_hour: 420, price_hour_discount: 410, payment_method: "účet PoraDys", status: "former", note: "ukončeno 6/2026" },
+    { id: "m1", name: "Aftanas Lukáš", phone: "777050743", category: "ZŠ", grade: "5. třída", subjects: "AJ", lector_name: "Štruncová", price_hour: 420, price_hour_discount: 430, payment_method: "hotově", status: "active", note: "", flag: "inperson" },
+    { id: "m2", name: "Balík Petr", phone: "723111222", category: "ZŠ", grade: "7. třída", subjects: "MAT", lector_name: "Kunkelová", price_hour: 440, price_hour_discount: 420, payment_method: "účet PoraDys", status: "active", note: "", flag: "online" },
+    { id: "m3", name: "Berchak Anna", phone: "605333444", category: "SŠ", grade: "2. ročník", subjects: "ČJ, MAT", lector_name: "Mužíková", price_hour: 450, price_hour_discount: 430, payment_method: "účet DR", status: "active", note: "přijímačky na VŠ", flag: "contacted" },
+    { id: "m4", name: "Bezdičková Ela", phone: "776555666", category: "ZŠ", grade: "9. tř. - přijímačky", subjects: "ČJ, MAT", lector_name: "Šíma", price_hour: 430, price_hour_discount: 420, payment_method: "účet jazykovka", status: "active", note: "", flag: "problem" },
+    { id: "m5", name: "Vondrušková Melissa", phone: "731777888", category: "ZŠ", grade: "8. třída", subjects: "MAT", lector_name: "Machalíková", price_hour: 420, price_hour_discount: 410, payment_method: "hotově", status: "active", note: "", flag: "" },
+    { id: "m6", name: "Zvonař František", phone: "702999000", category: "SŠ", grade: "3. roč.", subjects: "ČJ, NAT", lector_name: "Tampír", price_hour: 420, price_hour_discount: 410, payment_method: "účet PoraDys", status: "former", note: "ukončeno 6/2026", flag: "ending" },
   ],
   payments: [
     { id: "p1", student_id: "m1", paid_at: "2026-05-02", amount_czk: 3900, hours_credit: 10, method: "hotově", note: "" },
@@ -161,24 +172,54 @@ function visibleRows() {
     .filter((r) => !q || (r.name || "").toLowerCase().includes(q) || (r.phone || "").includes(q));
 }
 
+// Souhrny peněz podle způsobu platby (kolik klientů + kolik Kč).
+function renderMoney() {
+  const vis = visibleRows();
+  const totalCzk = vis.reduce((s, r) => s + Number(r.paid_czk || 0), 0);
+  const groups = {};
+  vis.forEach((r) => {
+    const m = r.payment_method || "(neuvedeno)";
+    const g = groups[m] || (groups[m] = { count: 0, czk: 0 });
+    g.count++; g.czk += Number(r.paid_czk || 0);
+  });
+  const order = PAY_METHODS.concat(Object.keys(groups).filter((m) => !PAY_METHODS.includes(m)));
+  const czk = (n) => Math.round(n).toLocaleString("cs-CZ") + " Kč";
+
+  let html = '<div class="mcard total"><div class="m-label">Celkem zaplaceno</div>' +
+    '<div class="m-czk">' + czk(totalCzk) + '</div><div class="m-cnt">' + vis.length + " klientů</div></div>";
+  order.forEach((m) => {
+    const g = groups[m];
+    if (!g) return;
+    html += '<div class="mcard"><div class="m-label">' + escapeHtml(m) + "</div>" +
+      '<div class="m-czk">' + czk(g.czk) + '</div><div class="m-cnt">' + g.count + " klientů</div></div>";
+  });
+  $("ktMoney").innerHTML = html;
+}
+
 function renderTable() {
   const vis = visibleRows();
   const low = vis.filter((r) => r.balance_hours <= 0).length;
   $("ktSummary").innerHTML =
-    "<b>" + vis.length + "</b> klientů · zaplaceno celkem <b>" +
-    Math.round(vis.reduce((s, r) => s + Number(r.paid_czk || 0), 0)).toLocaleString("cs-CZ") + " Kč</b>" +
+    "<b>" + vis.length + "</b> klientů" +
     (low ? ' · <span style="color:#c62828;font-weight:600;">' + low + "× nízký kredit</span>" : "");
+  renderMoney();
 
   const tb = $("ktBody");
   tb.innerHTML = "";
   if (!vis.length) {
-    tb.innerHTML = '<tr><td colspan="12" style="color:#999;padding:18px;">Žádní klienti. Založte prvního tlačítkem „+ Nový klient".</td></tr>';
+    tb.innerHTML = '<tr><td colspan="13" style="color:#999;padding:18px;">Žádní klienti. Založte prvního tlačítkem „+ Nový klient".</td></tr>';
     return;
   }
   vis.forEach((r) => {
     const tr = document.createElement("tr");
-    if (r.status === "former") tr.className = "former";
+    const classes = [];
+    if (r.status === "former") classes.push("former");
+    if (r.flag) classes.push("row-" + r.flag);
+    tr.className = classes.join(" ");
     const band = balanceBand(Number(r.balance_hours));
+    const flagSel = '<select class="flag-select" data-id="' + r.id + '">' +
+      FLAGS.map((f) => '<option value="' + f.key + '"' + (f.key === (r.flag || "") ? " selected" : "") + ">" +
+        (f.key ? "● " : "") + escapeHtml(f.label.replace("— bez označení —", "bez označení")) + "</option>").join("") + "</select>";
     tr.innerHTML =
       "<td><b>" + escapeHtml(r.name) + "</b></td>" +
       "<td>" + escapeHtml(r.phone) + "</td>" +
@@ -188,11 +229,23 @@ function renderTable() {
       "<td>" + escapeHtml(r.lector_name) + "</td>" +
       '<td class="num">' + (r.price_hour ? Math.round(r.price_hour) : "") + "</td>" +
       "<td>" + escapeHtml(r.payment_method) + "</td>" +
+      '<td class="flag-cell">' + flagSel + "</td>" +
       '<td class="num">' + fmtH(r.paid_hours) + "</td>" +
       '<td class="num">' + fmtH(r.used_hours) + "</td>" +
       '<td class="num"><b>' + fmtH(r.balance_hours) + "</b></td>" +
       '<td><span class="chip-credit ' + band + '">' + balanceLabel(Number(r.balance_hours)) + "</span></td>";
-    tr.onclick = () => openCardPanel(r.id);
+    tr.onclick = (e) => { if (!e.target.closest(".flag-select")) openCardPanel(r.id); };
+    const sel = tr.querySelector(".flag-select");
+    sel.onclick = (e) => e.stopPropagation();
+    sel.onchange = async (e) => {
+      e.stopPropagation();
+      const val = sel.value;
+      try {
+        await kt.saveStudent({ flag: val || null }, r.id);
+        r.flag = val;
+        tr.className = [r.status === "former" ? "former" : "", val ? "row-" + val : ""].filter(Boolean).join(" ");
+      } catch (err) { alert("Označení se nepodařilo uložit: " + (err.message || err)); }
+    };
     tb.appendChild(tr);
   });
 }
@@ -266,6 +319,8 @@ function renderCard() {
     fieldHtml("Způsob platby", '<select id="kMethod">' + methodOptions(s.payment_method) + "</select>") +
     fieldHtml("Stav", '<select id="kStatus"><option value="active"' + (s.status !== "former" ? " selected" : "") + '>aktivní</option><option value="former"' + (s.status === "former" ? " selected" : "") + ">bývalý</option></select>") +
     "</div>";
+  html += fieldHtml("Označení (barva řádku)", '<select id="kFlag">' +
+    FLAGS.map((f) => '<option value="' + f.key + '"' + (f.key === (s.flag || "") ? " selected" : "") + ">" + escapeHtml(f.label) + "</option>").join("") + "</select>");
   html += fieldHtml("Poznámka", inp("kNote", s.note));
 
   if (openId) {
@@ -367,6 +422,7 @@ async function saveCard() {
     price_hour_discount: Number($("kPriceD").value) || null,
     payment_method: $("kMethod").value || null,
     status: $("kStatus").value,
+    flag: $("kFlag").value || null,
     note: $("kNote").value.trim() || null,
   };
   const btn = $("cardSave");

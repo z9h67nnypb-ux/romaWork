@@ -15,56 +15,87 @@
 // ===========================================================================
 // KATEGORIE TESTŮ – UPRAV ZDE.
 // Každá oblast: key (ukládá se do databáze – po nasazení už neměnit),
-// name (zobrazený text) a max (maximum bodů). Cvičení k oblasti se propisují
-// do plánu přípravy.
+// name (zobrazený text), max (maximum bodů) a focus (na co se zaměřit –
+// poddovednosti z hodnotícího archu; propíšou se do plánu přípravy).
+//
+// ČEŠTINA odpovídá „1. diagnostickému testu z ČJ pro žáky 9. tříd" a
+// „Hodnotícímu archu k průběžnému testu" (PoraDys – Vzdělávací centrum Kladno).
 // ===========================================================================
 const SUBJECTS = {
-  matematika: {
-    label: "Matematika",
-    icon: "🧮",
-    areas: [
-      { key: "pocty",     name: "Počítání (sčítání, odčítání, násobení, dělení)", max: 20 },
-      { key: "zlomky",    name: "Zlomky a desetinná čísla",                       max: 20 },
-      { key: "slovni",    name: "Slovní úlohy",                                   max: 20 },
-      { key: "geometrie", name: "Geometrie",                                      max: 20 },
-      { key: "rovnice",   name: "Rovnice a výrazy",                               max: 20 },
-    ],
-    exercises: {
-      pocty:     "pamětné počítání do 100, násobilka s kartičkami, počítání s časovačem",
-      zlomky:    "názorné dělení (pizza, čokoláda), číselná osa se zlomky, převody desetinných čísel",
-      slovni:    "podtrhávání klíčových údajů, zápis „co vím / co hledám“, kreslení schémat k úloze",
-      geometrie: "rýsování podle diktátu, obvody a obsahy na čtverečkovaném papíře, poznávání těles",
-      rovnice:   "model vah v rovnováze, zápis úprav krok za krokem, dosazovací zkouška",
-    },
-  },
   cestina: {
     label: "Čeština",
     icon: "📖",
+    grade: "9. třída (průběžný test)",
+    maxTotal: 64,
     areas: [
-      { key: "cteni",    name: "Čtení s porozuměním",                       max: 20 },
-      { key: "pravopis", name: "Pravopis (i/y, ě, s/z, velká písmena)",     max: 20 },
-      { key: "mluvnice", name: "Mluvnice (slovní druhy, větné členy)",      max: 20 },
-      { key: "zasoba",   name: "Slovní zásoba a vyjadřování",               max: 20 },
-      { key: "sloh",     name: "Sloh a psaný projev",                       max: 20 },
+      { key: "pravopis", name: "Pravopisné jevy", max: 10, focus: [
+        "psaní i/y v koncovkách",
+        "předpony s / z",
+        "psaní velkých písmen",
+        "významově rozlišená slova",
+      ] },
+      { key: "tvaroslovi", name: "Tvarosloví", max: 20, focus: [
+        "tvary přídavných jmen",
+        "určování slovních druhů",
+        "mluvnické kategorie podstatných jmen",
+        "mluvnické kategorie sloves",
+        "kořen a předpony",
+      ] },
+      { key: "vetnastavba", name: "Větná stavba", max: 10, focus: [
+        "rozlišování věty jednoduché a souvětí",
+        "větné členy",
+        "druhy vět vedlejších",
+        "významové poměry mezi větami",
+        "interpunkce",
+      ] },
+      { key: "slovnizasoba", name: "Slovní zásoba", max: 8, focus: [
+        "význam slov v kontextu",
+        "spisovná × nespisovná čeština",
+        "citové zabarvení slov",
+      ] },
+      { key: "stylistika", name: "Stylistika a literatura", max: 16, focus: [
+        "rozlišení druhů textů",
+        "obrazná pojmenování",
+        "základní literární pojmy",
+      ] },
     ],
-    exercises: {
-      cteni:    "čtení s okénkem, otázky k textu po odstavcích, převyprávění vlastními slovy",
-      pravopis: "doplňovačky i/y, kartičky vyjmenovaných slov, krátké diktáty s okamžitou kontrolou",
-      mluvnice: "barevné podtrhávání slovních druhů, skládání vět z kartiček, rozbory krok za krokem",
-      zasoba:   "hry se synonymy a antonymy, popis obrázku, pátrání ve slovníku",
-      sloh:     "krátké texty na dané téma, osnova před psaním, společná úprava napsaného",
-    },
+  },
+  matematika: {
+    label: "Matematika",
+    icon: "🧮",
+    grade: "",
+    note: "Kategorie a bodování doplníme podle vašeho testu z matematiky (zatím orientační).",
+    areas: [
+      { key: "pocty",     name: "Počítání (základní operace)", max: 20, focus: ["pamětné počítání", "násobilka", "písemné algoritmy"] },
+      { key: "zlomky",    name: "Zlomky a desetinná čísla",    max: 20, focus: ["krácení a rozšiřování zlomků", "převody na desetinná čísla"] },
+      { key: "slovni",    name: "Slovní úlohy",                max: 20, focus: ["zápis úlohy (co vím / co hledám)", "úměra a trojčlenka"] },
+      { key: "geometrie", name: "Geometrie",                   max: 20, focus: ["obvody a obsahy", "konstrukce", "tělesa"] },
+      { key: "rovnice",   name: "Rovnice a výrazy",            max: 20, focus: ["úpravy výrazů", "řešení rovnic"] },
+    ],
   },
 };
 
-// Hranice pásem (podíl získaných bodů).
-const WEAK_LIMIT = 0.45;   // pod 45 % = slabá stránka
-const STRONG_LIMIT = 0.7;  // nad 70 % = silná stránka
+// Hranice pásem podle hodnotícího archu (zvládá / částečně zvládá / nezvládá).
+const MID_LIMIT = 0.45;    // pod 45 % = nezvládá
+const STRONG_LIMIT = 0.75; // od 75 % = zvládá; mezi tím = částečně zvládá
+const BAND = {
+  strong: { label: "zvládá", cls: "strong" },
+  mid:    { label: "částečně zvládá", cls: "mid" },
+  weak:   { label: "nezvládá", cls: "weak" },
+};
+
+// Celkové hodnocení podle hodnotícího archu (4 stupně).
+function overallAssessment(pct) {
+  if (pct >= 85) return "Výborné zvládnutí učiva";
+  if (pct >= 70) return "Velmi dobré zvládnutí učiva";
+  if (pct >= 50) return "Dostačující zvládnutí učiva";
+  return "Učivo vyžaduje systematické doplnění";
+}
 
 const STORAGE_KEY = "poradys_diagnostics";
 const $ = (id) => document.getElementById(id);
 
-let activeSubject = "matematika";
+let activeSubject = "cestina";
 let lastResult = null;   // { entry, ev, plan } – poslední vyhodnocený test
 let allEntries = [];     // cache uložených testů (DB nebo localStorage)
 
@@ -164,7 +195,7 @@ function evaluate(subjKey, scores) {
   const results = SUBJECTS[subjKey].areas.map((a) => {
     const points = scores[a.key];
     const pct = points / a.max;
-    const band = pct < WEAK_LIMIT ? "weak" : pct > STRONG_LIMIT ? "strong" : "mid";
+    const band = pct < MID_LIMIT ? "weak" : pct >= STRONG_LIMIT ? "strong" : "mid";
     return { ...a, points, pct, band };
   });
   const byPct = (x, y) => x.pct - y.pct;
@@ -183,17 +214,29 @@ function overallPct(subjKey, scores) {
   return Math.round((pts / max) * 100);
 }
 
+// Vybere z oblasti pár konkrétních poddovedností „na co se zaměřit".
+// Prostřídá je podle pořadí týdne, ať se v plánu neopakuje pořád totéž.
+function focusPicks(area, week) {
+  const f = area.focus || [];
+  if (!f.length) return "procvičování dané oblasti";
+  if (f.length <= 2) return f.join(", ");
+  const a = f[week % f.length];
+  const b = f[(week + 1) % f.length];
+  return a + ", " + b;
+}
+
 function buildPlan(subjKey, ev) {
-  const focusPool = ev.weaknesses.length ? ev.weaknesses : ev.mids.length ? ev.mids : ev.results.slice(0, 2);
-  const extraPool = ev.weaknesses.length ? ev.mids : [];
-  const exercises = SUBJECTS[subjKey].exercises;
+  // Nejdřív oblasti „nezvládá", pak „částečně zvládá"; když je vše zvládnuté,
+  // vezmeme nejslabší z toho, co je, na udržovací procvičování.
+  const focusPool = ev.weaknesses.length
+    ? ev.weaknesses.concat(ev.mids)
+    : ev.mids.length ? ev.mids : ev.results.slice().sort((a, b) => a.pct - b.pct).slice(0, 2);
   const weeks = [];
   for (let w = 0; w < 8; w++) {
     const focus = focusPool[w % focusPool.length];
-    const extra = extraPool.length ? extraPool[w % extraPool.length] : null;
     weeks.push({
-      n: w + 1, focus, extra,
-      exercises: exercises[focus.key] || "procvičování dané oblasti",
+      n: w + 1, focus,
+      exercises: focusPicks(focus, w),
       review: w === 3 || w === 7, // ve 4. a 8. týdnu kontrolní opakování
     });
   }
@@ -203,17 +246,22 @@ function buildPlan(subjKey, ev) {
 
 function summaryText(entry, ev, plan) {
   const avg = overallPct(entry.subject, entry.scores);
-  let s = "<b>" + escapeHtml(entry.name) + "</b> – " + SUBJECTS[entry.subject].label.toLowerCase() +
-    ", celková úspěšnost <b>" + avg + " %</b>. ";
+  const S = SUBJECTS[entry.subject];
+  const pts = S.areas.reduce((s, a) => s + (Number(entry.scores[a.key]) || 0), 0);
+  const max = S.areas.reduce((s, a) => s + a.max, 0);
+  let s = "<b>" + escapeHtml(entry.name) + "</b> – " + S.label +
+    ", celkem <b>" + pts + " / " + max + " b. (" + avg + " %)</b>. " +
+    'Celkové hodnocení: <b>' + overallAssessment(avg) + "</b>. ";
   if (ev.weaknesses.length) {
     s += "Doporučujeme <b>" + plan.perWeek + "× týdně</b> doučování se zaměřením na: " +
       ev.weaknesses.map((r) => "<b>" + escapeHtml(r.name) + "</b>").join(", ") + ". ";
+  } else if (ev.mids.length) {
+    s += "Doporučujeme <b>" + plan.perWeek + "× týdně</b> upevnit oblasti, které žák zvládá jen částečně. ";
   } else {
-    s += "Žák nemá výrazně slabou oblast – stačí <b>1× týdně</b> udržovací lekce. ";
+    s += "Žák nemá slabou oblast – stačí <b>1× týdně</b> udržovací lekce. ";
   }
   if (ev.strengths.length) {
-    s += "Silné stránky (" + ev.strengths.map((r) => escapeHtml(r.name)).join(", ") +
-      ") využijte jako motivaci a odrazový můstek.";
+    s += "Bez problémů zvládá: " + ev.strengths.map((r) => escapeHtml(r.name)).join(", ") + ".";
   }
   return s;
 }
@@ -225,29 +273,32 @@ function renderResult(entry) {
   lastResult = { entry, ev, plan };
 
   const S = SUBJECTS[entry.subject];
-  $("resTitle").textContent = "Výsledek: " + entry.name + " – " + S.label + " (" + entry.grade + ", " + fmtDateCz(entry.date) + ")";
+  $("resTitle").textContent = "Hodnotící arch: " + entry.name + " – " + S.label + " (" + entry.grade + ", " + fmtDateCz(entry.date) + ")";
   $("resSummary").innerHTML = summaryText(entry, ev, plan) +
     (entry.note ? '<br><span style="color:#666">Poznámka: ' + escapeHtml(entry.note) + "</span>" : "");
 
+  // Přehled oblastí s úrovní (zvládá / částečně zvládá / nezvládá) – jako v archu.
   $("resBars").innerHTML = ev.results.map((r) => {
     const pct = Math.round(r.pct * 100);
     return '<div class="bar-row"><span>' + escapeHtml(r.name) + "</span>" +
       '<div class="bar-track"><div class="bar-fill ' + r.band + '" style="width:' + pct + '%"></div></div>' +
-      '<span class="bar-pct">' + r.points + "/" + r.max + "</span></div>";
+      '<span class="bar-pct">' + r.points + "/" + r.max + ' b. · <span class="lvl ' + BAND[r.band].cls + '">' + BAND[r.band].label + "</span></span></div>";
   }).join("");
 
-  const list = (rows, empty) => rows.length
-    ? "<ul>" + rows.map((r) => "<li>" + escapeHtml(r.name) + " (" + Math.round(r.pct * 100) + " %)</li>").join("") + "</ul>"
-    : '<span class="diag-note">' + empty + "</span>";
-  $("resSW").innerHTML =
-    '<div class="sw-strong"><h3>✔ Silné stránky</h3>' + list(ev.strengths, "Žádná oblast nad 70 %.") + "</div>" +
-    '<div class="sw-weak"><h3>✘ Slabé stránky</h3>' + list(ev.weaknesses, "Žádná oblast pod 45 % – super!") + "</div>";
+  // „Na co se zaměřit" – konkrétní poddovednosti u oblastí, které nejsou zvládnuté.
+  const toWork = ev.weaknesses.concat(ev.mids);
+  const focusHtml = toWork.length
+    ? toWork.map((r) => '<div class="focus-block"><h4>' + escapeHtml(r.name) +
+        ' <span class="lvl ' + BAND[r.band].cls + '">' + BAND[r.band].label + "</span></h4><ul>" +
+        (r.focus || []).map((f) => "<li>" + escapeHtml(f) + "</li>").join("") + "</ul></div>").join("")
+    : '<span class="diag-note">Všechny oblasti žák zvládá – žádné cílené doplnění není potřeba. 🎉</span>';
+  $("resSW").innerHTML = '<div class="focus-wrap"><h3>Na co se zaměřit</h3>' + focusHtml + "</div>";
 
   $("resPlan").innerHTML =
-    '<table class="plan-table"><tr><th>Týden</th><th>Hlavní zaměření</th><th>Co dělat na lekcích</th></tr>' +
+    '<table class="plan-table"><tr><th>Týden</th><th>Hlavní zaměření</th><th>Co procvičovat na lekcích</th></tr>' +
     plan.weeks.map((w) =>
       "<tr><td>" + w.n + ".</td><td><b>" + escapeHtml(w.focus.name) + "</b>" +
-      (w.extra ? '<br><span style="color:#777">+ ' + escapeHtml(w.extra.name) + "</span>" : "") +
+      ' <span class="lvl ' + BAND[w.focus.band].cls + '">' + BAND[w.focus.band].label + "</span>" +
       "</td><td>" + escapeHtml(w.exercises) +
       (w.review ? "<br><b>Kontrolní opakování a mini-test pokroku.</b>" : "") +
       "</td></tr>"

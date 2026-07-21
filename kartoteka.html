@@ -28,6 +28,35 @@
     .kt-summary { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
     .kt-summary b { color: var(--text); }
 
+    /* Souhrny peněz podle způsobu platby */
+    .kt-money { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .kt-money .mcard { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: #fff; min-width: 130px; }
+    .kt-money .mcard.total { background: #f1f5fc; border-color: #d6e2f6; }
+    .kt-money .mcard .m-label { font-size: 11px; color: var(--muted); }
+    .kt-money .mcard .m-czk { font-size: 17px; font-weight: 700; }
+    .kt-money .mcard .m-cnt { font-size: 11px; color: var(--muted); }
+
+    /* Legenda + barevné označení */
+    .kt-legend { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    .kt-legend-title { font-weight: 600; }
+    .kt-legend-item { display: flex; align-items: center; gap: 5px; }
+    .kt-legend .dot, .flag-select-wrap .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,.15); }
+    .dot.fl-online { background: #3b82f6; }
+    .dot.fl-inperson { background: #22c55e; }
+    .dot.fl-ending { background: #9ca3af; }
+    .dot.fl-contacted { background: #ef4444; }
+    .dot.fl-problem { background: #f59e0b; }
+
+    /* Tónování celého řádku podle označení */
+    .kt-table tr.row-online   { background: #eff6ff; }
+    .kt-table tr.row-inperson { background: #f0fdf4; }
+    .kt-table tr.row-ending   { background: #f3f4f6; color: #6b7280; }
+    .kt-table tr.row-contacted{ background: #fef2f2; }
+    .kt-table tr.row-problem  { background: #fff7ed; }
+    .kt-table tr.row-online:hover, .kt-table tr.row-inperson:hover, .kt-table tr.row-ending:hover,
+    .kt-table tr.row-contacted:hover, .kt-table tr.row-problem:hover { filter: brightness(0.97); }
+    .flag-select { border: 1px solid var(--line-strong); border-radius: 4px; padding: 2px 4px; font-size: 11px; background: #fff; cursor: pointer; }
+
     .kt-table-wrap { background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
     .kt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 980px; }
     .kt-table th, .kt-table td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -104,12 +133,26 @@
         <button id="ktExportBtn">⬇ Export CSV</button>
       </div>
       <div id="ktSummary" class="kt-summary"></div>
+
+      <!-- Souhrny peněz podle způsobu platby -->
+      <div id="ktMoney" class="kt-money"></div>
+
+      <!-- Legenda barevného označení klientů -->
+      <div class="kt-legend">
+        <span class="kt-legend-title">Označení:</span>
+        <span class="kt-legend-item"><span class="dot fl-online"></span> online</span>
+        <span class="kt-legend-item"><span class="dot fl-inperson"></span> osobně</span>
+        <span class="kt-legend-item"><span class="dot fl-ending"></span> končí / ukončuje</span>
+        <span class="kt-legend-item"><span class="dot fl-contacted"></span> kontaktováno</span>
+        <span class="kt-legend-item"><span class="dot fl-problem"></span> problémový</span>
+      </div>
+
       <div class="kt-table-wrap">
         <table class="kt-table">
           <thead>
             <tr>
               <th>Klient</th><th>Telefon</th><th>Kat.</th><th>Třída</th><th>Předměty</th>
-              <th>Lektor/ka</th><th class="num">Cena/hod</th><th>Platba</th>
+              <th>Lektor/ka</th><th class="num">Cena/hod</th><th>Platba</th><th>Označení</th>
               <th class="num">Zaplaceno h</th><th class="num">Vyčerpáno h</th><th class="num">Zůstatek</th><th></th>
             </tr>
           </thead>
@@ -153,7 +196,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=4"></script>
-  <script src="kartoteka.js?v=1"></script>
+  <script src="config.js?v=5"></script>
+  <script src="kartoteka.js?v=2"></script>
 </body>
 </html>
