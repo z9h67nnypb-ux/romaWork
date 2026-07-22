@@ -322,22 +322,21 @@ function renderCard() {
       "</div>";
   }
 
-  // Údaje klienta (levý sloupec)
-  let fieldsHtml =
-    '<div class="field-row">' + fieldHtml("Jméno *", inp("kName", s.name)) + fieldHtml("Telefon", inp("kPhone", s.phone)) + "</div>" +
-    '<div class="field-row">' + fieldHtml("Kategorie", inp("kCategory", s.category, "ZŠ / SŠ…")) + fieldHtml("Třída / ročník", inp("kGrade", s.grade)) + "</div>" +
-    '<div class="field-row">' + fieldHtml("Předměty", inp("kSubjects", s.subjects, "např. ČJ, MAT")) + fieldHtml("Lektor/ka", inp("kLector", s.lector_name)) + "</div>" +
-    '<div class="field-row">' +
-      fieldHtml("Cena Kč/hod", '<input type="number" id="kPrice" value="' + (s.price_hour || "") + '">') +
-      fieldHtml("Cena se slevou", '<input type="number" id="kPriceD" value="' + (s.price_hour_discount || "") + '">') +
-    "</div>" +
-    '<div class="field-row">' +
-      fieldHtml("Způsob platby", '<select id="kMethod">' + methodOptions(s.payment_method) + "</select>") +
-      fieldHtml("Stav", '<select id="kStatus"><option value="active"' + (s.status !== "former" ? " selected" : "") + '>aktivní</option><option value="former"' + (s.status === "former" ? " selected" : "") + ">bývalý</option></select>") +
-    "</div>" +
-    '<div class="field-row">' +
-      fieldHtml("Označení (barva řádku)", '<select id="kFlag">' + flagOptions(s.flag) + "</select>") +
-      fieldHtml("Poznámka", inp("kNote", s.note)) +
+  // Údaje klienta – mřížka 2×N, aby popisky i políčka byly v jedné rovině
+  // (u flexu se pole rozjela, když měl jeden popisek dva řádky).
+  let fieldsHtml = '<div class="card-fields">' +
+    fieldHtml("Jméno *", inp("kName", s.name)) +
+    fieldHtml("Telefon", inp("kPhone", s.phone)) +
+    fieldHtml("Kategorie", inp("kCategory", s.category, "ZŠ / SŠ…")) +
+    fieldHtml("Třída / ročník", inp("kGrade", s.grade)) +
+    fieldHtml("Předměty", inp("kSubjects", s.subjects, "např. ČJ, MAT")) +
+    fieldHtml("Lektor/ka", inp("kLector", s.lector_name)) +
+    fieldHtml("Cena Kč/hod", '<input type="number" id="kPrice" value="' + (s.price_hour || "") + '">') +
+    fieldHtml("Cena se slevou", '<input type="number" id="kPriceD" value="' + (s.price_hour_discount || "") + '">') +
+    fieldHtml("Způsob platby", '<select id="kMethod">' + methodOptions(s.payment_method) + "</select>") +
+    fieldHtml("Stav", '<select id="kStatus"><option value="active"' + (s.status !== "former" ? " selected" : "") + '>aktivní</option><option value="former"' + (s.status === "former" ? " selected" : "") + ">bývalý</option></select>") +
+    fieldHtml("Označení", '<select id="kFlag">' + flagOptions(s.flag) + "</select>") +
+    fieldHtml("Poznámka", inp("kNote", s.note)) +
     "</div>";
 
   // Platby + Výuka (pravý sloupec)

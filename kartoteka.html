@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="styles.css?v=6" />
   <style>
     /* Styly jen pro kartotéku */
-    .kt-wrap { max-width: 1180px; margin: 0 auto; padding: 14px 20px 60px; }
+    .kt-wrap { max-width: 1500px; margin: 0 auto; padding: 14px 20px 60px; }
     .kt-top { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
     .kt-top h1 { margin: 0; font-size: 22px; color: var(--title); }
     .kt-top a { font-size: 13px; color: var(--accent); text-decoration: none; }
@@ -58,13 +58,28 @@
     .flag-select { border: 1px solid var(--line-strong); border-radius: 4px; padding: 2px 4px; font-size: 11px; background: #fff; cursor: pointer; }
 
     .kt-table-wrap { background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
-    .kt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 980px; }
-    .kt-table th, .kt-table td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-    .kt-table th { color: var(--muted); font-weight: 600; font-size: 11.5px; position: sticky; top: 0; background: #fff; }
+    .kt-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+    .kt-table th, .kt-table td { text-align: left; padding: 5px 7px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .kt-table th { color: var(--muted); font-weight: 600; font-size: 11px; position: sticky; top: 0; background: #fff; }
     .kt-table td.num, .kt-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
     .kt-table tbody tr { cursor: pointer; }
     .kt-table tbody tr:hover { background: #f6f8fc; }
     .kt-table .former td { color: #999; }
+    /* Pevné šířky sloupců, ať se tabulka vejde bez vodorovného rolování.
+       Pořadí: Klient, Telefon, Kat., Třída, Předměty, Lektor, Cena, Platba,
+       Označení, Zapl., Vyč., Zůstatek, chip */
+    .kt-table col.c-klient   { width: 15%; }
+    .kt-table col.c-tel      { width: 8%; }
+    .kt-table col.c-kat      { width: 4%; }
+    .kt-table col.c-trida    { width: 11%; }
+    .kt-table col.c-predm    { width: 7%; }
+    .kt-table col.c-lektor   { width: 9%; }
+    .kt-table col.c-cena     { width: 5%; }
+    .kt-table col.c-platba   { width: 9%; }
+    .kt-table col.c-oznac    { width: 12%; }
+    .kt-table col.c-num      { width: 6%; }
+    .kt-table col.c-chip     { width: 6%; }
+    .kt-table .flag-select { max-width: 100%; }
 
     .chip-credit { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 10px; padding: 1px 9px; }
     .chip-credit.ok { background: #e6f4ea; color: #1e6b30; }
@@ -96,6 +111,12 @@
     .card-col { min-width: 0; }
     .card-col .kt-section-h:first-child { margin-top: 4px; }
     .card-col .field:first-child, .card-col .field-row:first-child { margin-top: 0; }
+    /* Údaje klienta v mřížce – všechna pole a popisky v jedné rovině */
+    .card-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+    .card-fields .field { margin-top: 0; min-width: 0; display: flex; flex-direction: column; }
+    .card-fields .field label { min-height: 30px; display: flex; align-items: flex-end; margin-bottom: 4px; }
+    /* Stejná výška u input i select, ať jsou pole zarovnaná na pixel */
+    .card-fields .field input, .card-fields .field select { height: 33px; margin-top: 0; }
     /* Dlouhý seznam výuky se posouvá uvnitř svého sloupce, ne celá karta */
     .lessons-scroll { max-height: 260px; overflow-y: auto; }
     @media (max-width: 700px) { .card-main { grid-template-columns: 1fr; } }
@@ -158,11 +179,16 @@
 
       <div class="kt-table-wrap">
         <table class="kt-table">
+          <colgroup>
+            <col class="c-klient" /><col class="c-tel" /><col class="c-kat" /><col class="c-trida" />
+            <col class="c-predm" /><col class="c-lektor" /><col class="c-cena" /><col class="c-platba" />
+            <col class="c-oznac" /><col class="c-num" /><col class="c-num" /><col class="c-num" /><col class="c-chip" />
+          </colgroup>
           <thead>
             <tr>
-              <th>Klient</th><th>Telefon</th><th>Kat.</th><th>Třída</th><th>Předměty</th>
-              <th>Lektor/ka</th><th class="num">Cena/hod</th><th>Platba</th><th>Označení</th>
-              <th class="num">Zaplaceno h</th><th class="num">Vyčerpáno h</th><th class="num">Zůstatek</th><th></th>
+              <th>Klient</th><th>Telefon</th><th>Kat.</th><th>Třída</th><th>Předm.</th>
+              <th>Lektor/ka</th><th class="num">Kč/h</th><th>Platba</th><th>Označení</th>
+              <th class="num">Zapl. h</th><th class="num">Vyč. h</th><th class="num">Zůstatek</th><th></th>
             </tr>
           </thead>
           <tbody id="ktBody"></tbody>
@@ -206,6 +232,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js?v=5"></script>
-  <script src="kartoteka.js?v=4"></script>
+  <script src="kartoteka.js?v=5"></script>
 </body>
 </html>
