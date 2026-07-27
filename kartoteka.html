@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kartotéka – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
   <style>
     /* Styly jen pro kartotéku */
     .kt-wrap { max-width: 1500px; margin: 0 auto; padding: 14px 20px 60px; }
@@ -76,10 +76,44 @@
     .kt-table col.c-lektor   { width: 9%; }
     .kt-table col.c-cena     { width: 5%; }
     .kt-table col.c-platba   { width: 9%; }
-    .kt-table col.c-oznac    { width: 12%; }
+    .kt-table col.c-oznac    { width: 10%; }
     .kt-table col.c-num      { width: 6%; }
-    .kt-table col.c-chip     { width: 6%; }
+    /* poslední sloupec nese buď stav kreditu, nebo tlačítko „↩ aktivovat" */
+    .kt-table col.c-chip     { width: 9%; }
     .kt-table .flag-select { max-width: 100%; }
+
+    /* Bývalého klienta lze vrátit mezi aktivní přímo z tabulky */
+    .kt-table button.reactivate {
+      border: 1px solid var(--line-strong); background: #fff; border-radius: 4px;
+      padding: 1px 6px; font-size: 10.5px; cursor: pointer; color: #1e6b30; font-weight: 600;
+      white-space: nowrap;
+    }
+    .kt-table button.reactivate:hover { background: #e6f4ea; border-color: #1e6b30; }
+
+    /* Rozklikávací rozpis klientů podle způsobu platby */
+    .kt-money .mcard.clickable { cursor: pointer; }
+    .kt-money .mcard.clickable:hover { background: #f6f8fc; border-color: var(--line-strong); }
+    .kt-money .mcard.open { background: #eef2fb; border-color: var(--accent); }
+    .kt-money .m-caret { color: var(--accent); font-weight: 700; }
+    .kt-method-detail {
+      background: #fff; border: 1px solid var(--accent); border-radius: 8px;
+      padding: 10px 12px; margin: -4px 0 12px;
+    }
+    .kt-method-detail .md-head {
+      display: flex; align-items: center; gap: 10px; font-size: 12.5px;
+      color: var(--muted); margin-bottom: 6px;
+    }
+    .kt-method-detail .md-head b { color: var(--title); font-size: 13.5px; }
+    .kt-method-detail .md-head button {
+      margin-left: auto; border: 1px solid var(--line-strong); background: #fff;
+      border-radius: 4px; padding: 2px 9px; cursor: pointer; font-size: 11.5px;
+    }
+    .md-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .md-table th, .md-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    .md-table th { color: var(--muted); font-size: 11px; font-weight: 600; }
+    .md-table td.num, .md-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .md-table tbody tr { cursor: pointer; }
+    .md-table tr:hover { background: #f6f8fc; }
 
     .chip-credit { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 10px; padding: 1px 9px; }
     .chip-credit.ok { background: #e6f4ea; color: #1e6b30; }
@@ -164,8 +198,9 @@
       </div>
       <div id="ktSummary" class="kt-summary"></div>
 
-      <!-- Souhrny peněz podle způsobu platby -->
+      <!-- Souhrny peněz podle způsobu platby (kliknutím se rozbalí seznam klientů) -->
       <div id="ktMoney" class="kt-money"></div>
+      <div id="ktMethodDetail" class="kt-method-detail hidden"></div>
 
       <!-- Legenda barevného označení klientů -->
       <div class="kt-legend">
@@ -231,7 +266,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=5"></script>
-  <script src="kartoteka.js?v=5"></script>
+  <script src="config.js?v=6"></script>
+  <script src="kartoteka.js?v=7"></script>
 </body>
 </html>

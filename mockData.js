@@ -79,8 +79,50 @@ function _buildRandomLessons(d) {
   const count = dow === 0 ? Math.floor(rnd() * 3) : dow === 6 ? 3 + Math.floor(rnd() * 4) : 9 + Math.floor(rnd() * 8);
 
   const lessons = [];
+
+  // Směny lektorů u stolů – co si šéfová ráno zapisuje ke každému stolu.
+  if (dow !== 0) {
+    const shiftRooms = window.ROOMS.slice(0, 4 + Math.floor(rnd() * 4));
+    shiftRooms.forEach((room, i) => {
+      const from = 8 + Math.floor(rnd() * 3);          // 8–10
+      const to = from + 4 + Math.floor(rnd() * 5);     // 4–8 hodin
+      lessons.push({
+        id: "rndshift-" + i,
+        kind: "shift",
+        room_id: room.id,
+        starts_at: _at(d, from, 0),
+        ends_at: _at(d, Math.min(to, 21), 0),
+        student_names: "",
+        subject: "",
+        lector_name: pick(MOCK_LECTORS),
+        mode: "offline",
+        status: "planned",
+        done: false,
+        description: "",
+      });
+      // občas se u stolu vystřídají dva lektoři
+      if (rnd() < 0.35 && to < 18) {
+        lessons.push({
+          id: "rndshift-b-" + i,
+          kind: "shift",
+          room_id: room.id,
+          starts_at: _at(d, Math.min(to, 20), 0),
+          ends_at: _at(d, Math.min(to + 4, 21), 0),
+          student_names: "",
+          subject: "",
+          lector_name: pick(MOCK_LECTORS),
+          mode: "offline",
+          status: "planned",
+          done: false,
+          description: "",
+        });
+      }
+    });
+  }
+
   const busy = {}; // room_id -> [{s,e}] – ať se lekce v jedné místnosti nepřekrývají
-  for (let n = 0; n < count * 3 && lessons.length < count; n++) {
+  const wanted = lessons.length + count; // v lessons už jsou směny, ty se nepočítají
+  for (let n = 0; n < count * 3 && lessons.length < wanted; n++) {
     const room = pick(window.ROOMS);
     const startH = 8 + Math.floor(rnd() * 10); // 8–17
     const startM = rnd() < 0.75 ? 0 : 30;
@@ -96,6 +138,7 @@ function _buildRandomLessons(d) {
     const done = status === "done";
     lessons.push({
       id: "rnd-" + lessons.length,
+      kind: "lesson",
       room_id: room.id,
       starts_at: _at(d, Math.floor(s / 60), s % 60),
       ends_at: _at(d, Math.floor(e / 60), e % 60),
@@ -105,7 +148,8 @@ function _buildRandomLessons(d) {
       mode: rnd() < 0.18 ? "online" : "offline",
       status: status,
       done: done,
-      description: done ? pick(MOCK_DESCRIPTIONS) : "",
+      // poznámka i u naplánovaných lekcí – ukazuje se rovnou v buňce rozvrhu
+      description: done || rnd() < 0.4 ? pick(MOCK_DESCRIPTIONS) : "",
     });
   }
   return lessons;
@@ -121,6 +165,7 @@ window.buildMockLessons = function (date) {
     Object.assign(
       {
         id: "mock-" + i++,
+        kind: "lesson",
         room_id: room,
         starts_at: _at(d, sh, sm),
         ends_at: _at(d, eh, em),
@@ -135,38 +180,59 @@ window.buildMockLessons = function (date) {
       extra || {}
     );
 
-  return [
-    L("office-1", 8, 0, 9, 0, "Šíma", "AJ", "Kunkelová"),
-    L("office-1", 9, 0, 11, 0, "Vedoucí lektor dne", "—", "Kunkelová", { status: "done", done: true }),
-    L("office-1", 13, 0, 14, 0, "Milka Stanislav", "AJ", "Šíma"),
-    L("office-1", 14, 0, 15, 0, "Barášková Kristýna", "AJ", "Šíma", { status: "planned" }),
+  // Směna: kdo je u kterého stolu a od kolika do kolika. Ukáže se jako řádek
+  // pod názvem stolu – přesně to, co si šéfová dřív psala jako "lekci" v 8:00.
+  const S = (room, sh, eh, lector, note) => ({
+    id: "mock-" + i++,
+    kind: "shift",
+    room_id: room,
+    starts_at: _at(d, sh, 0),
+    ends_at: _at(d, eh, 0),
+    student_names: "",
+    subject: "",
+    lector_name: lector,
+    mode: "offline",
+    status: "planned",
+    done: false,
+    description: note || "",
+  });
 
-    L("sam-1", 8, 0, 9, 0, "Kunkelová", "—", "Mužíková"),
-    L("sam-1", 14, 0, 15, 0, "Hamouz Ondřej", "ČJ", "Mužíková"),
+  return [
+    S("office-1", 8, 13, "Kunkelová"),
+    S("office-1", 13, 17, "Šíma"),
+    S("sam-1", 8, 17, "Mužíková"),
+    S("sam-2", 13, 17, "Kunkelová", "zaskakuje za Mužíkovou"),
+    S("jaz-1", 14, 17, "Snížková", "dopoledne nemůže"),
+    S("jaz-2", 8, 16, "Bečková"),
+    S("vse-2", 8, 12, "Selicharová"),
+    S("vse-3", 12, 16, "Machalíková"),
+    S("mat-1", 8, 14, "Machalíková"),
+    S("mat-1", 14, 18, "Jenčíková"),
+    S("mat-2", 8, 14, "Jenčíková"),
+    S("mat-2", 14, 16, "Feireislová"),
+
+    L("office-1", 9, 0, 11, 0, "Šíma", "AJ", "Kunkelová", { status: "done", done: true, description: "Opakování minulého času, poslech." }),
+    L("office-1", 13, 0, 14, 0, "Milka Stanislav", "AJ", "Šíma", { description: "Nepravidelná slovesa – přinést sešit." }),
+    L("office-1", 14, 0, 15, 0, "Barášková Kristýna", "AJ", "Šíma"),
+
+    L("sam-1", 14, 0, 15, 0, "Hamouz Ondřej", "ČJ", "Mužíková", { description: "Shoda přísudku s podmětem." }),
     L("sam-1", 15, 0, 16, 0, "Petřík Sebastián a Daniel", "ČJ", "Mužíková"),
     L("sam-1", 16, 0, 17, 0, "Nedvěd Oliver", "ČJ", "Mužíková"),
 
-    L("sam-2", 8, 0, 9, 0, "Mužíková", "—", "Kunkelová"),
     L("sam-2", 13, 0, 15, 0, "Tůmová Adéla", "AJ", "Mužíková"),
     L("sam-2", 16, 0, 17, 0, "Hromadníková Iva", "AJ", "Mužíková"),
 
-    L("jaz-1", 8, 0, 12, 0, "Snížková (k dispozici od 14:00)", "—", "Snížková", { status: "cancelled", description: "JARNÍ PRÁZDNINY" }),
-    L("jaz-1", 16, 0, 17, 0, "Pajskr David", "MAT", "Snížková"),
+    L("jaz-1", 16, 0, 17, 0, "Pajskr David", "MAT", "Snížková", { description: "Zlomky – převody." }),
 
-    L("jaz-2", 8, 0, 9, 0, "Bečková", "ČJ", "Bečková"),
     L("jaz-2", 14, 0, 15, 0, "Lukaškin Žena", "ČJ", "Bečková"),
-    L("jaz-2", 15, 0, 16, 0, "Mládek Martin", "ČJ", "Bečková"),
-
-    L("vse-2", 8, 0, 9, 0, "Selicharová", "—", "Selicharová"),
+    L("jaz-2", 15, 0, 16, 0, "Mládek Martin", "ČJ", "Bečková", { description: "Čtení s porozuměním, diagnostika." }),
 
     L("vse-3", 12, 0, 13, 30, "Flekáčová", "Přír.", "Machalíková", { mode: "online" }),
     L("vse-3", 14, 0, 16, 0, "Kimlová Nela", "MAT", "Machalíková"),
 
-    L("mat-1", 8, 0, 9, 0, "Machalíková", "MAT", "Machalíková"),
-    L("mat-1", 14, 0, 16, 0, "Opata Jiří", "MAT", "Jenčíková"),
+    L("mat-1", 14, 0, 16, 0, "Opata Jiří", "MAT", "Jenčíková", { description: "Příprava na přijímačky – testové úlohy." }),
     L("mat-1", 16, 0, 18, 0, "Příbyl", "MAT", "Jenčíková"),
 
-    L("mat-2", 8, 0, 9, 0, "Jenčíková", "MAT", "Jenčíková"),
     L("mat-2", 14, 0, 15, 0, "Petřík Sebastián a Daniel", "MAT", "Feireislová"),
     L("mat-2", 15, 0, 16, 0, "Lacko", "MAT", "Feireislová"),
 

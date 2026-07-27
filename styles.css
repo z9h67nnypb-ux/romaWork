@@ -192,6 +192,38 @@ body.app-schedule .day-scroll { max-height: none; }
 .col.time .col-head { background: var(--bg); color: transparent; }
 .col-body { position: relative; }
 
+/* Řádek pod názvem stolu: kdo je tu dnes a od kolika do kolika.
+   Vykresluje se ve všech sloupcích najednou (i prázdných), aby zůstaly
+   stejně vysoké a časová osa seděla s bloky lekcí. */
+.shift-row {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;   /* jeden lektor = jeden řádek, ať výška sedí přesně */
+  gap: 1px;
+  padding: 2px;
+  overflow-y: auto;
+  background: #f4f6fa;
+  border-bottom: 1px solid var(--line);
+}
+.shift-chip {
+  font-size: 9.5px;
+  line-height: 12px;
+  height: 13px;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: 3px;
+  padding: 0 3px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shift-chip.editable { cursor: pointer; }
+.shift-chip.editable:hover { background: #eef2fb; }
+
 .time-label {
   position: absolute;
   right: 5px;
@@ -218,6 +250,8 @@ body.app-schedule .day-scroll { max-height: none; }
 .event .e-time { font-weight: 600; }
 .event .e-title { font-weight: 600; }
 .event .e-sub { opacity: 0.9; }
+/* Poznámka k lekci – co se zbytek bloku nevejde, ukáže tooltip. */
+.event .e-note { opacity: 0.88; font-style: italic; }
 .event.is-done { opacity: 0.75; }
 .event.is-done .e-title::after { content: " ✓"; }
 .event.is-cancelled { opacity: 0.55; }

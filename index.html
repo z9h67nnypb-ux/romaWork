@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rozvrh – PoraDys osobní výuka</title>
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
 </head>
 <body class="app-schedule">
   <!-- Přihlášení -->
@@ -40,6 +40,8 @@
     <button id="nextDay">▶</button>
     <button id="todayBtn">Dnes</button>
     <button id="newLessonBtn" class="primary-btn hidden">+ Nová lekce</button>
+    <button id="newShiftBtn" class="hidden" title="Kdo je dnes u kterého stolu a od kolika do kolika">+ Lektor u stolu</button>
+    <button id="doneAllBtn" class="hidden" title="Označí všechny naplánované lekce zobrazeného dne jako odučené">✓ Vše odučeno</button>
     <button id="selectAllBtn" class="hidden">Vybrat vše</button>
     <button id="extendWeekBtn" class="hidden" title="Zkopíruje všechny lekce z aktuálního týdne do týdne následujícího (kolize se přeskočí)">Protáhnout týden →</button>
 
@@ -111,8 +113,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N nutí prohlížeč stáhnout čerstvé soubory místo verze z cache;
        při každé změně JS/CSS číslo zvedni -->
-  <script src="config.js?v=5"></script>
-  <script src="mockData.js?v=5"></script>
-  <script src="app.js?v=7"></script>
+  <script src="config.js?v=6"></script>
+  <script src="mockData.js?v=6"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

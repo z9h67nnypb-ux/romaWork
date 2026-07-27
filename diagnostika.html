@@ -3,179 +3,384 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Diagnostický test – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <title>Diagnostika – PoraDys</title>
+  <link rel="stylesheet" href="styles.css?v=7" />
   <style>
     /* Styly jen pro stránku diagnostiky */
-    .diag-wrap { max-width: 860px; margin: 0 auto; padding: 18px 20px 60px; }
-    .diag-top { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+    .diag-wrap { max-width: 1180px; margin: 0 auto; padding: 14px 20px 60px; }
+    .diag-top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
     .diag-top h1 { margin: 0; font-size: 22px; color: var(--title); }
     .diag-top a { font-size: 13px; color: var(--accent); text-decoration: none; }
     .diag-top a:hover { text-decoration: underline; }
     .diag-sub { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+    .diag-note { font-size: 12px; color: var(--muted); }
 
     .store-badge {
-      display: inline-block;
-      font-size: 11.5px;
-      border-radius: 10px;
-      padding: 2px 10px;
-      margin-bottom: 12px;
-      background: #eee;
-      color: #555;
+      display: inline-block; font-size: 11.5px; border-radius: 10px;
+      padding: 2px 10px; background: #eee; color: #555;
     }
     .store-badge.db { background: #e6f4ea; color: #1e6b30; }
+    .store-badge.admin { background: #eef2fb; color: #34507e; }
 
-    .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
-    .tabs button {
-      border: 1px solid var(--line-strong);
-      background: #fff;
-      border-radius: 6px 6px 0 0;
-      padding: 9px 18px;
-      font-size: 14px;
-      cursor: pointer;
+    /* ---------- Seznam žáků ---------- */
+    .diag-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
+    .diag-controls input[type="text"] {
+      border: 1px solid var(--line-strong); border-radius: 5px; padding: 8px 11px;
+      font-size: 13.5px; width: 300px;
     }
-    .tabs button.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-      font-weight: 600;
+    .diag-controls label { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+    button.btn {
+      border: 1px solid var(--line-strong); background: #fff; border-radius: 5px;
+      padding: 8px 13px; cursor: pointer; font-size: 13px;
     }
+    button.btn:hover { background: #f6f8fc; }
+    button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    button.btn.primary:hover { filter: brightness(1.08); }
+    button.btn:disabled { opacity: .55; cursor: default; }
 
+    .diag-table-wrap { background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+    .diag-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+    .diag-table th, .diag-table td {
+      text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .diag-table th { color: var(--muted); font-weight: 600; font-size: 11.5px; }
+    .diag-table tbody tr { cursor: pointer; }
+    .diag-table tbody tr:hover { background: #f6f8fc; }
+    .diag-table .former td { color: #999; }
+    .diag-table col.c-name { width: 22%; }
+    .diag-table col.c-school { width: 24%; }
+    .diag-table col.c-grade { width: 15%; }
+    .diag-table col.c-subj { width: 12%; }
+    .diag-table col.c-cnt { width: 9%; }
+    .diag-table col.c-last { width: 18%; }
+    .diag-table td.num, .diag-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* ---------- Karta žáka ---------- */
     .diag-card {
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 18px 20px;
-      margin-bottom: 18px;
+      background: #fff; border: 1px solid var(--line); border-radius: 8px;
+      padding: 14px 16px; margin-bottom: 12px;
     }
-    .diag-card h2 { margin: 0 0 12px; font-size: 16px; }
+    .diag-card h2 { margin: 0 0 10px; font-size: 15px; }
 
-    .diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
-    @media (max-width: 640px) { .diag-grid { grid-template-columns: 1fr; } }
+    .stud-head { display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+    .stud-head h2 { margin: 0 0 6px; font-size: 18px; color: var(--title); }
+    .stud-meta { display: flex; flex-wrap: wrap; gap: 5px 20px; font-size: 12.5px; }
+    .stud-meta div { display: flex; gap: 6px; }
+    .stud-meta .k { color: var(--muted); }
+    .stud-meta .v { font-weight: 600; }
+    .stud-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
+    .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+    .tabs button {
+      border: 1px solid var(--line-strong); background: #fff;
+      border-radius: 6px 6px 0 0; padding: 8px 16px; font-size: 13.5px; cursor: pointer;
+    }
+    .tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .tabs .cnt { opacity: .75; font-size: 11.5px; }
+
+    /* Pásek testů žáka */
+    .test-strip { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .test-chip {
+      border: 1px solid var(--line-strong); background: #fff; border-radius: 16px;
+      padding: 5px 13px; font-size: 12.5px; cursor: pointer; display: flex; gap: 7px; align-items: center;
+    }
+    .test-chip:hover { background: #f6f8fc; }
+    .test-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .test-chip .pct { font-variant-numeric: tabular-nums; }
+
+    /* Formulář nového testu */
+    .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 22px; }
+    @media (max-width: 720px) { .score-grid { grid-template-columns: 1fr; } }
     .score-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
-    .score-row:last-child { border-bottom: none; }
     .score-row label { flex: 1; font-size: 13.5px; }
-    .score-row .max { color: var(--muted); font-size: 12px; width: 64px; text-align: right; }
+    .score-row .max { color: var(--muted); font-size: 12px; width: 60px; text-align: right; }
     .score-row input { width: 70px; border: 1px solid var(--line-strong); border-radius: 5px; padding: 6px 8px; font-size: 14px; text-align: right; }
-
-    .diag-actions { display: flex; gap: 10px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
+    .form-head { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 10px; }
+    .form-head .field { display: flex; flex-direction: column; gap: 3px; }
+    .form-head label { font-size: 11.5px; color: var(--muted); }
+    .form-head input { border: 1px solid var(--line-strong); border-radius: 5px; padding: 7px 9px; font-size: 13.5px; }
+    .form-head input#fNote { width: 300px; }
+    .diag-actions { display: flex; gap: 10px; margin-top: 14px; align-items: center; flex-wrap: wrap; }
     .diag-error { color: #c62828; font-size: 13px; }
+    .diag-ok { color: #2e7d32; font-size: 13px; }
 
-    /* Výsledek */
-    .bars { margin: 8px 0 4px; }
-    .bar-row { display: grid; grid-template-columns: 210px 1fr 168px; gap: 10px; align-items: center; margin-bottom: 7px; font-size: 13px; }
-    @media (max-width: 640px) { .bar-row { grid-template-columns: 1fr 60px; } .bar-row .bar-track { display: none; } }
-    .bar-track { background: #eee; border-radius: 5px; height: 16px; overflow: hidden; }
-    .bar-fill { height: 100%; border-radius: 5px; }
+    /* ---------- Výsledek testu ----------
+       Všechny bloky mají stejnou typografickou škálu (nadpis 13 px, text
+       12.5 px), aby žádná část stránky vizuálně nepřerostla ostatní. */
+    #testDetail h3, #draftResult h3, #printArea h3 {
+      font-size: 13px; margin: 16px 0 8px; padding-bottom: 3px;
+      border-bottom: 1px solid var(--line); color: var(--title);
+    }
+    .plan-summary { background: #f1f5fc; border: 1px solid #d6e2f6; color: #34507e; border-radius: 6px; padding: 9px 11px; font-size: 12.5px; margin-bottom: 4px; }
+    .chart-box { max-width: 420px; }
+    .chart-box svg { width: 100%; height: auto; display: block; }
+    .chart-cap { font-size: 11px; color: var(--muted); margin: 5px 0 0; line-height: 1.4; }
+
+    /* Výsledek: oblasti vlevo, vývoj v čase vpravo */
+    .res-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr); gap: 0 26px; align-items: start; }
+    @media (max-width: 980px) { .res-grid { grid-template-columns: 1fr; } .chart-box { max-width: 420px; } }
+
+    /* Vodorovné barevné pruhy úspěšnosti podle oblastí */
+    .bars { display: flex; flex-direction: column; gap: 5px; }
+    .bar-row { display: grid; grid-template-columns: minmax(90px, 150px) minmax(60px, 1fr) 96px 104px; gap: 10px; align-items: center; font-size: 12.5px; }
+    .bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-track { background: #eceff3; border-radius: 4px; height: 13px; overflow: hidden; }
+    .bar-fill {
+      display: block; height: 100%; border-radius: 4px;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact; /* pruhy musí zůstat barevné i v PDF */
+    }
     .bar-fill.weak { background: #c62828; }
     .bar-fill.mid { background: #ef6c00; }
     .bar-fill.strong { background: #2e7d32; }
-    .bar-pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .bar-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 11.5px; }
+    @media (max-width: 620px) {
+      .bar-row { grid-template-columns: 1fr auto; gap: 3px 8px; }
+      .bar-track { grid-column: 1 / -1; }
+    }
 
-    /* Úroveň zvládnutí (jako v hodnotícím archu) */
-    .lvl { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 9px; padding: 0 8px; }
+    .lvl {
+      display: inline-block; font-size: 10.5px; font-weight: 600; border-radius: 9px;
+      padding: 1px 8px; white-space: nowrap;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
     .lvl.strong { background: #e6f4ea; color: #1e6b30; }
     .lvl.mid { background: #fff3e0; color: #b45309; }
     .lvl.weak { background: #fdeaea; color: #c62828; }
 
-    .focus-wrap h3 { margin: 0 0 10px; font-size: 14px; }
-    .focus-block { margin-bottom: 12px; }
-    .focus-block h4 { margin: 0 0 4px; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
-    .focus-block ul { margin: 0; padding-left: 20px; font-size: 13px; }
-    .focus-block li { margin-bottom: 3px; }
+    .focus-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 4px 26px; }
+    .focus-block { margin-bottom: 10px; }
+    .focus-block h4 { margin: 0 0 3px; font-size: 12.5px; display: flex; align-items: center; gap: 8px; }
+    .focus-block ul { margin: 0; padding-left: 18px; font-size: 12.5px; }
+    .focus-block li { margin-bottom: 2px; }
 
-    .plan-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .plan-table th, .plan-table td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
-    .plan-table th { color: var(--muted); font-size: 12px; }
-    .plan-summary { background: #f1f5fc; border: 1px solid #d6e2f6; color: #34507e; border-radius: 6px; padding: 10px 12px; font-size: 13px; margin-bottom: 14px; }
+    .plan-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .plan-table th, .plan-table td { text-align: left; padding: 5px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .plan-table th { color: var(--muted); font-size: 11px; font-weight: 600; }
+    .plan-table td:first-child, .plan-table th:first-child { width: 48px; }
+    .plan-table td:nth-child(2), .plan-table th:nth-child(2) { width: 32%; }
 
-    .diag-note { font-size: 12px; color: var(--muted); }
+    /* ---------- Modal: nový žák ---------- */
+    .diag-modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 60; }
+    .diag-modal .box { background: #fff; border-radius: 10px; padding: 20px 22px; width: 460px; max-width: 92vw; }
+    .diag-modal h2 { margin: 0 0 12px; font-size: 17px; }
+    .diag-modal .field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 9px; }
+    .diag-modal label { font-size: 11.5px; color: var(--muted); }
+    .diag-modal input { border: 1px solid var(--line-strong); border-radius: 5px; padding: 8px 10px; font-size: 13.5px; }
 
-    /* Historie a graf */
-    .hist-chart { margin: 4px 0 14px; }
-    .hist-chart svg { width: 100%; height: auto; display: block; }
-    .history-row { display: flex; gap: 12px; align-items: center; padding: 7px 4px; border-bottom: 1px solid var(--line); font-size: 13px; }
-    .history-row .h-date { color: var(--muted); width: 90px; flex: 0 0 auto; }
-    .history-row .h-name { flex: 1; font-weight: 600; }
-    .history-row .h-pct { width: 60px; text-align: right; font-variant-numeric: tabular-nums; }
-    .history-row button { border: 1px solid var(--line-strong); background: #fff; border-radius: 4px; padding: 3px 9px; cursor: pointer; font-size: 12px; }
+    .locked { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .locked h2 { color: var(--title); }
+
+    /* ---------- Hromadné zadávání testů (ovládá se klávesnicí) ---------- */
+    .batch-bar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    .batch-bar .field { display: flex; flex-direction: column; gap: 3px; }
+    .batch-bar label { font-size: 11px; color: var(--muted); }
+    .batch-bar input[type="date"] { border: 1px solid var(--line-strong); border-radius: 5px; padding: 6px 8px; font-size: 13px; }
+    .batch-count { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+    .batch-count b { color: #1e6b30; }
+
+    .batch-step { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+    .batch-pick { position: relative; max-width: 460px; }
+    .batch-pick input {
+      width: 100%; border: 2px solid var(--accent); border-radius: 6px;
+      padding: 9px 11px; font-size: 15px; box-sizing: border-box;
+    }
+    .batch-sug {
+      position: absolute; z-index: 20; left: 0; right: 0; top: 100%; margin-top: 3px;
+      background: #fff; border: 1px solid var(--line-strong); border-radius: 6px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.12); max-height: 260px; overflow-y: auto;
+    }
+    .batch-sug div { padding: 7px 11px; font-size: 13px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; }
+    .batch-sug div .sub { color: var(--muted); font-size: 11.5px; }
+    .batch-sug div.hi { background: #eef2fb; }
+    .batch-sug div.new { color: var(--accent); font-weight: 600; border-top: 1px solid var(--line); }
+
+    .batch-chosen { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+    .batch-chosen b { font-size: 16px; color: var(--title); }
+    .batch-chosen .sub { font-size: 12.5px; color: var(--muted); }
+
+    .batch-scores { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-top: 10px; }
+    .batch-scores .sc { display: flex; flex-direction: column; gap: 3px; }
+    .batch-scores .sc label { font-size: 11px; color: var(--muted); }
+    .batch-scores .sc .mx { font-size: 10.5px; color: #aaa; }
+    .batch-scores input {
+      width: 82px; border: 1px solid var(--line-strong); border-radius: 5px;
+      padding: 8px 9px; font-size: 16px; text-align: right; font-variant-numeric: tabular-nums;
+    }
+    .batch-scores input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .batch-scores input.bad { border-color: #c62828; background: #fdeaea; }
+    .batch-total { font-size: 13px; padding-bottom: 8px; }
+    .batch-total b { font-size: 16px; }
+
+    .batch-log { margin-top: 6px; }
+    .batch-log .row {
+      display: flex; align-items: center; gap: 10px; font-size: 12.5px;
+      padding: 5px 2px; border-bottom: 1px solid var(--line);
+    }
+    .batch-log .row .ok { color: #2e7d32; font-weight: 700; }
+    .batch-log .row .nm { flex: 1; font-weight: 600; }
+    .batch-log .row .pc { font-variant-numeric: tabular-nums; }
+    .batch-log .row button { border: 1px solid var(--line-strong); background: #fff; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 11.5px; }
+    kbd {
+      background: #f3f4f6; border: 1px solid var(--line-strong); border-bottom-width: 2px;
+      border-radius: 4px; padding: 0 5px; font-size: 11px; font-family: inherit;
+    }
+    /* na modrém tlačítku musí být klávesa čitelná */
+    .btn.primary kbd { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.5); color: #fff; }
+
+    /* ---------- Tisková zpráva pro rodiče (A4) ---------- */
+    #printArea { display: none; }
+    #printArea .p-head { border-bottom: 2px solid #34507e; padding-bottom: 8px; margin-bottom: 14px; }
+    #printArea .p-org { font-size: 12px; color: #34507e; font-weight: 700; letter-spacing: .04em; }
+    #printArea .p-title { font-size: 17px; font-weight: 700; margin: 3px 0 0; }
+    #printArea .p-ident { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 24px; font-size: 12px; margin-bottom: 12px; }
+    #printArea .p-ident .k { color: #666; display: inline-block; min-width: 92px; }
+    #printArea .p-foot { margin-top: 16px; padding-top: 6px; border-top: 1px solid #ddd; font-size: 10px; color: #777; }
+    #printArea .plan-summary { background: #f1f5fc; border: 1px solid #d6e2f6; }
 
     @media print {
-      .no-print { display: none !important; }
-      .diag-card { border: none; padding: 0; }
+      @page { size: A4 portrait; margin: 12mm 11mm; }
       body { background: #fff; }
+      .diag-wrap, .diag-modal { display: none !important; }
+      #printArea { display: block !important; }
+      #printArea .page-break { break-before: page; page-break-before: always; }
+      #printArea .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+      /* Na A4 na šířku dvou sloupců není místo – oba bloky pod sebe. */
+      #printArea .res-grid { grid-template-columns: 1fr; }
+      #printArea .chart-box { max-width: 108mm; }
+      #printArea .bar-row { grid-template-columns: minmax(70px, 130px) minmax(50px, 1fr) 88px 96px; }
     }
   </style>
 </head>
 <body>
-  <div class="diag-wrap">
-    <div class="diag-top no-print">
-      <h1>🧪 Diagnostický test</h1>
-      <a href="index.html">← Zpět na rozvrh</a>
-    </div>
-    <p class="diag-sub no-print">
-      Zadejte body žáka z diagnostického testu. Aplikace vyhodnotí silné a slabé
-      stránky, sestaví plán přípravy na 8 týdnů a uloží výsledek k žákovi.
-    </p>
-    <span id="storeBadge" class="store-badge no-print">…</span>
-
-    <div class="tabs no-print" id="subjectTabs"></div>
-
-    <div class="diag-card no-print">
-      <h2>Žák</h2>
-      <div class="diag-grid">
-        <div class="field"><label>Jméno žáka</label>
-          <input type="text" id="dName" placeholder="Např. Novák Petr" list="studentsDatalist" />
-          <datalist id="studentsDatalist"></datalist>
-        </div>
-        <div class="field"><label>Třída / ročník</label>
-          <select id="dGrade">
-            <option>1.–2. třída ZŠ</option>
-            <option>3.–5. třída ZŠ</option>
-            <option selected>6.–7. třída ZŠ</option>
-            <option>8.–9. třída ZŠ (přijímačky)</option>
-            <option>Střední škola</option>
-          </select>
-        </div>
-        <div class="field"><label>Datum testu</label><input type="date" id="dDate" /></div>
-        <div class="field"><label>Poznámka (nepovinné)</label><input type="text" id="dNote" placeholder="Např. dyslexie, doporučení PPP…" /></div>
-      </div>
-    </div>
-
-    <div class="diag-card no-print">
-      <h2 id="scoreTitle">Body z testu</h2>
-      <div id="scoreRows"></div>
-      <div class="diag-actions">
-        <button id="evalBtn" style="background: var(--accent); color:#fff; border:none; border-radius:5px; padding:10px 18px; font-weight:600; cursor:pointer;">Vyhodnotit a sestavit plán</button>
-        <span id="dError" class="diag-error"></span>
-      </div>
-    </div>
-
-    <div id="resultCard" class="diag-card hidden">
-      <h2 id="resTitle"></h2>
-      <div id="resSummary" class="plan-summary"></div>
-      <div id="resBars" class="bars"></div>
-      <div id="resSW" class="sw-cols" style="margin-top:14px;"></div>
-      <h2 style="margin-top:22px;">Plán přípravy na 8 týdnů</h2>
-      <div id="resPlan"></div>
-      <div class="diag-actions no-print">
-        <button id="printBtn" style="border:1px solid var(--line-strong); background:#fff; border-radius:5px; padding:9px 14px; cursor:pointer;">🖨 Vytisknout</button>
-        <button id="saveBtn" style="border:1px solid var(--line-strong); background:#fff; border-radius:5px; padding:9px 14px; cursor:pointer;">💾 Uložit k žákovi</button>
-        <span id="saveInfo" style="color:#2e7d32; font-size:13px;"></span>
-      </div>
-    </div>
-
-    <div class="diag-card no-print">
-      <h2 id="histTitle">Historie testů</h2>
-      <p id="histSub" class="diag-note" style="margin:0 0 10px;"></p>
-      <div id="histChart" class="hist-chart"></div>
-      <div id="historyList"></div>
+  <!-- Nepřihlášeno -->
+  <div id="lockedBox" class="diag-wrap hidden">
+    <div class="locked">
+      <h2>🔒 Diagnostika je jen pro přihlášené</h2>
+      <p>Přihlaste se v rozvrhu a pak se sem vraťte.</p>
+      <p><a id="lockedLink" href="index.html">← Přejít na rozvrh</a></p>
     </div>
   </div>
 
+  <div id="mainBox" class="diag-wrap hidden">
+    <div class="diag-top no-print">
+      <h1>🧪 Diagnostika</h1>
+      <a id="backLink" href="index.html">← Zpět na rozvrh</a>
+      <span id="storeBadge" class="store-badge">…</span>
+      <span id="roleBadge" class="store-badge">…</span>
+    </div>
+
+    <!-- ============ SEZNAM ŽÁKŮ ============ -->
+    <section id="listView">
+      <p class="diag-sub">
+        Vyhledejte žáka a otevřete jeho kartu – uvidíte výsledky všech
+        diagnostických testů, graf a doporučenou přípravu k vytištění pro rodiče.
+      </p>
+      <div class="diag-controls">
+        <input type="text" id="dSearch" placeholder="Hledat žáka – jméno, škola, třída…" autofocus />
+        <label><input type="checkbox" id="dShowFormer" /> zobrazit i bývalé</label>
+        <label><input type="checkbox" id="dOnlyTested" /> jen s testem</label>
+        <button id="batchBtn" class="btn primary hidden" title="Zadávání testů jednoho po druhém jen z klávesnice">📝 Zadávat testy</button>
+        <button id="newStudentBtn" class="btn hidden">+ Nový žák</button>
+        <span id="listSummary" class="diag-note"></span>
+      </div>
+      <div class="diag-table-wrap">
+        <table class="diag-table">
+          <colgroup>
+            <col class="c-name" /><col class="c-school" /><col class="c-grade" />
+            <col class="c-subj" /><col class="c-cnt" /><col class="c-last" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Žák</th><th>Škola</th><th>Třída / ročník</th>
+              <th>Předměty</th><th class="num">Testů</th><th>Poslední test</th>
+            </tr>
+          </thead>
+          <tbody id="listBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ KARTA ŽÁKA ============ -->
+    <section id="cardView" class="hidden">
+      <div class="diag-top no-print" style="margin-bottom:10px;">
+        <button id="backToList" class="btn">← Seznam žáků</button>
+      </div>
+      <div id="studentHead" class="diag-card no-print"></div>
+      <div class="tabs no-print" id="subjectTabs"></div>
+      <div id="testStrip" class="diag-card no-print"></div>
+      <div id="newTestCard" class="diag-card hidden no-print"></div>
+      <div id="testDetail"></div>
+    </section>
+
+    <!-- ============ HROMADNÉ ZADÁVÁNÍ TESTŮ (admin) ============ -->
+    <section id="batchView" class="hidden">
+      <div class="diag-top" style="margin-bottom:10px;">
+        <button id="batchBack" class="btn">← Seznam žáků</button>
+        <h1 style="font-size:18px;">📝 Zadávání testů</h1>
+      </div>
+      <p class="diag-sub">
+        Napište pár písmen ze jména žáka, <kbd>↓</kbd><kbd>↑</kbd> vyberte, <kbd>Enter</kbd> potvrďte.
+        Pak zapisujte body – <kbd>Enter</kbd> skáče na další oblast a u poslední rovnou uloží
+        a nachystá dalšího žáka. Myš nepotřebujete.
+      </p>
+
+      <div class="diag-card">
+        <div class="batch-bar">
+          <div class="field">
+            <label>Předmět</label>
+            <div class="tabs" id="batchTabs" style="margin:0;"></div>
+          </div>
+          <div class="field">
+            <label>Datum testu (platí pro celou dávku)</label>
+            <input type="date" id="batchDate" />
+          </div>
+          <span class="batch-count" id="batchCount"></span>
+        </div>
+      </div>
+
+      <div class="diag-card">
+        <div id="batchStudentBox">
+          <div class="batch-step">1 · Žák</div>
+          <div class="batch-pick">
+            <input type="text" id="batchSearch" placeholder="Začněte psát jméno žáka…" autocomplete="off" />
+            <div id="batchSug" class="batch-sug hidden"></div>
+          </div>
+        </div>
+        <div id="batchScoreBox" class="hidden"></div>
+      </div>
+
+      <div class="diag-card" id="batchLogCard">
+        <h2>Uložené v této dávce</h2>
+        <div id="batchLog" class="batch-log"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Nový žák -->
+  <div id="newStudentModal" class="diag-modal hidden">
+    <div class="box">
+      <h2>Nový žák</h2>
+      <div class="field"><label>Jméno a příjmení *</label><input type="text" id="nsName" placeholder="Např. Novák Petr" /></div>
+      <div class="field"><label>Škola</label><input type="text" id="nsSchool" placeholder="Např. ZŠ Norská, Kladno" /></div>
+      <div class="field"><label>Třída / ročník</label><input type="text" id="nsGrade" placeholder="Např. 9. třída" /></div>
+      <div class="field"><label>Kategorie</label><input type="text" id="nsCategory" placeholder="ZŠ / SŠ…" /></div>
+      <div class="field"><label>Telefon</label><input type="text" id="nsPhone" /></div>
+      <div class="field"><label>Předměty</label><input type="text" id="nsSubjects" placeholder="např. ČJ, MAT" /></div>
+      <p class="diag-note">Žák se založí i v kartotéce – zbytek karty (ceny, platby) doplníte tam.</p>
+      <div class="diag-actions">
+        <button id="nsSave" class="btn primary">Založit žáka</button>
+        <button id="nsCancel" class="btn">Zrušit</button>
+        <span id="nsError" class="diag-error"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tisková zpráva pro rodiče (vidět jen při tisku / uložení do PDF) -->
+  <div id="printArea"></div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=5"></script>
-  <script src="diagnostika.js?v=6"></script>
+  <script src="config.js?v=6"></script>
+  <script src="diagnostika.js?v=11"></script>
 </body>
 </html>
