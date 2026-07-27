@@ -14,7 +14,7 @@ spustit v Supabase SQL editoru.
 
 | Tabulka | Co drží | Jak dlouho |
 |---|---|---|
-| `lessons` | lekce v rozvrhu (čas, učebna, lektor, stav) | **~13 měsíců**, starší maže `purge_old_lessons()` |
+| `lessons` | lekce v rozvrhu (čas, učebna, lektor, stav); `kind = 'shift'` = záznam „kdo je u stolu od–do" | **~13 měsíců**, starší maže `purge_old_lessons()` |
 | `students` | klienti/žáci – aktuální i bývalí (`status: active/former`) | **nemaže se** – bývalý klient se jen označí `former` |
 | `lectors` | pracovníci (jméno, kontakt, **hodinová sazba**, nástup/odchod) | **nemaže se** (požadavek 10+ let) – odchod = `left_at` + `active=false` |
 | `work_log` | **odpracované hodiny** – 1 řádek za každou potvrzenou lekci | **nemaže se** (10+ let); je maličký |
@@ -194,11 +194,65 @@ měsíců (hodiny ve `work_log` zůstávají). Spouštění:
   odkomentovat řádek `cron.schedule(...)` ve schématu – pak se úklid dělá
   sám první den v měsíci.
 
-## 8) Diagnostické testy – algoritmus vs. AI
+## 7b) Rozvrh – lektoři u stolů a hromadné potvrzení dne
 
-Stránka [`diagnostika.html`](diagnostika.html) vyhodnocuje test **pevným
-algoritmem** přímo v prohlížeči (pásma: pod 45 % slabina, nad 70 % silná
-stránka; plán na 8 týdnů střídá slabé oblasti). Proč ne rovnou AI:
+**Kdo je u kterého stolu.** Řádek v `lessons` se sloupcem `kind = 'shift'`
+není lekce, ale poznámka „u tohohle stolu je dnes Kunkelová 8–13". V rozvrhu
+se ukáže jako proužek pod názvem stolu; zakládá se tlačítkem
+**+ Lektor u stolu** (nebo přepínačem *Typ zápisu* v detailu). Směny:
+
+- se **nepočítají** do odpracovaných hodin (`work_log`) ani nečerpají kredit
+  žáka (`credit_log`) – hlídají to triggery,
+- **nekolidují** s lekcemi, takže lekce mají uvnitř směny normálně vznikat,
+- **kopírují se** tlačítkem *Protáhnout týden →*, takže stálé rozpisy stačí
+  nastavit jednou.
+
+Řádek se směnami je ve všech sloupcích stejně vysoký (podle stolu s nejvíc
+lektory) – jinak by se sloupce svisle rozjely proti časové ose.
+
+**Konec dne.** Tlačítko **✓ Vše odučeno (N)** označí naráz všechny naplánované
+lekce zobrazeného dne. Vynechá zrušené, nedostavené i směny a bere lekce obou
+režimů (prezenční i online), takže večer stačí jedno kliknutí místo obcházení
+celého rozvrhu. Vidí ho jen administrátor; lektoři si dál odklikávají své
+lekce jednotlivě.
+
+**Poznámka v buňce.** Popis lekce se ukazuje přímo v bloku rozvrhu (kurzívou);
+co se do bloku nevejde, je celé v tooltipu.
+
+## 8) Diagnostické testy – karta žáka, práva, algoritmus vs. AI
+
+Stránka [`diagnostika.html`](diagnostika.html) nezačíná formulářem, ale
+**vyhledáním žáka**. Seznam se čte z tabulky `students` (stejná data jako
+kartotéka), takže u žáka rovnou vidíte **školu a třídu**. Po otevření karty
+jsou tam všechny jeho testy, sloupcový graf oblastí, vývoj v čase a tlačítko
+**Zpráva pro rodiče (PDF)** – to otevře tiskový dialog, kde stačí zvolit
+„Uložit jako PDF" (A4 souhrn s grafy a doporučenou přípravou na 8 týdnů).
+
+**Zadávání testů:** kromě tlačítka „+ Nový test" na kartě žáka je v seznamu
+tlačítko **📝 Zadávat testy** – režim na přepisování celého stohu papírových
+testů. Předmět a datum se zvolí jednou pro celou dávku, pak už jen dokola:
+napsat pár písmen ze jména → <kbd>Enter</kbd> → body, mezi poli
+<kbd>Enter</kbd>, u posledního pole <kbd>Enter</kbd> uloží a nachystá dalšího
+žáka. Myš není potřeba. Uložené testy se sypou do seznamu „Uložené v této
+dávce", kde má každý tlačítko **Vrátit** (překlep se smaže jedním klikem).
+Když žák v systému ještě není, poslední položka v našeptávači ho rovnou založí.
+
+**Práva:** roli bere stránka z tabulky `profiles`.
+
+| | administrátor | lektor |
+|---|---|---|
+| vyhledat žáka, číst výsledky, tisknout zprávu | ✅ | ✅ |
+| zadat výsledky nového testu, smazat test | ✅ | ❌ |
+| založit nového žáka | ✅ | ❌ |
+
+V appce se lektorovi tlačítka pro zápis nezobrazí; navíc to hlídají **RLS
+politiky** `diag_*` a `stud_*` na konci [`schema.sql`](schema.sql) (čtení pro
+všechny přihlášené, zápis jen `is_admin()`). Ten blok spusťte až poté, co má
+aspoň jeden účet roli `admin` – jinak nebude moct zapisovat nikdo.
+
+Vyhodnocení testu je **pevný algoritmus** přímo v prohlížeči (pásma: pod 45 %
+nezvládá, 45–75 % zvládá částečně, nad 75 % zvládá; plán na 8 týdnů střídá
+slabé oblasti). Proč ne rovnou AI:
 
 - AI klíč **nesmí** být ve veřejném webu (kdokoli by ho vytáhl a utrácel váš kredit),
 - algoritmus je zdarma, okamžitý a pro stejné body dá vždy stejný výsledek.
@@ -217,7 +271,9 @@ spolehlivé a zadarmo.
 3. Založit účty lektorů (Authentication → Users), adminovi zvednout roli.
 4. Vyplnit `lectors.hourly_rate` u každého lektora.
 5. V [`config.js`](config.js) vyplnit URL + anon klíč, `USE_SUPABASE: true`.
-6. **Zpřísnit RLS** – nahradit prototypové `proto_all` politiky vzorem na konci
-   `schema.sql` (lektor smí měnit jen popis/odučeno, rozvrh jen admin).
+6. **Zpřísnit RLS** – spustit blok „PRÁVA K DIAGNOSTICKÝM TESTŮM A KARTÁM
+   ŽÁKŮ" na konci `schema.sql` (zápis testů a žáků jen admin) a nahradit
+   zbylé prototypové `proto_all` politiky vzorem úplně na konci souboru
+   (lektor smí měnit jen popis/odučeno, rozvrh jen admin).
 7. Web samotný (HTML/JS soubory) hostovat zdarma na GitHub Pages / Netlify /
    Cloudflare Pages – je to statická stránka, server nepotřebuje.

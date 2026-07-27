@@ -53,6 +53,12 @@ create table if not exists lessons (
 create index if not exists lessons_starts_at_idx on lessons (starts_at);
 create index if not exists lessons_room_idx on lessons (room_id);
 
+-- Řádek v rozvrhu je buď LEKCE, nebo SMĚNA lektora u stolu ("kdo tu dnes je
+-- a od kolika do kolika"). Směna je jen informace do hlavičky sloupce –
+-- nepočítá se do odpracovaných hodin ani nečerpá kredit žáka a nekoliduje
+-- s lekcemi, takže se lekce dají zakládat uvnitř směny.
+alter table lessons add column if not exists kind text not null default 'lesson';  -- 'lesson' | 'shift'
+
 -- Účast (M:N žák <-> lekce). Běžná lekce = 1 řádek, skupina = více řádků.
 create table if not exists attendance (
   lesson_id  uuid references lessons(id) on delete cascade,
@@ -90,6 +96,7 @@ create index if not exists work_log_lector_date_idx on work_log (lector_id, work
 create or replace function log_lesson_work() returns trigger
 language plpgsql security definer as $$
 begin
+  if new.kind <> 'lesson' then return new; end if;    -- směna u stolu není odučená hodina
   if new.done then
     if new.lector_id is null then return new; end if; -- bez lektora není komu hodiny připsat
     insert into work_log (lesson_id, lector_id, work_date, minutes, subject)
@@ -218,7 +225,7 @@ declare l record;
 begin
   delete from credit_log where lesson_id = p_lesson;
   select * into l from lessons where id = p_lesson;
-  if l.id is null or not l.done then return; end if;
+  if l.id is null or not l.done or l.kind <> 'lesson' then return; end if;
   insert into credit_log (lesson_id, student_id, lesson_date, hours, subject)
   select l.id, a.student_id,
          (l.starts_at at time zone 'Europe/Prague')::date,
@@ -335,7 +342,9 @@ select
   r.name  as room_name,
   r.color as room_color,
   lec.name as lector_name,
-  coalesce(string_agg(s.name, ', ' order by s.name), '') as student_names
+  coalesce(string_agg(s.name, ', ' order by s.name), '') as student_names,
+  -- nové sloupce se u "create or replace view" smí přidávat jen na konec
+  l.kind
 from lessons l
 left join rooms r    on r.id = l.room_id
 left join lectors lec on lec.id = l.lector_id
@@ -479,6 +488,50 @@ $$;
 -- ➜ PO ZALOŽENÍ administrátorského účtu nastav jeho roli (doplň jeho e-mail):
 --   update profiles set role = 'admin'
 --   where id = (select id from auth.users where email = 'admin@poradys.cz');
+
+-- ===========================================================================
+-- PRÁVA K DIAGNOSTICKÝM TESTŮM A KARTÁM ŽÁKŮ
+-- ---------------------------------------------------------------------------
+-- Administrátor zadává výsledky testů a zakládá žáky, lektor smí jen číst
+-- (vyhledat žáka, prohlédnout výsledky, vytisknout zprávu pro rodiče).
+--
+-- ⚠️ NEJDŘÍV si nastav aspoň jeden účet jako 'admin' příkazem výše, jinak
+--    po spuštění tohohle bloku nebude moct zapisovat nikdo.
+--
+-- Politiky se sčítají (OR), takže "read" pro všechny přihlášené platí i pro
+-- administrátora. Zápis pouští jen is_admin() – ta čte roli z `profiles`.
+-- ===========================================================================
+
+-- Diagnostické testy
+alter table diagnostics enable row level security;
+drop policy if exists proto_all   on diagnostics;
+drop policy if exists diag_read   on diagnostics;
+drop policy if exists diag_insert on diagnostics;
+drop policy if exists diag_update on diagnostics;
+drop policy if exists diag_delete on diagnostics;
+
+create policy diag_read   on diagnostics for select to authenticated using (true);
+create policy diag_insert on diagnostics for insert to authenticated with check (is_admin());
+create policy diag_update on diagnostics for update to authenticated using (is_admin()) with check (is_admin());
+create policy diag_delete on diagnostics for delete to authenticated using (is_admin());
+
+-- Karty žáků (kartotéka). Lektor je čte – potřebuje to rozvrh (pohled
+-- lesson_details jména žáků joinuje) i vyhledávání v diagnostice.
+-- Zakládat a měnit je smí jen administrátor.
+alter table students enable row level security;
+drop policy if exists proto_all   on students;
+drop policy if exists stud_read   on students;
+drop policy if exists stud_insert on students;
+drop policy if exists stud_update on students;
+drop policy if exists stud_delete on students;
+
+create policy stud_read   on students for select to authenticated using (true);
+create policy stud_insert on students for insert to authenticated with check (is_admin());
+create policy stud_update on students for update to authenticated using (is_admin()) with check (is_admin());
+create policy stud_delete on students for delete to authenticated using (is_admin());
+
+-- Kontrola po spuštění: kdo je admin?
+--   select p.role, u.email from profiles p join auth.users u on u.id = p.id;
 
 -- ===========================================================================
 -- ZPŘÍSNĚNÍ RLS (až bude appka naostro) – nahradí prototypové "proto_all".

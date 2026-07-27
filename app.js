@@ -126,6 +126,7 @@ const SupabaseProvider = {
     const c = this._init();
     const lector_id = await this._resolveLector(payload.lector_name);
     const row = {
+      kind: payload.kind || "lesson",
       starts_at: payload.starts_at.toISOString(),
       ends_at: payload.ends_at.toISOString(),
       subject: payload.subject,
@@ -257,12 +258,17 @@ function roomById(id) { return state.rooms.find((r) => r.id === id); }
 // Překrývají se intervaly [aS,aE) a [bS,bE)?
 function overlaps(aS, aE, bS, bE) { return aS < bE && bS < aE; }
 
+// Řádek rozvrhu je buď lekce, nebo směna lektora u stolu (kdo tu dnes je).
+function isShift(l) { return l.kind === "shift"; }
+function isLesson(l) { return !isShift(l); }
+
 // Najde v daném seznamu lekci, která koliduje (stejná místnost + překryv času).
-// Online lekce (bez místnosti) se nekontrolují.
+// Online lekce (bez místnosti) se nekontrolují. Směny se nekontrolují vůbec –
+// lekce se naopak mají zakládat uvnitř směny lektora.
 function findConflict(dayLessons, roomId, start, end, excludeId) {
   if (!roomId) return null;
   return dayLessons.find(
-    (l) => l.id !== excludeId && l.room_id === roomId && overlaps(start, end, l.starts_at, l.ends_at)
+    (l) => l.id !== excludeId && isLesson(l) && l.room_id === roomId && overlaps(start, end, l.starts_at, l.ends_at)
   );
 }
 
@@ -365,7 +371,14 @@ function renderMiniCalendar() {
 function renderToolbar() {
   document.getElementById("navDate").textContent = fmtDateLong(state.date);
   document.getElementById("newLessonBtn").classList.toggle("hidden", !isAdmin());
+  document.getElementById("newShiftBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("selectAllBtn").classList.toggle("hidden", !isAdmin());
+  // „Vše odučeno" má smysl jen na denním pohledu, kde je vidět, co se potvrzuje
+  const doneAll = document.getElementById("doneAllBtn");
+  doneAll.classList.toggle("hidden", !isAdmin() || state.view !== "den");
+  const pending = isAdmin() ? pendingLessonsOfDay().length : 0;
+  doneAll.textContent = pending ? "✓ Vše odučeno (" + pending + ")" : "✓ Vše odučeno";
+  doneAll.disabled = !pending;
   document.getElementById("extendWeekBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("kartotekaBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("hoursBtn").classList.toggle("hidden", !isAdmin());
@@ -394,7 +407,7 @@ function matchesMode(l) {
 // plochy pod lištami – rozvrh se pak celý vejde na jednu obrazovku bez
 // svislého rolování. Na malých displejích má spodní mez (radši malý scroll
 // než nečitelně nízké bloky); CFG.HOUR_HEIGHT je záloha, když nejde změřit.
-function computeHourHeight() {
+function computeHourHeight(withShiftRow) {
   const hours = CFG.DAY_END_HOUR - CFG.DAY_START_HOUR;
   const vc = document.getElementById("viewContainer");
   if (!vc) return CFG.HOUR_HEIGHT;
@@ -403,9 +416,61 @@ function computeHourHeight() {
   // při stavbě ještě nedopočítaná (banner/hint se teprve srovnávají).
   const top = vc.getBoundingClientRect().top;
   const avail = window.innerHeight - top - 10;
-  const OVERHEAD = 40; // záhlaví sloupců + okraje mřížky
+  // záhlaví sloupců + okraje mřížky (+ řádek se směnami, když se zobrazuje)
+  const OVERHEAD = 40 + (withShiftRow ? shiftRowHeight() + 1 : 0);
   const fit = Math.floor((avail - OVERHEAD) / hours);
   return Math.max(24, Math.min(fit, 80));
+}
+
+// Ve sloupci je málo místa, tak celé hodiny píšeme bez ":00" (8–12, 12:30–17).
+function fmtHourShort(d) {
+  return d.getMinutes() ? d.getHours() + ":" + pad(d.getMinutes()) : String(d.getHours());
+}
+
+// Směny zobrazeného dne pro daný stůl.
+function shiftsOf(roomId) {
+  return state.lessons
+    .filter((l) => isShift(l) && l.room_id === roomId && matchesMode(l))
+    .sort((a, b) => a.starts_at - b.starts_at);
+}
+function dayHasShifts() {
+  return state.lessons.some((l) => isShift(l) && matchesMode(l));
+}
+
+// Nejvíc směn u jednoho stolu – podle toho je řádek vysoký ve všech sloupcích.
+// Stejná výška je nutná, jinak by se sloupce svisle rozjely proti časové ose.
+function maxShiftsPerRoom() {
+  return visibleRooms().reduce((m, r) => Math.max(m, shiftsOf(r.id).length), 0);
+}
+const SHIFT_CHIP_H = 14; // výška jednoho řádku se jménem lektora (px)
+function shiftRowHeight() {
+  const n = Math.min(maxShiftsPerRoom(), 4); // víc než 4 lektory u stolu = rolování
+  return n ? n * SHIFT_CHIP_H + 5 : 0;
+}
+
+// Řádek pod názvem stolu: „Kunkelová 8–13 / Šíma 13–17".
+// Když v daném dni není ani jedna směna, řádek se nikde nevykreslí; jinak ho
+// dostanou VŠECHNY sloupce (i prázdné), aby zůstaly stejně vysoké.
+function buildShiftRow(room) {
+  const row = document.createElement("div");
+  row.className = "shift-row";
+  row.style.height = shiftRowHeight() + "px";
+  if (!room) return row; // sloupec s časy – jen drží výšku
+
+  shiftsOf(room.id).forEach((s) => {
+    const label = (s.lector_name || "?") + " " + fmtHourShort(s.starts_at) + "–" + fmtHourShort(s.ends_at);
+    const chip = document.createElement("span");
+    chip.className = "shift-chip";
+    chip.textContent = label;
+    // v úzkém sloupci se text ořízne, celý je proto vždy v tooltipu
+    chip.title = label + (s.description ? " – " + s.description : "");
+    if (isAdmin()) {
+      chip.classList.add("editable");
+      chip.onclick = (e) => { e.stopPropagation(); openDetail(s.id); };
+    }
+    row.appendChild(chip);
+  });
+  return row;
 }
 
 function buildDayView() {
@@ -414,7 +479,8 @@ function buildDayView() {
   const grid = document.createElement("div");
   grid.className = "day-grid";
 
-  const HH = computeHourHeight();
+  const showShiftRow = dayHasShifts();
+  const HH = computeHourHeight(showShiftRow);
   state.hourH = HH;
   const hours = CFG.DAY_END_HOUR - CFG.DAY_START_HOUR;
   const bodyH = hours * HH;
@@ -427,6 +493,7 @@ function buildDayView() {
   const timeCol = document.createElement("div");
   timeCol.className = "col time";
   timeCol.innerHTML = '<div class="col-head"></div>';
+  if (showShiftRow) timeCol.appendChild(buildShiftRow(null));
   const timeBody = document.createElement("div");
   timeBody.className = "col-body";
   timeBody.style.height = bodyH + "px";
@@ -450,13 +517,16 @@ function buildDayView() {
     head.textContent = room.name;
     col.appendChild(head);
 
+    // Kdo je dnes u tohohle stolu a od kolika do kolika (směny).
+    if (showShiftRow) col.appendChild(buildShiftRow(room));
+
     const body = document.createElement("div");
     body.className = "col-body" + (isAdmin() ? " admin" : "");
     body.style.height = bodyH + "px";
     body.style.background = lineCss;
 
     state.lessons
-      .filter((l) => l.room_id === room.id && matchesMode(l))
+      .filter((l) => isLesson(l) && l.room_id === room.id && matchesMode(l))
       .forEach((l) => body.appendChild(buildEvent(l, room)));
 
     col.appendChild(body);
@@ -472,7 +542,8 @@ function buildDayView() {
 function setupBoxSelect(wrap) {
   wrap.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
-    if (e.target.closest(".event")) return; // klik na lekci řeší buildEvent
+    if (e.target.closest(".event")) return;     // klik na lekci řeší buildEvent
+    if (e.target.closest(".shift-row")) return; // klik na směnu otevírá její detail
     const startX = e.clientX, startY = e.clientY;
     let rect = null;
     const additive = e.ctrlKey || e.metaKey;
@@ -526,7 +597,7 @@ function clearSelection() {
 // Bere jen lekce aktuálního režimu (Prezenční/Online), ať se nekopíruje nic skrytého.
 function selectAllDay() {
   if (!isAdmin()) return;
-  state.selection = new Set(state.lessons.filter(matchesMode).map((l) => l.id));
+  state.selection = new Set(state.lessons.filter((l) => isLesson(l) && matchesMode(l)).map((l) => l.id));
   renderView();
   toast("Vybráno " + state.selection.size + " lekcí.");
 }
@@ -550,11 +621,16 @@ function buildEvent(l, room) {
   ev.style.background = room.color;
 
   const sub = [l.subject && l.subject !== "—" ? l.subject : null, l.lector_name].filter(Boolean).join(" · ");
+  // Poznámka (popis lekce) rovnou v buňce – celá je v tooltipu, v bloku se
+  // vejde tolik, kolik dovolí jeho výška.
+  const note = (l.description || "").trim();
   ev.innerHTML =
     '<div class="e-time">' + fmtRange(l.starts_at, l.ends_at) + "</div>" +
     '<div class="e-title">' + escapeHtml(l.student_names || "") + "</div>" +
     (sub ? '<div class="e-sub">' + escapeHtml(sub) + "</div>" : "") +
+    (note ? '<div class="e-note">' + escapeHtml(note) + "</div>" : "") +
     (l.mode === "online" ? '<span class="e-badge">ONLINE</span>' : "");
+  if (note) ev.title = note;
 
   if (isAdmin()) {
     // Admin: klik = výběr (Ctrl/⌘ přidává), dvojklik = úprava.
@@ -581,7 +657,7 @@ function buildAgenda() {
   const wrap = document.createElement("div");
   wrap.className = "agenda";
   const lessons = state.lessons
-    .filter((l) => (!state.roomFilter || l.room_id === state.roomFilter) && matchesMode(l))
+    .filter((l) => isLesson(l) && (!state.roomFilter || l.room_id === state.roomFilter) && matchesMode(l))
     .slice()
     .sort((a, b) => a.starts_at - b.starts_at);
 
@@ -627,28 +703,37 @@ function openDetail(id) {
   const l = state.lessons.find((x) => x.id === id);
   if (!l) return;
   state.openLessonId = id;
-  if (isAdmin()) renderAdminForm(l, "Detail lekce");
+  if (isAdmin()) renderAdminForm(l, isShift(l) ? "Lektor u stolu" : "Detail lekce");
   else renderLektorForm(l);
   showPanel();
 }
 
-// Admin: nová lekce
-function openCreate() {
+// Admin: nová lekce (kind = 'lesson') nebo nová směna lektora (kind = 'shift')
+function openCreate(kind) {
   state.openLessonId = null;
   const base = new Date(state.date);
   base.setHours(8, 0, 0, 0);
-  const end = new Date(base); end.setHours(9, 0, 0, 0);
+  const end = new Date(base);
+  end.setHours(kind === "shift" ? 12 : 9, 0, 0, 0);
   renderAdminForm(
-    { starts_at: base, ends_at: end, room_id: "", lector_name: "", subject: "", student_names: "", mode: "offline", status: "planned", done: false, description: "" },
-    "Nová lekce"
+    { starts_at: base, ends_at: end, room_id: "", lector_name: "", subject: "", student_names: "",
+      mode: "offline", status: "planned", done: false, description: "", kind: kind || "lesson" },
+    kind === "shift" ? "Nový lektor u stolu" : "Nová lekce"
   );
   showPanel();
 }
 
-// Formulář pro administrátora (plná editace)
+// Formulář pro administrátora (plná editace).
+// Přepínač Typ rozhoduje, jestli jde o lekci, nebo jen o zápis „kdo je u stolu
+// od kolika do kolika" – u směny nemá smysl žák, předmět ani odučeno, tak se
+// ta pole schovají.
 function renderAdminForm(l, title) {
+  const shift = l.kind === "shift";
   document.getElementById("detailTitle").textContent = title;
   document.getElementById("detailBody").innerHTML =
+    field("Typ zápisu",
+      '<select id="fKind"><option value="lesson"' + (shift ? "" : " selected") + ">Lekce</option>" +
+      '<option value="shift"' + (shift ? " selected" : "") + ">Lektor u stolu (kdo tu dnes je)</option></select>") +
     '<div class="field-row">' +
       field("Datum", '<input type="date" id="fDate" value="' + dateVal(l.starts_at) + '">') +
     "</div>" +
@@ -656,19 +741,49 @@ function renderAdminForm(l, title) {
       field("Začátek", '<input type="time" id="fStart" value="' + timeVal(l.starts_at) + '">') +
       field("Konec", '<input type="time" id="fEnd" value="' + timeVal(l.ends_at) + '">') +
     "</div>" +
-    field("Místnost / stůl", '<select id="fRoom">' + roomOptions(l.room_id) + "</select>") +
-    field("Žák", '<input type="text" id="fStudent" value="' + escapeHtml(l.student_names || "") + '">') +
-    field("Lektor", '<input type="text" id="fLector" value="' + escapeHtml(l.lector_name || "") + '">') +
-    '<div class="field-row">' +
-      field("Předmět", '<input type="text" id="fSubject" value="' + escapeHtml(l.subject || "") + '">') +
-      field("Režim", '<select id="fMode"><option value="offline"' + (l.mode !== "online" ? " selected" : "") + ">Offline</option><option value=\"online\"" + (l.mode === "online" ? " selected" : "") + ">Online</option></select>") +
+    field(shift ? "Stůl / učebna" : "Místnost / stůl", '<select id="fRoom">' + roomOptions(l.room_id) + "</select>") +
+    '<div id="lessonOnly"' + (shift ? ' class="hidden"' : "") + ">" +
+      field("Žák", '<input type="text" id="fStudent" value="' + escapeHtml(l.student_names || "") + '">') +
     "</div>" +
-    field("Stav", '<select id="fStatus">' + statusOptions(l.status) + "</select>") +
-    '<label class="check"><input type="checkbox" id="fDone"' + (l.done ? " checked" : "") + "> Odučeno</label>" +
-    field("Popis – co se dělalo", '<textarea id="fDesc">' + escapeHtml(l.description || "") + "</textarea>");
+    field("Lektor", '<input type="text" id="fLector" value="' + escapeHtml(l.lector_name || "") + '">') +
+    '<div id="lessonOnly2"' + (shift ? ' class="hidden"' : "") + ">" +
+      '<div class="field-row">' +
+        field("Předmět", '<input type="text" id="fSubject" value="' + escapeHtml(l.subject || "") + '">') +
+        field("Režim", '<select id="fMode"><option value="offline"' + (l.mode !== "online" ? " selected" : "") + ">Offline</option><option value=\"online\"" + (l.mode === "online" ? " selected" : "") + ">Online</option></select>") +
+      "</div>" +
+      field("Stav", '<select id="fStatus">' + statusOptions(l.status) + "</select>") +
+      '<label class="check"><input type="checkbox" id="fDone"' + (l.done ? " checked" : "") + "> Odučeno</label>" +
+    "</div>" +
+    field(shift ? "Poznámka" : "Popis – co se dělalo", '<textarea id="fDesc">' + escapeHtml(l.description || "") + "</textarea>") +
+    (shift ? '<div class="role-note">Směna se ukáže jako řádek pod názvem stolu. Nepočítá se do odpracovaných hodin ani nečerpá kredit žáka.</div>' : "");
+
+  // Přepnutí typu překreslí formulář, ať sedí popisky i schovaná pole.
+  document.getElementById("fKind").onchange = (e) => {
+    renderAdminForm(readAdminForm(e.target.value), e.target.value === "shift" ? "Lektor u stolu" : "Lekce");
+  };
 
   document.getElementById("detailDelete").classList.toggle("hidden", !state.openLessonId);
   document.getElementById("detailSaved").textContent = "";
+}
+
+// Přečte rozdělaný formulář zpět do objektu (kvůli přepnutí typu bez ztráty dat).
+function readAdminForm(kind) {
+  const g = (id) => document.getElementById(id);
+  const [y, mo, d] = g("fDate").value.split("-").map(Number);
+  const mk = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return new Date(y, mo - 1, d, h, m); };
+  return {
+    starts_at: mk(g("fStart").value),
+    ends_at: mk(g("fEnd").value),
+    room_id: g("fRoom").value,
+    student_names: g("fStudent") ? g("fStudent").value : "",
+    lector_name: g("fLector").value,
+    subject: g("fSubject") ? g("fSubject").value : "",
+    mode: g("fMode") ? g("fMode").value : "offline",
+    status: g("fStatus") ? g("fStatus").value : "planned",
+    done: g("fDone") ? g("fDone").checked : false,
+    description: g("fDesc").value,
+    kind: kind,
+  };
 }
 
 // Formulář pro lektora (jen popis + potvrzení)
@@ -709,6 +824,8 @@ async function saveDetail() {
   btn.disabled = true;
   try {
     if (isAdmin()) {
+      const kind = document.getElementById("fKind").value;
+      const shift = kind === "shift";
       const [sh, sm] = document.getElementById("fStart").value.split(":").map(Number);
       const [eh, em] = document.getElementById("fEnd").value.split(":").map(Number);
       const [y, mo, d] = document.getElementById("fDate").value.split("-").map(Number);
@@ -716,24 +833,32 @@ async function saveDetail() {
       const ends = new Date(y, mo - 1, d, eh, em);
       if (ends <= starts) { saved.textContent = "Konec musí být po začátku."; btn.disabled = false; return; }
       const roomId = document.getElementById("fRoom").value || null;
+      if (shift && !roomId) { saved.textContent = "U lektora u stolu vyberte stůl."; btn.disabled = false; return; }
+      if (shift && !document.getElementById("fLector").value.trim()) {
+        saved.textContent = "Vyplňte lektora."; btn.disabled = false; return;
+      }
       // Kontrola překryvu: stejná místnost + překrývající se čas v daném dni.
-      const dayLessons = await provider.getLessons(starts);
-      const conflict = findConflict(dayLessons, roomId, starts, ends, state.openLessonId);
-      if (conflict) {
-        saved.textContent = "Kolize: v této místnosti už je lekce " + fmtRange(conflict.starts_at, conflict.ends_at) + ".";
-        btn.disabled = false;
-        return;
+      // Směny se nekontrolují – lekce mají uvnitř směny naopak vznikat.
+      if (!shift) {
+        const dayLessons = await provider.getLessons(starts);
+        const conflict = findConflict(dayLessons, roomId, starts, ends, state.openLessonId);
+        if (conflict) {
+          saved.textContent = "Kolize: v této místnosti už je lekce " + fmtRange(conflict.starts_at, conflict.ends_at) + ".";
+          btn.disabled = false;
+          return;
+        }
       }
       const payload = {
+        kind,
         starts_at: starts,
         ends_at: ends,
         room_id: roomId,
-        student_names: document.getElementById("fStudent").value.trim(),
+        student_names: shift ? "" : document.getElementById("fStudent").value.trim(),
         lector_name: document.getElementById("fLector").value.trim(),
-        subject: document.getElementById("fSubject").value.trim(),
-        mode: document.getElementById("fMode").value,
-        status: document.getElementById("fStatus").value,
-        done: document.getElementById("fDone").checked,
+        subject: shift ? "" : document.getElementById("fSubject").value.trim(),
+        mode: shift ? "offline" : document.getElementById("fMode").value,
+        status: shift ? "planned" : document.getElementById("fStatus").value,
+        done: shift ? false : document.getElementById("fDone").checked,
         description: document.getElementById("fDesc").value,
       };
       await provider.saveLesson(payload, state.openLessonId);
@@ -776,6 +901,48 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// ---------- Konec dne: „Vše odučeno" (admin) ----------
+// Šéfová to zmáčkne večer a odklikne tím celý den najednou. Bere lekce
+// obou režimů (prezenční i online), ale jen ty naplánované – zrušené,
+// nedostavené ani směny lektorů u stolu se nedotýká.
+function pendingLessonsOfDay() {
+  return state.lessons.filter(
+    (l) => isLesson(l) && !l.done && l.status !== "cancelled" && l.status !== "no_show"
+  );
+}
+
+async function markDayDone() {
+  const pending = pendingLessonsOfDay();
+  if (!pending.length) {
+    toast("Všechny lekce tohoto dne už jsou odučené (nebo zrušené).");
+    return;
+  }
+  const online = pending.filter((l) => l.mode === "online").length;
+  if (!confirm(
+    "Označit " + pending.length + " " + lessonWord(pending.length) + " dne " + fmtDateLong(state.date) +
+    " jako odučené?" + (online ? "\n(Z toho " + online + " online – ty teď v rozvrhu nevidíte.)" : "") +
+    "\n\nZapíšou se tím lektorům odpracované hodiny a žákům se strhne kredit."
+  )) return;
+
+  const btn = document.getElementById("doneAllBtn");
+  btn.disabled = true;
+  let ok = 0, failed = 0;
+  for (const l of pending) {
+    try {
+      await provider.updateLessonFields(l.id, {
+        done: true,
+        status: l.status === "planned" ? "done" : l.status,
+      });
+      ok++;
+    } catch (e) { console.error(e); failed++; }
+  }
+  btn.disabled = false;
+  await refresh();
+  toast("Odučeno: " + ok + " " + lessonWord(ok) + (failed ? ", " + failed + " se nepodařilo uložit" : "") + ".");
+}
+
+function lessonWord(n) { return n === 1 ? "lekci" : n >= 2 && n <= 4 ? "lekce" : "lekcí"; }
+
 // ---------- Kopírování / vkládání (admin) ----------
 function copySelection() {
   if (!isAdmin() || !state.selection.size) return;
@@ -786,7 +953,7 @@ function copySelection() {
       sh: l.starts_at.getHours(), sm: l.starts_at.getMinutes(),
       eh: l.ends_at.getHours(), em: l.ends_at.getMinutes(),
       subject: l.subject, lector_name: l.lector_name,
-      student_names: l.student_names, mode: l.mode,
+      student_names: l.student_names, mode: l.mode, kind: l.kind || "lesson",
     }));
   toast("Zkopírováno " + state.clipboard.length + " lekcí. Přepni den a stiskni Ctrl/⌘+V.");
 }
@@ -800,8 +967,9 @@ async function pasteClipboard() {
     const y = state.date.getFullYear(), mo = state.date.getMonth(), d = state.date.getDate();
     const starts = new Date(y, mo, d, t.sh, t.sm);
     const ends = new Date(y, mo, d, t.eh, t.em);
-    if (findConflict(placed, t.room_id, starts, ends, null)) { skipped++; continue; }
+    if (t.kind !== "shift" && findConflict(placed, t.room_id, starts, ends, null)) { skipped++; continue; }
     const payload = {
+      kind: t.kind || "lesson",
       starts_at: starts, ends_at: ends, room_id: t.room_id,
       student_names: t.student_names, lector_name: t.lector_name,
       subject: t.subject, mode: t.mode, status: "planned", done: false, description: "",
@@ -864,8 +1032,10 @@ async function extendWeekToNext() {
         if (l.status === "cancelled") continue;
         const starts = new Date(tgtDay); starts.setHours(l.starts_at.getHours(), l.starts_at.getMinutes(), 0, 0);
         const ends = new Date(tgtDay); ends.setHours(l.ends_at.getHours(), l.ends_at.getMinutes(), 0, 0);
-        if (findConflict(placed, l.room_id, starts, ends, null)) { skipped++; continue; }
+        // Směny se kopírují taky (kdo u kterého stolu bývá), jen nekolidují.
+        if (isLesson(l) && findConflict(placed, l.room_id, starts, ends, null)) { skipped++; continue; }
         const res = await provider.saveLesson({
+          kind: l.kind || "lesson",
           starts_at: starts, ends_at: ends, room_id: l.room_id,
           student_names: l.student_names, lector_name: l.lector_name,
           subject: l.subject, mode: l.mode, status: "planned", done: false, description: "",
@@ -1010,7 +1180,9 @@ async function startApp(user) {
     document.getElementById("detailClose").onclick = closeDetail;
     document.getElementById("detailSave").onclick = saveDetail;
     document.getElementById("detailDelete").onclick = deleteDetail;
-    document.getElementById("newLessonBtn").onclick = openCreate;
+    document.getElementById("newLessonBtn").onclick = () => openCreate("lesson");
+    document.getElementById("newShiftBtn").onclick = () => openCreate("shift");
+    document.getElementById("doneAllBtn").onclick = markDayDone;
     document.getElementById("selectAllBtn").onclick = selectAllDay;
     document.getElementById("extendWeekBtn").onclick = extendWeekToNext;
 
