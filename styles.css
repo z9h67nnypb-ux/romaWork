@@ -37,7 +37,9 @@ body.app-schedule > .topbar,
 body.app-schedule > .toolbar,
 body.app-schedule > .admin-hint { flex: 0 0 auto; }
 
-/* ---------- Topbar ---------- */
+/* Topbar (název + legenda + kalendář) byl zrušen – bral skoro 180 px výšky,
+   které teď dostane samotná mřížka rozvrhu. Zbytky stylů drží ostatní
+   stránky, které topbar používají. */
 .topbar {
   display: flex;
   gap: 16px;
@@ -47,52 +49,20 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
   border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
-.title-block h1 {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--title);
-}
-.title-block p {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-}
 
-/* ---------- Legenda učeben ---------- */
-.legend {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(105px, 1fr));
-  gap: 4px;
-  flex: 1;
-  min-width: 330px;
-  max-width: 520px;
-  margin-left: auto;
-}
-.legend .chip {
-  font-size: 10px;
-  color: #fff;
-  padding: 3px 6px;
-  border-radius: 4px;
-  cursor: pointer;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border: 2px solid transparent;
-  user-select: none;
-}
-.legend .chip.all { background: #6b6b6b; }
-.legend .chip.active { border-color: #111; box-shadow: 0 0 0 1px #fff inset; }
-
-/* ---------- Mini kalendář ---------- */
+/* ---------- Mini kalendář (rozbalí se kliknutím na datum) ---------- */
 .mini-calendar {
+  position: absolute;
+  top: 100%;
+  left: 60px;
+  z-index: 30;
   width: 208px;
-  background: var(--bg);
-  border: 1px solid var(--line);
+  background: #fff;
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   padding: 6px;
   font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 .mini-head {
   display: flex;
@@ -127,14 +97,16 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
 
 /* ---------- Toolbar ---------- */
 .toolbar {
+  position: relative;          /* kotva pro rozbalený mini kalendář */
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 5px 16px;
+  gap: 8px;
+  padding: 4px 12px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
+.toolbar .app-name { font-weight: 700; color: var(--title); font-size: 13px; }
 .toolbar button {
   border: 1px solid var(--line-strong);
   background: #fff;
@@ -144,7 +116,8 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
   font-size: 12px;
 }
 .toolbar button:hover { background: #f2f2f2; }
-.nav-date { font-weight: 600; min-width: 150px; text-transform: capitalize; }
+.nav-date { font-weight: 600; min-width: 158px; text-transform: capitalize; text-align: center; }
+.nav-date::after { content: " ▾"; color: var(--muted); font-weight: 400; }
 .primary-btn {
   background: var(--accent) !important;
   color: #fff;
@@ -152,6 +125,16 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
   font-weight: 600;
 }
 .primary-btn:hover { background: #244e9e !important; }
+/* Údaje klienta pod polem „Žák" v detailu lekce */
+.student-info { margin: -4px 0 8px; font-size: 12px; }
+.student-info .si-known { color: #1e6b30; background: #eef7f0; border-radius: 5px; padding: 4px 8px; }
+.student-info .si-note { color: var(--muted); font-weight: 400; }
+.student-info .si-new { color: #34507e; background: #eef3fb; border: 1px solid #d9e3f4; border-radius: 5px; padding: 6px 8px; }
+.student-info .si-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.student-info .si-grid input, .student-info .si-grid select {
+  border: 1px solid var(--line-strong); border-radius: 4px; padding: 5px 7px; font-size: 12px; width: 100%; box-sizing: border-box;
+}
+
 .role-switch { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
 .role-switch select { padding: 4px 6px; border: 1px solid var(--line-strong); border-radius: 4px; font-size: 12px; }
 .view-tabs { margin-left: auto; display: flex; gap: 4px; }
@@ -250,7 +233,10 @@ body.app-schedule .day-scroll { max-height: none; }
 .event .e-time { font-weight: 600; }
 .event .e-title { font-weight: 600; }
 .event .e-sub { opacity: 0.9; }
-/* Poznámka k lekci – co se zbytek bloku nevejde, ukáže tooltip. */
+/* Ročník / kategorie klienta – ať je poznat, o jaké doučování jde. */
+.event .e-level { opacity: 0.95; font-weight: 600; }
+.event .e-phone { opacity: 0.85; font-variant-numeric: tabular-nums; }
+/* Poznámka k lekci – co se do bloku nevejde, ukáže tooltip. */
 .event .e-note { opacity: 0.88; font-style: italic; }
 .event.is-done { opacity: 0.75; }
 .event.is-done .e-title::after { content: " ✓"; }
@@ -451,13 +437,16 @@ body.app-schedule .day-scroll { max-height: none; }
 /* ---------- User badge / hint / toast ---------- */
 .user-badge { font-size: 12px; color: var(--text); font-weight: 600; }
 .user-badge .role { color: var(--muted); font-weight: 400; }
+/* Nápověda je sbalená (<details>), rozbalí se jen když ji někdo chce. */
 .admin-hint {
   background: #eef3fb;
   border-bottom: 1px solid #d9e3f4;
   color: #34507e;
   font-size: 11px;
-  padding: 3px 16px;
+  padding: 2px 16px;
 }
+.admin-hint summary { cursor: pointer; color: var(--muted); user-select: none; }
+.admin-hint[open] summary { margin-bottom: 2px; font-weight: 600; }
 .toast {
   position: fixed;
   bottom: 22px;

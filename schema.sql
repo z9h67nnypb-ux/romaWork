@@ -216,6 +216,11 @@ create table if not exists credit_log (
   created_at  timestamptz not null default now(),
   unique (lesson_id, student_id)
 );
+-- Ruční korekce hodin z kartotéky (lekce se protáhla, zapsala se omylem…).
+-- Označuje se příznakem, ne prázdným lesson_id – to po roce dostanou i běžné
+-- zápisy, protože roční úklid je od smazaných lekcí odpojuje.
+alter table credit_log add column if not exists manual boolean not null default false;
+alter table credit_log add column if not exists note text;
 create index if not exists credit_log_student_idx on credit_log (student_id, lesson_date);
 
 -- Přepočítá čerpání kreditu jedné lekce podle jejího stavu a účastí.
@@ -344,7 +349,12 @@ select
   lec.name as lector_name,
   coalesce(string_agg(s.name, ', ' order by s.name), '') as student_names,
   -- nové sloupce se u "create or replace view" smí přidávat jen na konec
-  l.kind
+  l.kind,
+  -- údaje klienta z kartotéky – rozvrh je ukazuje v buňce i v detailu lekce,
+  -- takže se nikde neduplikují (zdrojem zůstává karta klienta)
+  coalesce(string_agg(s.phone,    ', ' order by s.name), '') as student_phone,
+  coalesce(string_agg(s.grade,    ', ' order by s.name), '') as student_grade,
+  coalesce(string_agg(s.category, ', ' order by s.name), '') as student_category
 from lessons l
 left join rooms r    on r.id = l.room_id
 left join lectors lec on lec.id = l.lector_id

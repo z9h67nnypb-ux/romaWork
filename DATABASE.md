@@ -24,6 +24,13 @@ spustit v Supabase SQL editoru.
 | `diagnostics` | výsledky diagnostických testů + vygenerovaný plán | nemaže se |
 | `profiles` | přihlašovací role (admin / lektor) | – |
 
+**Odučené hodiny v kartotéce.** V kartě klienta je sekce *Odučené hodiny*:
+kolik jich přišlo z rozvrhu, jaké byly ruční korekce a kolik je celkem
+vyčerpáno. Korekce (`credit_log` s `manual = true`) se zadává v hodinách –
+kladně přidá (lekce se protáhla, doučovalo se mimo rozvrh), záporně odečte
+(zapsáno omylem). Zápisy z rozvrhu zůstávají nedotčené, takže je vždy poznat,
+co spočítala appka a co do toho někdo sáhl rukou.
+
 **Kartotéka (kreditový systém):** klient předplatí hodiny (řádek v `payments`),
 každá odučená lekce s jeho účastí kredit čerpá (`credit_log`, plní se triggery
 stejně jako `work_log`). Pohled `student_credit` počítá zaplaceno / vyčerpáno /
@@ -218,6 +225,32 @@ lekce jednotlivě.
 
 **Poznámka v buňce.** Popis lekce se ukazuje přímo v bloku rozvrhu (kurzívou);
 co se do bloku nevejde, je celé v tooltipu.
+
+**Co je v buňce vidět.** Čas, žák, jeho třída a kategorie, předmět, lektor,
+telefon a poznámka – tedy i to, *o jaké doučování jde*, ne jen předmět.
+Telefon, třídu a kategorii bere pohled `lesson_details` z karty klienta,
+takže se nikde neduplikují.
+
+**Zakládání lekcí.** *+ Nová lekce* startuje nejbližší celou hodinou a konec
+se dopočítá na +1 hodinu (a drží si délku, když se posune začátek).
+**Dvojklikem do prázdna** v rozvrhu vznikne lekce přímo na tom čase a stole –
+tím jde doplnit i hodina, která už proběhla. *Opakovat* založí kopie
+**jen na následující týden** (denně / týdně / ob týden); dál dopředu se rozvrh
+protahuje tlačítkem *Protáhnout týden →*.
+
+**Nový klient rovnou z rozvrhu.** Když je v poli *Žák* jméno, které kartotéka
+nezná, formulář nabídne kategorii (ZŠ/SŠ/pracující…), třídu, telefon a způsob
+platby – uloží se s lekcí do `students`, takže se karta nemusí zakládat zvlášť.
+U známého jména se místo toho ukáže, co už kartotéka ví.
+
+**Export do Excelu.** Tlačítko *⬇ Excel* stáhne den, týden nebo měsíc jako
+`.csv` s BOM a středníkem – Excel ho otevře dvojklikem včetně diakritiky.
+
+**Vzhled.** Původní vysoká hlavička (název, dlaždice učeben, kalendář) je
+pryč: filtr učeben je rozbalovací seznam v liště a kalendář se otevře
+kliknutím na datum. Uvolněných ~180 px dostala mřížka, takže bloky jsou
+zhruba dvakrát vyšší a čitelné. Den končí ve 20:00 (`DAY_END_HOUR`
+v [`config.js`](config.js)).
 
 ## 8) Diagnostické testy – karta žáka, práva, algoritmus vs. AI
 

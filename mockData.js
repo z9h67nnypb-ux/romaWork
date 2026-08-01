@@ -23,6 +23,23 @@ window.ROOMS = [
   { id: "mat-6",    name: "Matematická stůl 6",  color: "#4569b0", sort: 16 },
 ];
 
+// Klienti z kartotéky – rozvrh z nich bere telefon a ročník k lekci.
+// V ostré verzi je nahradí tabulka `students`.
+window.MOCK_CLIENTS = [
+  { id: "c1", name: "Novák Petr",         phone: "777111222", grade: "7. třída",            category: "ZŠ", payment_method: "hotově",         status: "active" },
+  { id: "c2", name: "Svobodová Anna",     phone: "605222333", grade: "9. tř. – přijímačky", category: "ZŠ", payment_method: "účet PoraDys",   status: "active" },
+  { id: "c3", name: "Dvořák Jakub",       phone: "731333444", grade: "2. ročník",           category: "SŠ", payment_method: "účet DR",        status: "active" },
+  { id: "c4", name: "Černá Eliška",       phone: "776444555", grade: "5. třída",            category: "ZŠ", payment_method: "hotově",         status: "active" },
+  { id: "c5", name: "Procházka Tomáš",    phone: "702555666", grade: "3. ročník",           category: "SŠ", payment_method: "účet jazykovka", status: "active" },
+  { id: "c6", name: "Kučerová Tereza",    phone: "608666777", grade: "8. třída",            category: "ZŠ", payment_method: "účet PoraDys",   status: "active" },
+  { id: "c7", name: "Opata Jiří",         phone: "777333444", grade: "1. ročník",           category: "SŠ", payment_method: "účet DR",        status: "active" },
+  { id: "c8", name: "Bezdičková Ela",     phone: "776555666", grade: "9. tř. – přijímačky", category: "ZŠ", payment_method: "účet jazykovka", status: "active" },
+  { id: "c9", name: "Milka Stanislav",    phone: "605777888", grade: "6. třída",            category: "ZŠ", payment_method: "hotově",         status: "active" },
+  { id: "c10", name: "Kimlová Nela",      phone: "739888999", grade: "4. ročník",           category: "SŠ", payment_method: "účet PoraDys",   status: "active" },
+];
+
+function _client(name) { return window.MOCK_CLIENTS.find((c) => c.name === name) || null; }
+
 // Pomůcka: vyrobí Date pro dnešní den (resp. zadané datum) v daný čas.
 function _at(baseDate, h, m) {
   const d = new Date(baseDate);
@@ -136,13 +153,18 @@ function _buildRandomLessons(d) {
     const r = rnd();
     const status = r < 0.25 ? "done" : r < 0.32 ? "cancelled" : r < 0.36 ? "no_show" : "planned";
     const done = status === "done";
+    const who = pick(MOCK_STUDENTS);
+    const cl = _client(who);
     lessons.push({
       id: "rnd-" + lessons.length,
       kind: "lesson",
       room_id: room.id,
       starts_at: _at(d, Math.floor(s / 60), s % 60),
       ends_at: _at(d, Math.floor(e / 60), e % 60),
-      student_names: pick(MOCK_STUDENTS),
+      student_names: who,
+      student_phone: (cl && cl.phone) || "",
+      student_grade: (cl && cl.grade) || "",
+      student_category: (cl && cl.category) || "",
       subject: pick(MOCK_SUBJECTS),
       lector_name: pick(MOCK_LECTORS),
       mode: rnd() < 0.18 ? "online" : "offline",
@@ -170,6 +192,9 @@ window.buildMockLessons = function (date) {
         starts_at: _at(d, sh, sm),
         ends_at: _at(d, eh, em),
         student_names: student,
+        student_phone: (_client(student) || {}).phone || "",
+        student_grade: (_client(student) || {}).grade || "",
+        student_category: (_client(student) || {}).category || "",
         subject: subject,
         lector_name: lector,
         mode: "offline",

@@ -78,11 +78,15 @@ const MockKt = {
       { date: "2026-07-08 16:00", subject: "ČJ", lector: "Šíma", hours: 1, done: true },
     ],
   },
+  corrections: [
+    { id: "k1", student_id: "m1", lesson_date: "2026-07-16", hours: 0.5, note: "lekce se protáhla o půl hodiny", manual: true },
+  ],
   _credit(s) {
     const paid = this.payments.filter((p) => p.student_id === s.id);
     const paid_hours = paid.reduce((x, p) => x + Number(p.hours_credit), 0);
     const paid_czk = paid.reduce((x, p) => x + Number(p.amount_czk), 0);
-    const used_hours = this.used[s.id] || 0;
+    const corr = this.corrections.filter((k) => k.student_id === s.id).reduce((x, k) => x + Number(k.hours), 0);
+    const used_hours = (this.used[s.id] || 0) + corr;
     return { ...s, student_id: s.id, paid_hours, paid_czk, used_hours, balance_hours: paid_hours - used_hours };
   },
   async list() { return this.students.map((s) => this._credit(s)); },
@@ -93,8 +97,11 @@ const MockKt = {
       credit: this._credit(s),
       payments: this.payments.filter((p) => p.student_id === id).sort((a, b) => b.paid_at.localeCompare(a.paid_at)),
       lessons: this.lessons[id] || [],
+      corrections: this.corrections.filter((k) => k.student_id === id).sort((a, b) => b.lesson_date.localeCompare(a.lesson_date)),
     };
   },
+  async addCorrection(row) { this.corrections.push({ ...row, id: "knew" + this._seq++, manual: true }); },
+  async deleteCorrection(id) { this.corrections = this.corrections.filter((x) => x.id !== id); },
   async saveStudent(fields, id) {
     if (id) { Object.assign(this.students.find((x) => x.id === id), fields); return id; }
     const s = { id: "mnew" + this._seq++, status: "active", ...fields };
@@ -123,11 +130,12 @@ const DbKt = {
   },
   async getCard(id) {
     const c = this._c();
-    const [st, cr, pay, att] = await Promise.all([
+    const [st, cr, pay, att, corr] = await Promise.all([
       c.from("students").select("*").eq("id", id).single(),
       c.from("student_credit").select("*").eq("student_id", id).single(),
       c.from("payments").select("*").eq("student_id", id).order("paid_at", { ascending: false }),
       c.from("attendance").select("lessons(id, starts_at, ends_at, subject, done, status, lectors(name))").eq("student_id", id),
+      c.from("credit_log").select("*").eq("student_id", id).eq("manual", true).order("lesson_date", { ascending: false }),
     ]);
     if (st.error) throw st.error;
     const lessons = (att.data || [])
@@ -142,7 +150,16 @@ const DbKt = {
       }))
       .sort((a, b) => new Date(b.starts) - new Date(a.starts))
       .slice(0, 60);
-    return { student: st.data, credit: cr.data, payments: pay.data || [], lessons };
+    return { student: st.data, credit: cr.data, payments: pay.data || [], lessons, corrections: corr.data || [] };
+  },
+  // Ruční korekce odučených hodin = řádek v credit_log bez vazby na lekci.
+  async addCorrection(row) {
+    const { error } = await this._c().from("credit_log").insert(Object.assign({ manual: true }, row));
+    if (error) throw error;
+  },
+  async deleteCorrection(id) {
+    const { error } = await this._c().from("credit_log").delete().eq("id", id);
+    if (error) throw error;
   },
   async saveStudent(fields, id) {
     const c = this._c();
@@ -449,6 +466,34 @@ function renderCard() {
       "</div>";
   }
 
+  // Odučené hodiny: kolik přišlo z rozvrhu, kolik ručních korekcí a součet.
+  // Korekce jsou vedené zvlášť, aby bylo poznat, co appka spočítala sama
+  // a co do toho někdo sáhl rukou.
+  let hoursHtml = "";
+  if (openId) {
+    const corrections = openCard.corrections || [];
+    const corrSum = corrections.reduce((s, k) => s + Number(k.hours), 0);
+    const fromSchedule = Number((cr && cr.used_hours) || 0) - corrSum;
+    const signed = (n) => (n > 0 ? "+" : n < 0 ? "−" : "") + fmtH(Math.abs(n));
+
+    hoursHtml = '<div class="kt-section-h">Odučené hodiny</div>' +
+      '<table class="pay-table"><tr><td>Z rozvrhu (potvrzené lekce)</td><td class="num">' + fmtH(fromSchedule) + " h</td><td></td></tr>" +
+      corrections.map((k) =>
+        "<tr><td>" + fmtDateCz(k.lesson_date) + ' <span style="color:#999">' +
+        escapeHtml(k.note || "ruční korekce") + "</span></td>" +
+        '<td class="num">' + signed(Number(k.hours)) + " h</td>" +
+        '<td><button data-corrid="' + k.id + '">Smazat</button></td></tr>'
+      ).join("") +
+      '<tr><td><b>Celkem vyčerpáno</b></td><td class="num"><b>' + fmtH((cr && cr.used_hours) || 0) + " h</b></td><td></td></tr></table>" +
+      '<div class="corr-form">' +
+        '<input type="date" id="cDate" value="' + new Date().toISOString().slice(0, 10) + '">' +
+        '<input type="number" id="cHours" step="0.25" placeholder="hodiny (i −1)">' +
+        '<input type="text" id="cNote" placeholder="důvod korekce">' +
+        '<button id="cAdd">Přidat korekci</button>' +
+      "</div>" +
+      '<div class="corr-hint">Kladné číslo hodiny přidá (lekce se protáhla, doučovalo se mimo rozvrh), záporné je odečte (zapsáno omylem).</div>';
+  }
+
   let lessonsHtml = '<div class="kt-section-h">Výuka (z rozvrhu)</div>';
   if (openId) {
     if (openCard.lessons.length) {
@@ -477,7 +522,7 @@ function renderCard() {
   let html = stateHtml;
   if (openId) {
     html += '<div class="card-main">' +
-      '<div class="card-col">' + fieldsHtml + "</div>" +
+      '<div class="card-col">' + fieldsHtml + hoursHtml + "</div>" +
       '<div class="card-col">' + payHtml + lessonsHtml + "</div>" +
       "</div>";
   } else {
@@ -500,6 +545,40 @@ function renderCard() {
       } catch (err) { alert("Smazání selhalo: " + (err.message || err)); }
     };
   });
+  // Ruční korekce odučených hodin
+  document.querySelectorAll("#cardBody [data-corrid]").forEach((b) => {
+    b.onclick = async (e) => {
+      e.stopPropagation();
+      if (!confirm("Smazat tuto korekci hodin?")) return;
+      try {
+        await kt.deleteCorrection(b.dataset.corrid);
+        openCard = await kt.getCard(openId);
+        renderCard();
+        refreshList();
+      } catch (err) { alert("Smazání selhalo: " + (err.message || err)); }
+    };
+  });
+  const cAdd = $("cAdd");
+  if (cAdd) cAdd.onclick = async () => {
+    const hours = Number($("cHours").value);
+    if (!hours) { alert("Zadejte počet hodin – kladně přidat, záporně odečíst."); return; }
+    cAdd.disabled = true;
+    try {
+      await kt.addCorrection({
+        student_id: openId,
+        lesson_date: $("cDate").value || new Date().toISOString().slice(0, 10),
+        hours,
+        note: $("cNote").value.trim() || null,
+      });
+      openCard = await kt.getCard(openId);
+      renderCard();
+      refreshList();
+    } catch (err) {
+      cAdd.disabled = false;
+      alert("Uložení korekce selhalo: " + (err.message || err));
+    }
+  };
+
   const pAdd = $("pAdd");
   if (pAdd) pAdd.onclick = async () => {
     const hours = Number($("pHours").value);

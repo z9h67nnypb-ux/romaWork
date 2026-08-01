@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kartotéka – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=7" />
+  <link rel="stylesheet" href="styles.css?v=8" />
   <style>
     /* Styly jen pro kartotéku */
     .kt-wrap { max-width: 1500px; margin: 0 auto; padding: 14px 20px 60px; }
@@ -136,6 +136,17 @@
     .pay-table th { color: var(--muted); font-size: 11px; }
     .pay-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .pay-table button { border: 1px solid var(--line-strong); background: #fff; border-radius: 4px; padding: 1px 7px; cursor: pointer; font-size: 11px; }
+    /* Ruční korekce odučených hodin */
+    .corr-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .corr-form input { border: 1px solid var(--line-strong); border-radius: 5px; padding: 6px 8px; font-size: 12.5px; width: 100%; box-sizing: border-box; }
+    .corr-form #cNote { grid-column: 1 / -1; }
+    .corr-form button {
+      grid-column: 1 / -1; background: #fff; color: var(--accent); border: 1px solid var(--accent);
+      border-radius: 5px; padding: 6px; font-weight: 600; cursor: pointer; font-size: 12.5px;
+    }
+    .corr-form button:hover { background: #eef2fb; }
+    .corr-hint { font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+
     .pay-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
     .pay-form input, .pay-form select { border: 1px solid var(--line-strong); border-radius: 5px; padding: 6px 8px; font-size: 12.5px; width: 100%; }
     .pay-form .full { grid-column: 1 / -1; }
@@ -267,6 +278,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js?v=6"></script>
-  <script src="kartoteka.js?v=7"></script>
+  <script src="kartoteka.js?v=8"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rozvrh – PoraDys osobní výuka</title>
-  <link rel="stylesheet" href="styles.css?v=7" />
+  <link rel="stylesheet" href="styles.css?v=8" />
 </head>
 <body class="app-schedule">
   <!-- Přihlášení -->
@@ -25,29 +25,30 @@
     <code>USE_SUPABASE = true</code>, appka začne číst z tvojí databáze.
   </div>
 
-  <header class="topbar">
-    <div class="title-block">
-      <h1>Rozvrh pro PoraDys – osobní výuka</h1>
-      <p>Klikněte na jakoukoli rezervaci, abyste viděli detaily.</p>
-    </div>
-    <div id="legend" class="legend"></div>
-    <div id="miniCalendar" class="mini-calendar"></div>
-  </header>
-
+  <!-- Jedna kompaktní lišta místo původní vysoké hlavičky – ať zbyde co
+       nejvíc místa na samotný rozvrh. Mini kalendář se rozbalí kliknutím
+       na datum, filtr učeben je v rozbalovacím seznamu. -->
   <nav class="toolbar">
-    <button id="prevDay">◀</button>
-    <span id="navDate" class="nav-date"></span>
-    <button id="nextDay">▶</button>
+    <span class="app-name">Rozvrh PoraDys</span>
+    <button id="prevDay" title="Předchozí den">◀</button>
+    <button id="navDate" class="nav-date" title="Zvolit datum z kalendáře"></button>
+    <button id="nextDay" title="Následující den">▶</button>
     <button id="todayBtn">Dnes</button>
+    <div id="miniCalendar" class="mini-calendar hidden"></div>
+
     <button id="newLessonBtn" class="primary-btn hidden">+ Nová lekce</button>
     <button id="newShiftBtn" class="hidden" title="Kdo je dnes u kterého stolu a od kolika do kolika">+ Lektor u stolu</button>
     <button id="doneAllBtn" class="hidden" title="Označí všechny naplánované lekce zobrazeného dne jako odučené">✓ Vše odučeno</button>
     <button id="selectAllBtn" class="hidden">Vybrat vše</button>
     <button id="extendWeekBtn" class="hidden" title="Zkopíruje všechny lekce z aktuálního týdne do týdne následujícího (kolize se přeskočí)">Protáhnout týden →</button>
+    <button id="exportBtn" title="Stáhne rozvrh jako .csv – otevře se v Excelu">⬇ Excel</button>
 
+    <label class="role-switch" for="roomSelect">Učebna:
+      <select id="roomSelect"></select>
+    </label>
     <label class="role-switch" for="modeSelect">Výuka:
       <select id="modeSelect">
-        <option value="offline">Prezenční</option>
+        <option value="offline">Osobní</option>
         <option value="online">Online</option>
       </select>
     </label>
@@ -66,12 +67,18 @@
     </div>
   </nav>
 
-  <div id="adminHint" class="admin-hint hidden">
-    Tip: táhnutím myši vyberte lekce (nebo <b>Vybrat vše</b> / <b>Ctrl/⌘+A</b>) · <b>Ctrl/⌘+C</b> zkopíruje výběr · přepněte den a <b>Ctrl/⌘+V</b> vloží · <b>dvojklik</b> upraví lekci · <b>Delete</b> smaže výběr.
-  </div>
+  <!-- Nápověda k ovládání: sbalená do jednoho řádku, ať nebere výšku -->
+  <details id="adminHint" class="admin-hint hidden">
+    <summary>Ovládání rozvrhu</summary>
+    <b>Dvojklik do prázdna</b> založí lekci na daný čas a stůl (i zpětně) · <b>dvojklik na lekci</b> ji upraví ·
+    táhnutím myši vyberete lekce (nebo <b>Vybrat vše</b> / <b>Ctrl/⌘+A</b>) · <b>Ctrl/⌘+C</b> zkopíruje výběr ·
+    přepněte den a <b>Ctrl/⌘+V</b> vloží · <b>Delete</b> smaže výběr.
+  </details>
 
   <main id="viewContainer"></main>
   <div id="toast" class="toast hidden"></div>
+  <!-- Našeptávač jmen klientů z kartotéky (pole Žák v detailu lekce) -->
+  <datalist id="studentsList"></datalist>
 
   <!-- Výkaz hodin lektorů (admin) -->
   <div id="hoursModal" class="hours-modal hidden">
@@ -113,8 +120,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N nutí prohlížeč stáhnout čerstvé soubory místo verze z cache;
        při každé změně JS/CSS číslo zvedni -->
-  <script src="config.js?v=6"></script>
-  <script src="mockData.js?v=6"></script>
-  <script src="app.js?v=8"></script>
+  <script src="config.js?v=7"></script>
+  <script src="mockData.js?v=7"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
