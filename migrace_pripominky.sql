@@ -43,22 +43,7 @@ left join students s  on s.id = a.student_id
 group by l.id, r.name, r.color, lec.name;
 
 -- ---------------------------------------------------------------------------
--- Ruční korekce odučených hodin v kartotéce.
--- ---------------------------------------------------------------------------
--- Čerpání kreditu plní triggery z rozvrhu. Někdy je ale potřeba hodiny
--- doladit ručně (lekce se protáhla, zapsala se omylem, doučovalo se mimo
--- rozvrh). Korekce je řádek v credit_log bez vazby na lekci, označený
--- manual = true.
---
--- `manual` je nutné: roční úklid starých lekcí (purge_old_lessons) odpojuje
--- credit_log od smazaných lekcí (lesson_id = null), takže samotné prázdné
--- lesson_id by po roce přestalo korekce odlišovat od běžných zápisů.
-alter table credit_log add column if not exists manual boolean not null default false;
-alter table credit_log add column if not exists note text;
-
--- ---------------------------------------------------------------------------
 -- Kontrola po spuštění (musí projít bez chyby):
 --   select student_names, student_phone, student_grade, student_category
 --   from lesson_details limit 5;
---   select manual, note from credit_log limit 1;
 -- ---------------------------------------------------------------------------

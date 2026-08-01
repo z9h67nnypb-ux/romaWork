@@ -26,6 +26,13 @@ const MockProvider = {
     }
     return this._all.filter((l) => sameDay(l.starts_at, date));
   },
+  async getLessonsRange(start, end) {
+    const out = [];
+    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+      out.push(...await this.getLessons(new Date(d)));
+    }
+    return out;
+  },
   async updateLessonFields(id, fields) {
     const l = this._all.find((x) => x.id === id);
     if (l) Object.assign(l, fields);
@@ -98,6 +105,11 @@ const SupabaseProvider = {
   async getLessons(date) {
     const start = new Date(date); start.setHours(0, 0, 0, 0);
     const end = new Date(start); end.setDate(end.getDate() + 1);
+    return this.getLessonsRange(start, end);
+  },
+  // Celý rozsah jedním dotazem – export měsíce by jinak poslal 31 requestů
+  // za sebou a appka by při něm viditelně stála.
+  async getLessonsRange(start, end) {
     const { data, error } = await this._init()
       .from("lesson_details")
       .select("*")
@@ -254,7 +266,7 @@ const state = {
   students: [], // klienti z kartotéky (telefon, ročník, kategorie)
   selection: new Set(), // id vybraných lekcí (admin)
   clipboard: [], // zkopírované lekce (admin)
-  hourH: CFG.HOUR_HEIGHT, // aktuální výška hodiny (dynamicky dle výšky okna)
+  hourH: null, // výška hodiny; dopočítá se z okna a drží se do změny dne/okna
 };
 
 function isAdmin() { return state.user && state.user.role === "admin"; }
@@ -327,10 +339,22 @@ const STATUS_LABELS = {
 };
 
 // ---------- Načtení a vykreslení ----------
+// Načtení dne. Když spojení selže (uspaný projekt, výpadek sítě), nesmí
+// zůstat prázdná stránka bez vysvětlení – ukážeme chybu a tlačítko Zkusit znovu.
 async function refresh() {
-  state.lessons = await provider.getLessons(state.date);
+  try {
+    state.lessons = await provider.getLessons(state.date);
+  } catch (e) {
+    console.error(e);
+    document.getElementById("viewContainer").innerHTML =
+      '<div class="placeholder">Data se nepodařilo načíst: ' + escapeHtml(e.message || e) +
+      '<br><button id="retryBtn" class="primary-btn" style="margin-top:10px;padding:6px 14px;">Zkusit znovu</button></div>';
+    const rb = document.getElementById("retryBtn");
+    if (rb) rb.onclick = refresh;
+    return;
+  }
+  invalidateLayout(); // jiný den = může přibýt/zmizet řádek se směnami
   renderRoomFilter();
-  renderMiniCalendar();
   renderToolbar();
   renderView();
 }
@@ -458,21 +482,41 @@ function renderToolbar() {
   });
 }
 
-let _fitPass = 0;
+// Výška hodiny se počítá ještě před vykreslením, takže se napoprvé netrefí
+// (lišta se na úzkém okně teprve zalomí). Doměříme ji tedy jednou po vložení
+// do DOM a VÝSLEDEK SI ULOŽÍME – jinak by se celá mřížka překreslovala dvakrát
+// při každém kliknutí na lekci, což je přesně to, co appku sekalo.
+// Znovu se počítá jen při změně dne (může přibýt/zmizet řádek se směnami)
+// a při změně velikosti okna.
+let _needsFit = false;
+
+function ensureHourHeight(withShiftRow) {
+  if (state.hourH == null) {
+    state.hourH = computeHourHeight(withShiftRow);
+    _needsFit = true;
+  }
+  return state.hourH;
+}
+function invalidateLayout() { state.hourH = null; }
+
 function renderView() {
   const c = document.getElementById("viewContainer");
   if (state.view === "den") {
     c.innerHTML = "";
     c.appendChild(buildDayView());
-    // Výška hodiny se počítá ještě před vykreslením, takže se netrefí, když
-    // se lišta na úzkém okně zalomí na víc řádků. Po vložení do DOM změříme
-    // skutečně zbylé místo a jednou překreslíme, ať rozvrh vyplní obrazovku.
-    if (_fitPass < 1) {
+    if (_needsFit) {
+      _needsFit = false;
       requestAnimationFrame(() => {
         const grid = c.querySelector(".day-grid");
         if (!grid) return;
+        const hours = CFG.DAY_END_HOUR - CFG.DAY_START_HOUR;
         const spare = window.innerHeight - grid.getBoundingClientRect().bottom - 8;
-        if (Math.abs(spare) > 10) { _fitPass++; renderView(); _fitPass = 0; }
+        if (Math.abs(spare) < 10) return;
+        // korekce se dopočítá rovnou, žádné opakované přibližování
+        const fixed = Math.max(24, Math.min(80, Math.round(state.hourH + spare / hours)));
+        if (fixed === state.hourH) return;
+        state.hourH = fixed;
+        renderView();
       });
     }
   } else if (state.view === "agenda") { c.innerHTML = ""; c.appendChild(buildAgenda()); }
@@ -565,8 +609,7 @@ function buildDayView() {
   grid.className = "day-grid";
 
   const showShiftRow = dayHasShifts();
-  const HH = computeHourHeight(showShiftRow);
-  state.hourH = HH;
+  const HH = ensureHourHeight(showShiftRow);
   const hours = CFG.DAY_END_HOUR - CFG.DAY_START_HOUR;
   const bodyH = hours * HH;
   const lineCss =
@@ -610,18 +653,9 @@ function buildDayView() {
     body.style.height = bodyH + "px";
     body.style.background = lineCss;
 
-    // Dvojklik do prázdna založí lekci na daný čas a stůl – tím jde zapsat
-    // i hodinu, která už proběhla (např. v 11:00 doplnit lekci od 9:00).
-    if (isAdmin()) {
-      body.ondblclick = (e) => {
-        if (e.target.closest(".event")) return; // dvojklik na lekci ji upravuje
-        const y = e.clientY - body.getBoundingClientRect().top;
-        const mins = (y / (state.hourH || CFG.HOUR_HEIGHT)) * 60;
-        const starts = new Date(state.date);
-        starts.setHours(CFG.DAY_START_HOUR + Math.floor(mins / 60), 0, 0, 0);
-        openCreate("lesson", { starts_at: starts, room_id: room.id });
-      };
-    }
+    // Dvojklik do prázdna zakládá lekci – obsluhuje ho setupBoxSelect,
+    // odsud si bere jen to, ke kterému stolu sloupec patří.
+    body.dataset.room = room.id;
 
     state.lessons
       .filter((l) => isLesson(l) && l.room_id === room.id && matchesMode(l))
@@ -666,8 +700,23 @@ function setupBoxSelect(wrap) {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       if (!rect) {
-        // jen kliknutí do prázdna = zrušit výběr
-        if (!additive) { state.selection.clear(); renderView(); }
+        // Dvojklik do prázdna = nová lekce na daném čase a stole.
+        // Nejde použít událost "dblclick": první klik zruší výběr a překreslí
+        // mřížku, takže druhý klik dopadne na úplně nový element a prohlížeč
+        // dvojklik nerozpozná. Proto si dvojklik hlídáme sami z času a pozice.
+        const now = Date.now();
+        const isDouble = _lastEmptyClick &&
+          now - _lastEmptyClick.t < 400 &&
+          Math.abs(ue.clientX - _lastEmptyClick.x) < 6 &&
+          Math.abs(ue.clientY - _lastEmptyClick.y) < 6;
+        _lastEmptyClick = { t: now, x: ue.clientX, y: ue.clientY };
+        if (isDouble && isAdmin()) {
+          _lastEmptyClick = null;
+          createAtPoint(ue);
+          return;
+        }
+        // jen kliknutí do prázdna = zrušit výběr (překreslujeme jen když je co)
+        if (!additive && state.selection.size) { state.selection.clear(); renderView(); }
         return;
       }
       const box = { l: Math.min(startX, ue.clientX), r: Math.max(startX, ue.clientX), t: Math.min(startY, ue.clientY), b: Math.max(startY, ue.clientY) };
@@ -685,6 +734,23 @@ function setupBoxSelect(wrap) {
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   });
+}
+
+let _lastEmptyClick = null;
+
+// Z místa kliknutí odvodí stůl a hodinu a otevře formulář nové lekce.
+function createAtPoint(ev) {
+  const body = ev.target.closest && ev.target.closest(".col-body");
+  if (!body || !body.dataset.room) return;
+  const y = ev.clientY - body.getBoundingClientRect().top;
+  const hours = y / (state.hourH || CFG.HOUR_HEIGHT);
+  const h = Math.min(
+    Math.max(CFG.DAY_START_HOUR + Math.floor(hours), CFG.DAY_START_HOUR),
+    CFG.DAY_END_HOUR - 1
+  );
+  const starts = new Date(state.date);
+  starts.setHours(h, 0, 0, 0);
+  openCreate("lesson", { starts_at: starts, room_id: body.dataset.room });
 }
 
 function clearSelection() {
@@ -1155,36 +1221,37 @@ async function exportSchedule() {
   const btn = document.getElementById("exportBtn");
   btn.disabled = true;
   try {
-    const days = exportDays(range);
-    const rows = [];
-    for (const d of days) {
-      const lessons = await provider.getLessons(d);
-      lessons.slice().sort((a, b) => a.starts_at - b.starts_at).forEach((l) => {
-        const room = roomById(l.room_id);
-        rows.push([
-          dayKey(l.starts_at),
-          DAYS_FULL[l.starts_at.getDay()],
-          fmtTime(l.starts_at),
-          fmtTime(l.ends_at),
-          (minutesBetween(l.starts_at, l.ends_at) / 60).toFixed(2).replace(".", ","),
-          isShift(l) ? "lektor u stolu" : "lekce",
-          room ? room.name : "",
-          l.student_names || "",
-          l.student_phone || "",
-          l.student_grade || "",
-          l.student_category || "",
-          l.subject || "",
-          l.lector_name || "",
-          l.mode === "online" ? "online" : "osobní",
-          STATUS_LABELS[l.status] || l.status || "",
-          l.done ? "ano" : "ne",
-          l.description || "",
-        ]);
-      });
-    }
+    const [from, to] = exportRange(range);
+    // Do exportu jdou jen lekce – směny lektorů u stolu jsou provozní
+    // poznámka k rozvrhu, ne odučená výuka, a v tabulce jen zavazely.
+    const lessons = (await provider.getLessonsRange(from, to))
+      .filter(isLesson)
+      .sort((a, b) => a.starts_at - b.starts_at);
+
+    const rows = lessons.map((l) => {
+      const room = roomById(l.room_id);
+      return [
+        dayKey(l.starts_at),
+        DAYS_FULL[l.starts_at.getDay()],
+        fmtTime(l.starts_at),
+        fmtTime(l.ends_at),
+        (minutesBetween(l.starts_at, l.ends_at) / 60).toFixed(2).replace(".", ","),
+        room ? room.name : "",
+        l.student_names || "",
+        l.student_phone || "",
+        l.student_grade || "",
+        l.student_category || "",
+        l.subject || "",
+        l.lector_name || "",
+        l.mode === "online" ? "online" : "osobní",
+        STATUS_LABELS[l.status] || l.status || "",
+        l.done ? "ano" : "ne",
+        l.description || "",
+      ];
+    });
     if (!rows.length) { toast("V tomto období nejsou žádné lekce."); return; }
 
-    const cols = ["Datum", "Den", "Od", "Do", "Hodin", "Typ", "Stůl / učebna", "Žák", "Telefon",
+    const cols = ["Datum", "Den", "Od", "Do", "Hodin", "Stůl / učebna", "Žák", "Telefon",
       "Třída / ročník", "Kategorie", "Předmět", "Lektor", "Režim", "Stav", "Odučeno", "Poznámka"];
     const csv = [cols.map(csvEscape).join(";")]
       .concat(rows.map((r) => r.map(csvEscape).join(";")))
@@ -1206,22 +1273,23 @@ async function exportSchedule() {
   }
 }
 
-// Seznam dnů, které se mají do exportu načíst.
-function exportDays(range) {
-  const days = [];
+// Období exportu jako [od, do) – načte se jedním dotazem.
+function exportRange(range) {
   const d0 = new Date(state.date); d0.setHours(0, 0, 0, 0);
-  if (range === "den") return [d0];
+  if (range === "den") {
+    const to = new Date(d0); to.setDate(to.getDate() + 1);
+    return [d0, to];
+  }
   if (range === "tyden") {
     const monday = new Date(d0);
     monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday); d.setDate(monday.getDate() + i); days.push(d);
-    }
-    return days;
+    const to = new Date(monday); to.setDate(monday.getDate() + 7);
+    return [monday, to];
   }
-  const last = new Date(d0.getFullYear(), d0.getMonth() + 1, 0).getDate();
-  for (let i = 1; i <= last; i++) days.push(new Date(d0.getFullYear(), d0.getMonth(), i));
-  return days;
+  return [
+    new Date(d0.getFullYear(), d0.getMonth(), 1),
+    new Date(d0.getFullYear(), d0.getMonth() + 1, 1),
+  ];
 }
 
 // ---------- Opakování lekce (admin) ----------
@@ -1527,8 +1595,19 @@ async function startApp(user) {
   renderUserBadge();
 
   if (!CFG.USE_SUPABASE) document.getElementById("banner").classList.remove("hidden");
-  state.rooms = await provider.getRooms();
-  await loadStudents();
+  // Když se nepodaří načíst číselníky (uspaný projekt, výpadek sítě),
+  // nesmí zůstat prázdná bílá stránka bez vysvětlení.
+  try {
+    state.rooms = await provider.getRooms();
+    await loadStudents();
+  } catch (e) {
+    console.error(e);
+    document.getElementById("viewContainer").innerHTML =
+      '<div class="placeholder">Spojení s databází selhalo: ' + escapeHtml(e.message || e) +
+      '<br><button id="bootRetry" class="primary-btn" style="margin-top:10px;padding:6px 14px;">Zkusit znovu</button></div>';
+    document.getElementById("bootRetry").onclick = () => location.reload();
+    return;
+  }
 
   if (!_appWired) {
     _appWired = true;
@@ -1575,7 +1654,11 @@ async function startApp(user) {
     let _resizeT = null;
     window.addEventListener("resize", () => {
       clearTimeout(_resizeT);
-      _resizeT = setTimeout(() => { if (state.view === "den") renderView(); }, 150);
+      _resizeT = setTimeout(() => {
+        if (state.view !== "den") return;
+        invalidateLayout(); // po změně okna se výška hodiny přepočítá
+        renderView();
+      }, 150);
     });
     document.addEventListener("keydown", onKeyDown);
   }
