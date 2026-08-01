@@ -344,7 +344,12 @@ select
   lec.name as lector_name,
   coalesce(string_agg(s.name, ', ' order by s.name), '') as student_names,
   -- nové sloupce se u "create or replace view" smí přidávat jen na konec
-  l.kind
+  l.kind,
+  -- údaje klienta z kartotéky – rozvrh je ukazuje v buňce i v detailu lekce,
+  -- takže se nikde neduplikují (zdrojem zůstává karta klienta)
+  coalesce(string_agg(s.phone,    ', ' order by s.name), '') as student_phone,
+  coalesce(string_agg(s.grade,    ', ' order by s.name), '') as student_grade,
+  coalesce(string_agg(s.category, ', ' order by s.name), '') as student_category
 from lessons l
 left join rooms r    on r.id = l.room_id
 left join lectors lec on lec.id = l.lector_id

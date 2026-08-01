@@ -449,7 +449,11 @@ function renderCard() {
       "</div>";
   }
 
-  let lessonsHtml = '<div class="kt-section-h">Výuka (z rozvrhu)</div>';
+  // Odučené hodiny se počítají výhradně z rozvrhu (potvrzené lekce) – ručně
+  // se nepřidávají, aby čísla v kartě vždy odpovídala tomu, co se doopravdy
+  // odučilo. Oprava se dělá u konkrétní lekce v rozvrhu.
+  const usedH = fmtH((cr && cr.used_hours) || 0);
+  let lessonsHtml = '<div class="kt-section-h">Odučené hodiny (z rozvrhu) · ' + usedH + " h</div>";
   if (openId) {
     if (openCard.lessons.length) {
       let lastMonth = "";

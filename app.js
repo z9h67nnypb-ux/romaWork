@@ -26,17 +26,38 @@ const MockProvider = {
     }
     return this._all.filter((l) => sameDay(l.starts_at, date));
   },
+  async getLessonsRange(start, end) {
+    const out = [];
+    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+      out.push(...await this.getLessons(new Date(d)));
+    }
+    return out;
+  },
   async updateLessonFields(id, fields) {
     const l = this._all.find((x) => x.id === id);
     if (l) Object.assign(l, fields);
   },
   async saveLesson(payload, id) {
+    // Nový klient z rozvrhu se v ukázkovém režimu přidá do seznamu klientů,
+    // ať se chová stejně jako v ostré verzi (propíše se do kartotéky).
+    if (payload.student_names && !window.MOCK_CLIENTS.some((s) => s.name === payload.student_names)) {
+      window.MOCK_CLIENTS.push(Object.assign(
+        { id: "c-" + this._seq++, name: payload.student_names, status: "active" },
+        payload.student_fields || {}
+      ));
+    }
+    const client = window.MOCK_CLIENTS.find((s) => s.name === payload.student_names);
+    const enriched = Object.assign({}, payload, {
+      student_phone: (client && client.phone) || "",
+      student_grade: (client && client.grade) || "",
+      student_category: (client && client.category) || "",
+    });
     if (id) {
       const l = this._all.find((x) => x.id === id);
-      if (l) Object.assign(l, payload);
+      if (l) Object.assign(l, enriched);
       return l;
     }
-    const l = Object.assign({ id: "mock-new-" + this._seq++ }, payload);
+    const l = Object.assign({ id: "mock-new-" + this._seq++ }, enriched);
     this._all.push(l);
     return l;
   },
@@ -44,6 +65,7 @@ const MockProvider = {
     const i = this._all.findIndex((x) => x.id === id);
     if (i >= 0) this._all.splice(i, 1);
   },
+  async getStudents() { return window.MOCK_CLIENTS.slice(); },
   // Součet potvrzených (done) lekcí za měsíc po lektorech.
   // Nejdřív doseje všechny dny měsíce, aby výkaz nezávisel na tom,
   // které dny už uživatel navštívil. month je 0-based (jako v JS Date).
@@ -83,6 +105,11 @@ const SupabaseProvider = {
   async getLessons(date) {
     const start = new Date(date); start.setHours(0, 0, 0, 0);
     const end = new Date(start); end.setDate(end.getDate() + 1);
+    return this.getLessonsRange(start, end);
+  },
+  // Celý rozsah jedním dotazem – export měsíce by jinak poslal 31 requestů
+  // za sebou a appka by při něm viditelně stála.
+  async getLessonsRange(start, end) {
     const { data, error } = await this._init()
       .from("lesson_details")
       .select("*")
@@ -112,12 +139,21 @@ const SupabaseProvider = {
     if (error) throw error;
     return ins.id;
   },
-  async _resolveStudent(name) {
+  async getStudents() {
+    const { data, error } = await this._init().from("students")
+      .select("id, name, phone, grade, category, payment_method, status").order("name");
+    if (error) throw error;
+    return data;
+  },
+  // Najde klienta podle jména, nebo ho založí. `fields` jsou údaje z rozvrhu
+  // (kategorie, třída, telefon, platba) – propíšou se rovnou do kartotéky.
+  async _resolveStudent(name, fields) {
     if (!name) return null;
     const c = this._init();
     const { data } = await c.from("students").select("id").eq("name", name).limit(1);
     if (data && data.length) return data[0].id;
-    const { data: ins, error } = await c.from("students").insert({ name }).select("id").single();
+    const { data: ins, error } = await c.from("students")
+      .insert(Object.assign({ name, status: "active" }, fields || {})).select("id").single();
     if (error) throw error;
     return ins.id;
   },
@@ -149,7 +185,7 @@ const SupabaseProvider = {
     }
     // Žák (prototyp počítá s jedním jménem; skupinu lze rozšířit)
     if (payload.student_names) {
-      const student_id = await this._resolveStudent(payload.student_names);
+      const student_id = await this._resolveStudent(payload.student_names, payload.student_fields);
       await c.from("attendance").insert({ lesson_id: lessonId, student_id });
     }
     return { id: lessonId };
@@ -227,12 +263,26 @@ const state = {
   rooms: [],
   lessons: [],
   openLessonId: null,
+  students: [], // klienti z kartotéky (telefon, ročník, kategorie)
   selection: new Set(), // id vybraných lekcí (admin)
   clipboard: [], // zkopírované lekce (admin)
-  hourH: CFG.HOUR_HEIGHT, // aktuální výška hodiny (dynamicky dle výšky okna)
+  hourH: null, // výška hodiny; dopočítá se z okna a drží se do změny dne/okna
 };
 
 function isAdmin() { return state.user && state.user.role === "admin"; }
+
+// Klienti z kartotéky – rozvrh z nich bere telefon a ročník k lekci
+// a našeptává jména, ať nevznikají překlepy a duplicitní karty.
+async function loadStudents() {
+  try { state.students = await provider.getStudents(); }
+  catch (e) { console.error(e); state.students = []; }
+  const dl = document.getElementById("studentsList");
+  if (dl) {
+    dl.innerHTML = state.students
+      .filter((s) => s.status !== "former")
+      .map((s) => '<option value="' + escapeHtml(s.name) + '">').join("");
+  }
+}
 
 // ---------- Pomocné funkce ----------
 // Klíč dne z lokálních složek data. Dřívější toISOString() převádělo na UTC,
@@ -289,16 +339,45 @@ const STATUS_LABELS = {
 };
 
 // ---------- Načtení a vykreslení ----------
+// Načtení dne. Když spojení selže (uspaný projekt, výpadek sítě), nesmí
+// zůstat prázdná stránka bez vysvětlení – ukážeme chybu a tlačítko Zkusit znovu.
 async function refresh() {
-  state.lessons = await provider.getLessons(state.date);
-  renderLegend();
-  renderMiniCalendar();
+  try {
+    state.lessons = await provider.getLessons(state.date);
+  } catch (e) {
+    console.error(e);
+    document.getElementById("viewContainer").innerHTML =
+      '<div class="placeholder">Data se nepodařilo načíst: ' + escapeHtml(e.message || e) +
+      '<br><button id="retryBtn" class="primary-btn" style="margin-top:10px;padding:6px 14px;">Zkusit znovu</button></div>';
+    const rb = document.getElementById("retryBtn");
+    if (rb) rb.onclick = refresh;
+    return;
+  }
+  invalidateLayout(); // jiný den = může přibýt/zmizet řádek se směnami
+  renderRoomFilter();
   renderToolbar();
   renderView();
 }
 
+// Filtr učeben. Dřív to byla mřížka 17 barevných dlaždic přes celou hlavičku;
+// jako rozbalovací seznam dělá totéž a nebere výšku, kterou potřebuje rozvrh.
+// Barvu učebny stejně nese záhlaví sloupce, takže legenda nechybí.
+function renderRoomFilter() {
+  const sel = document.getElementById("roomSelect");
+  sel.innerHTML = '<option value="">Vše</option>' +
+    state.rooms.map((r) =>
+      '<option value="' + escapeHtml(r.id) + '"' + (state.roomFilter === r.id ? " selected" : "") +
+      ' style="color:' + r.color + '">' + escapeHtml(r.name) + "</option>"
+    ).join("");
+  sel.onchange = () => {
+    state.roomFilter = sel.value || null;
+    renderView();
+  };
+}
+
 function renderLegend() {
   const el = document.getElementById("legend");
+  if (!el) return; // denní rozvrh legendu už nemá, filtr je v rozbalovacím seznamu
   el.innerHTML = "";
   const all = document.createElement("div");
   all.className = "chip all" + (state.roomFilter === null ? " active" : "");
@@ -363,9 +442,25 @@ function renderMiniCalendar() {
       const [y, m, day] = cell.dataset.date.split("-").map(Number);
       state.date = new Date(y, m - 1, day);
       clearSelection();
+      closeMiniCalendar();
       refresh();
     };
   });
+}
+
+// Mini kalendář je rozbalovací – otevře se kliknutím na datum v liště.
+function toggleMiniCalendar() {
+  const el = document.getElementById("miniCalendar");
+  if (el.classList.contains("hidden")) {
+    state.miniMonth = new Date(state.date.getFullYear(), state.date.getMonth(), 1);
+    renderMiniCalendar();
+    el.classList.remove("hidden");
+  } else {
+    el.classList.add("hidden");
+  }
+}
+function closeMiniCalendar() {
+  document.getElementById("miniCalendar").classList.add("hidden");
 }
 
 function renderToolbar() {
@@ -387,10 +482,44 @@ function renderToolbar() {
   });
 }
 
+// Výška hodiny se počítá ještě před vykreslením, takže se napoprvé netrefí
+// (lišta se na úzkém okně teprve zalomí). Doměříme ji tedy jednou po vložení
+// do DOM a VÝSLEDEK SI ULOŽÍME – jinak by se celá mřížka překreslovala dvakrát
+// při každém kliknutí na lekci, což je přesně to, co appku sekalo.
+// Znovu se počítá jen při změně dne (může přibýt/zmizet řádek se směnami)
+// a při změně velikosti okna.
+let _needsFit = false;
+
+function ensureHourHeight(withShiftRow) {
+  if (state.hourH == null) {
+    state.hourH = computeHourHeight(withShiftRow);
+    _needsFit = true;
+  }
+  return state.hourH;
+}
+function invalidateLayout() { state.hourH = null; }
+
 function renderView() {
   const c = document.getElementById("viewContainer");
-  if (state.view === "den") c.innerHTML = "", c.appendChild(buildDayView());
-  else if (state.view === "agenda") c.innerHTML = "", c.appendChild(buildAgenda());
+  if (state.view === "den") {
+    c.innerHTML = "";
+    c.appendChild(buildDayView());
+    if (_needsFit) {
+      _needsFit = false;
+      requestAnimationFrame(() => {
+        const grid = c.querySelector(".day-grid");
+        if (!grid) return;
+        const hours = CFG.DAY_END_HOUR - CFG.DAY_START_HOUR;
+        const spare = window.innerHeight - grid.getBoundingClientRect().bottom - 8;
+        if (Math.abs(spare) < 10) return;
+        // korekce se dopočítá rovnou, žádné opakované přibližování
+        const fixed = Math.max(24, Math.min(80, Math.round(state.hourH + spare / hours)));
+        if (fixed === state.hourH) return;
+        state.hourH = fixed;
+        renderView();
+      });
+    }
+  } else if (state.view === "agenda") { c.innerHTML = ""; c.appendChild(buildAgenda()); }
   else c.innerHTML = '<div class="placeholder">Pohled „' + state.view + '" je v prototypu zatím jen jako náhled. Hlavní je denní rozvrh.</div>';
 }
 
@@ -415,7 +544,7 @@ function computeHourHeight(withShiftRow) {
   // Bereme pozici v okně (getBoundingClientRect), ne clientHeight – ta bývá
   // při stavbě ještě nedopočítaná (banner/hint se teprve srovnávají).
   const top = vc.getBoundingClientRect().top;
-  const avail = window.innerHeight - top - 10;
+  const avail = window.innerHeight - top - 8;
   // záhlaví sloupců + okraje mřížky (+ řádek se směnami, když se zobrazuje)
   const OVERHEAD = 40 + (withShiftRow ? shiftRowHeight() + 1 : 0);
   const fit = Math.floor((avail - OVERHEAD) / hours);
@@ -480,8 +609,7 @@ function buildDayView() {
   grid.className = "day-grid";
 
   const showShiftRow = dayHasShifts();
-  const HH = computeHourHeight(showShiftRow);
-  state.hourH = HH;
+  const HH = ensureHourHeight(showShiftRow);
   const hours = CFG.DAY_END_HOUR - CFG.DAY_START_HOUR;
   const bodyH = hours * HH;
   const lineCss =
@@ -524,6 +652,10 @@ function buildDayView() {
     body.className = "col-body" + (isAdmin() ? " admin" : "");
     body.style.height = bodyH + "px";
     body.style.background = lineCss;
+
+    // Dvojklik do prázdna zakládá lekci – obsluhuje ho setupBoxSelect,
+    // odsud si bere jen to, ke kterému stolu sloupec patří.
+    body.dataset.room = room.id;
 
     state.lessons
       .filter((l) => isLesson(l) && l.room_id === room.id && matchesMode(l))
@@ -568,8 +700,23 @@ function setupBoxSelect(wrap) {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       if (!rect) {
-        // jen kliknutí do prázdna = zrušit výběr
-        if (!additive) { state.selection.clear(); renderView(); }
+        // Dvojklik do prázdna = nová lekce na daném čase a stole.
+        // Nejde použít událost "dblclick": první klik zruší výběr a překreslí
+        // mřížku, takže druhý klik dopadne na úplně nový element a prohlížeč
+        // dvojklik nerozpozná. Proto si dvojklik hlídáme sami z času a pozice.
+        const now = Date.now();
+        const isDouble = _lastEmptyClick &&
+          now - _lastEmptyClick.t < 400 &&
+          Math.abs(ue.clientX - _lastEmptyClick.x) < 6 &&
+          Math.abs(ue.clientY - _lastEmptyClick.y) < 6;
+        _lastEmptyClick = { t: now, x: ue.clientX, y: ue.clientY };
+        if (isDouble && isAdmin()) {
+          _lastEmptyClick = null;
+          createAtPoint(ue);
+          return;
+        }
+        // jen kliknutí do prázdna = zrušit výběr (překreslujeme jen když je co)
+        if (!additive && state.selection.size) { state.selection.clear(); renderView(); }
         return;
       }
       const box = { l: Math.min(startX, ue.clientX), r: Math.max(startX, ue.clientX), t: Math.min(startY, ue.clientY), b: Math.max(startY, ue.clientY) };
@@ -587,6 +734,23 @@ function setupBoxSelect(wrap) {
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   });
+}
+
+let _lastEmptyClick = null;
+
+// Z místa kliknutí odvodí stůl a hodinu a otevře formulář nové lekce.
+function createAtPoint(ev) {
+  const body = ev.target.closest && ev.target.closest(".col-body");
+  if (!body || !body.dataset.room) return;
+  const y = ev.clientY - body.getBoundingClientRect().top;
+  const hours = y / (state.hourH || CFG.HOUR_HEIGHT);
+  const h = Math.min(
+    Math.max(CFG.DAY_START_HOUR + Math.floor(hours), CFG.DAY_START_HOUR),
+    CFG.DAY_END_HOUR - 1
+  );
+  const starts = new Date(state.date);
+  starts.setHours(h, 0, 0, 0);
+  openCreate("lesson", { starts_at: starts, room_id: body.dataset.room });
 }
 
 function clearSelection() {
@@ -620,17 +784,30 @@ function buildEvent(l, room) {
   ev.style.height = height + "px";
   ev.style.background = room.color;
 
+  // V buňce má být poznat, o jaké doučování jde – proto vedle jména i ročník
+  // a kategorie klienta, a telefon, aby se dalo zavolat bez otvírání karty.
+  // Do bloku se vejde tolik, kolik dovolí jeho výška; celý obsah je v tooltipu.
   const sub = [l.subject && l.subject !== "—" ? l.subject : null, l.lector_name].filter(Boolean).join(" · ");
-  // Poznámka (popis lekce) rovnou v buňce – celá je v tooltipu, v bloku se
-  // vejde tolik, kolik dovolí jeho výška.
   const note = (l.description || "").trim();
+  const level = [l.student_grade, l.student_category].filter(Boolean).join(" ").trim();
+  const phone = (l.student_phone || "").trim();
+
   ev.innerHTML =
     '<div class="e-time">' + fmtRange(l.starts_at, l.ends_at) + "</div>" +
     '<div class="e-title">' + escapeHtml(l.student_names || "") + "</div>" +
+    (level ? '<div class="e-level">' + escapeHtml(level) + "</div>" : "") +
     (sub ? '<div class="e-sub">' + escapeHtml(sub) + "</div>" : "") +
+    (phone ? '<div class="e-phone">' + escapeHtml(phone) + "</div>" : "") +
     (note ? '<div class="e-note">' + escapeHtml(note) + "</div>" : "") +
     (l.mode === "online" ? '<span class="e-badge">ONLINE</span>' : "");
-  if (note) ev.title = note;
+
+  ev.title = [
+    (l.student_names || "—") + (level ? " · " + level : ""),
+    phone ? "Tel: " + phone : "",
+    sub,
+    fmtRange(l.starts_at, l.ends_at),
+    note ? "Poznámka: " + note : "",
+  ].filter(Boolean).join("\n");
 
   if (isAdmin()) {
     // Admin: klik = výběr (Ctrl/⌘ přidává), dvojklik = úprava.
@@ -708,19 +885,33 @@ function openDetail(id) {
   showPanel();
 }
 
-// Admin: nová lekce (kind = 'lesson') nebo nová směna lektora (kind = 'shift')
-function openCreate(kind) {
+// Admin: nová lekce (kind = 'lesson') nebo nová směna lektora (kind = 'shift').
+// `slot` (nepovinné) předvyplní čas a stůl – používá ho dvojklik do prázdna
+// v rozvrhu, díky kterému jde zapsat i lekce, která už proběhla.
+function openCreate(kind, slot) {
   state.openLessonId = null;
-  const base = new Date(state.date);
-  base.setHours(8, 0, 0, 0);
+  const base = slot ? new Date(slot.starts_at) : defaultStart();
   const end = new Date(base);
-  end.setHours(kind === "shift" ? 12 : 9, 0, 0, 0);
+  end.setHours(end.getHours() + (kind === "shift" ? 4 : 1));
   renderAdminForm(
-    { starts_at: base, ends_at: end, room_id: "", lector_name: "", subject: "", student_names: "",
+    { starts_at: base, ends_at: end, room_id: (slot && slot.room_id) || "",
+      lector_name: "", subject: "", student_names: "",
       mode: "offline", status: "planned", done: false, description: "", kind: kind || "lesson" },
     kind === "shift" ? "Nový lektor u stolu" : "Nová lekce"
   );
   showPanel();
+}
+
+// Nová lekce začíná nejbližší celou hodinou (u dnešního dne tou právě
+// probíhající), ne natvrdo v 8:00 – to se muselo pokaždé přepisovat.
+function defaultStart() {
+  const d = new Date(state.date);
+  const now = new Date();
+  const h = sameDay(d, now)
+    ? Math.min(Math.max(now.getHours(), CFG.DAY_START_HOUR), CFG.DAY_END_HOUR - 1)
+    : CFG.DAY_START_HOUR;
+  d.setHours(h, 0, 0, 0);
+  return d;
 }
 
 // Formulář pro administrátora (plná editace).
@@ -743,17 +934,29 @@ function renderAdminForm(l, title) {
     "</div>" +
     field(shift ? "Stůl / učebna" : "Místnost / stůl", '<select id="fRoom">' + roomOptions(l.room_id) + "</select>") +
     '<div id="lessonOnly"' + (shift ? ' class="hidden"' : "") + ">" +
-      field("Žák", '<input type="text" id="fStudent" value="' + escapeHtml(l.student_names || "") + '">') +
+      field("Žák", '<input type="text" id="fStudent" list="studentsList" value="' + escapeHtml(l.student_names || "") + '">') +
+      '<div id="studentInfo" class="student-info"></div>' +
     "</div>" +
     field("Lektor", '<input type="text" id="fLector" value="' + escapeHtml(l.lector_name || "") + '">') +
     '<div id="lessonOnly2"' + (shift ? ' class="hidden"' : "") + ">" +
       '<div class="field-row">' +
         field("Předmět", '<input type="text" id="fSubject" value="' + escapeHtml(l.subject || "") + '">') +
-        field("Režim", '<select id="fMode"><option value="offline"' + (l.mode !== "online" ? " selected" : "") + ">Offline</option><option value=\"online\"" + (l.mode === "online" ? " selected" : "") + ">Online</option></select>") +
+        field("Režim", '<select id="fMode"><option value="offline"' + (l.mode !== "online" ? " selected" : "") + ">Osobní</option><option value=\"online\"" + (l.mode === "online" ? " selected" : "") + ">Online</option></select>") +
       "</div>" +
       field("Stav", '<select id="fStatus">' + statusOptions(l.status) + "</select>") +
       '<label class="check"><input type="checkbox" id="fDone"' + (l.done ? " checked" : "") + "> Odučeno</label>" +
     "</div>" +
+    // Opakování dává smysl jen u nově zakládané lekce, ne při úpravě stávající.
+    (state.openLessonId ? "" :
+      '<div class="field-row">' +
+        field("Opakovat", '<select id="fRepeat">' +
+          '<option value="">neopakovat</option>' +
+          '<option value="daily">denně</option>' +
+          '<option value="weekly">týdně</option>' +
+          '<option value="biweekly">ob týden</option>' +
+        "</select>") +
+      "</div>" +
+      '<div class="role-note">Opakování založí lekce jen na následující týden. Dál dopředu se rozvrh protahuje tlačítkem <b>Protáhnout týden →</b>.</div>') +
     field(shift ? "Poznámka" : "Popis – co se dělalo", '<textarea id="fDesc">' + escapeHtml(l.description || "") + "</textarea>") +
     (shift ? '<div class="role-note">Směna se ukáže jako řádek pod názvem stolu. Nepočítá se do odpracovaných hodin ani nečerpá kredit žáka.</div>' : "");
 
@@ -762,8 +965,92 @@ function renderAdminForm(l, title) {
     renderAdminForm(readAdminForm(e.target.value), e.target.value === "shift" ? "Lektor u stolu" : "Lekce");
   };
 
+  // Konec se drží délky lekce – při posunu začátku se posune s ním.
+  // Nová lekce startuje s hodinou, takže z 9:00 je automaticky 9:00–10:00.
+  const fStart = document.getElementById("fStart");
+  const fEnd = document.getElementById("fEnd");
+  fStart.onchange = () => {
+    const mins = minutesBetween(l.starts_at, l.ends_at) || 60;
+    fEnd.value = addMinutesToTimeVal(fStart.value, mins);
+  };
+
+  if (!shift) {
+    const fStudent = document.getElementById("fStudent");
+    const showInfo = () => renderStudentInfo(fStudent.value.trim());
+    fStudent.oninput = showInfo;
+    showInfo();
+  }
+
   document.getElementById("detailDelete").classList.toggle("hidden", !state.openLessonId);
   document.getElementById("detailSaved").textContent = "";
+}
+
+// Kategorie klienta – stejné hodnoty používá kartotéka.
+const CATEGORIES = ["ZŠ", "SŠ", "VŠ", "pracující", "dospělý"];
+const PAY_METHODS = ["účet DR", "účet PoraDys", "účet jazykovka", "hotově"];
+
+function findStudent(name) {
+  const q = String(name || "").trim().toLowerCase();
+  if (!q) return null;
+  return state.students.find((s) => String(s.name || "").trim().toLowerCase() === q) || null;
+}
+
+// Pod polem „Žák" ukáže, co o klientovi ví kartotéka (telefon, ročník,
+// kategorie). Když je jméno nové, rovnou nabídne doplnění těchto údajů –
+// uloží se do kartotéky spolu s lekcí, aby se karta nemusela zakládat zvlášť.
+function renderStudentInfo(name) {
+  const box = document.getElementById("studentInfo");
+  if (!box) return;
+  if (!name) { box.innerHTML = ""; return; }
+
+  const s = findStudent(name);
+  if (s) {
+    const bits = [
+      s.phone ? "📞 " + s.phone : null,
+      s.grade || null,
+      s.category || null,
+      s.payment_method ? "platí: " + s.payment_method : null,
+    ].filter(Boolean);
+    box.innerHTML = '<div class="si-known">' +
+      (bits.length ? escapeHtml(bits.join(" · ")) : "V kartotéce zatím bez dalších údajů") +
+      ' <span class="si-note">(z kartotéky)</span></div>';
+    return;
+  }
+
+  const opts = (arr, id, ph) =>
+    '<select id="' + id + '"><option value="">' + ph + "</option>" +
+    arr.map((x) => '<option value="' + escapeHtml(x) + '">' + escapeHtml(x) + "</option>").join("") + "</select>";
+  box.innerHTML =
+    '<div class="si-new"><b>Nový klient</b> – doplňte, ať se rovnou založí i v kartotéce:' +
+    '<div class="si-grid">' +
+      opts(CATEGORIES, "fNewCategory", "kategorie…") +
+      '<input type="text" id="fNewGrade" placeholder="třída / ročník">' +
+      '<input type="text" id="fNewPhone" placeholder="telefon">' +
+      opts(PAY_METHODS, "fNewPay", "způsob platby…") +
+    "</div></div>";
+}
+
+// Údaje pro založení nového klienta (prázdné, když už v kartotéce je).
+function readNewStudentFields() {
+  const g = (id) => document.getElementById(id);
+  if (!g("fNewCategory")) return null;
+  return {
+    category: g("fNewCategory").value || null,
+    grade: g("fNewGrade").value.trim() || null,
+    phone: g("fNewPhone").value.trim() || null,
+    payment_method: g("fNewPay").value || null,
+  };
+}
+
+function minutesBetween(a, b) {
+  if (!a || !b) return 0;
+  return Math.round((b - a) / 60000);
+}
+// "09:00" + 90 min => "10:30"
+function addMinutesToTimeVal(hhmm, mins) {
+  const [h, m] = String(hhmm).split(":").map(Number);
+  const t = h * 60 + m + mins;
+  return pad(Math.floor(t / 60) % 24) + ":" + pad(t % 60);
 }
 
 // Přečte rozdělaný formulář zpět do objektu (kvůli přepnutí typu bez ztráty dat).
@@ -792,10 +1079,16 @@ function renderLektorForm(l) {
   document.getElementById("detailTitle").textContent = l.student_names || "Lekce";
   document.getElementById("detailBody").innerHTML =
     '<div class="role-note">Jako lektor můžeš zapsat popis a potvrdit, že lekce proběhla. Změny rozvrhu dělá administrátor.</div>' +
+    metaRow("Žák", escapeHtml(l.student_names || "—")) +
+    metaRow("Ročník", escapeHtml([l.student_grade, l.student_category].filter(Boolean).join(" · ") || "—")) +
+    metaRow("Telefon", l.student_phone
+      ? '<a href="tel:' + escapeHtml(l.student_phone.replace(/\s/g, "")) + '">' + escapeHtml(l.student_phone) + "</a>"
+      : "—") +
     metaRow("Předmět", escapeHtml(l.subject || "—")) +
     metaRow("Lektor", escapeHtml(l.lector_name || "—")) +
     metaRow("Místnost", room ? escapeHtml(room.name) : "—") +
     metaRow("Čas", fmtRange(l.starts_at, l.ends_at)) +
+    metaRow("Režim", l.mode === "online" ? "Online" : "Osobní") +
     metaRow("Stav", STATUS_LABELS[l.status] || l.status) +
     '<label class="check"><input type="checkbox" id="fDone"' + (l.done ? " checked" : "") + "> Lekce proběhla (potvrzuji)</label>" +
     field("Popis – co se na lekci dělalo", '<textarea id="fDesc" placeholder="Např.: Procvičili jsme kvadratické rovnice, zadán domácí úkol…">' + escapeHtml(l.description || "") + "</textarea>");
@@ -854,6 +1147,7 @@ async function saveDetail() {
         ends_at: ends,
         room_id: roomId,
         student_names: shift ? "" : document.getElementById("fStudent").value.trim(),
+        student_fields: shift ? null : readNewStudentFields(),
         lector_name: document.getElementById("fLector").value.trim(),
         subject: shift ? "" : document.getElementById("fSubject").value.trim(),
         mode: shift ? "offline" : document.getElementById("fMode").value,
@@ -862,6 +1156,17 @@ async function saveDetail() {
         description: document.getElementById("fDesc").value,
       };
       await provider.saveLesson(payload, state.openLessonId);
+
+      // Opakování (jen u nové lekce) – založí kopie na následující týden.
+      const repeatEl = document.getElementById("fRepeat");
+      if (repeatEl && repeatEl.value) {
+        const r = await repeatLesson(payload, repeatEl.value);
+        if (r.added || r.skipped) {
+          toast("Opakování: založeno " + r.added +
+            (r.skipped ? ", " + r.skipped + " přeskočeno kvůli kolizi" : "") + ".");
+        }
+      }
+      await loadStudents(); // v kartotéce mohl přibýt nový klient
       state.date = new Date(starts); // přepni na den lekce, ať je vidět
     } else {
       const id = state.openLessonId;
@@ -899,6 +1204,131 @@ async function deleteDetail() {
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ---------- Export rozvrhu do Excelu ----------
+// Klasický .csv s BOM a středníkem – Excel ho otevře dvojklikem včetně
+// diakritiky a nemusí se nic importovat. Bere i směny lektorů u stolu,
+// ať je v přehledu vidět, kdo kde ten den byl.
+function csvEscape(v) { return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; }
+
+async function exportSchedule() {
+  const choice = prompt("Stáhnout rozvrh jako Excel (.csv):\n\n1 = zobrazený den\n2 = celý týden\n3 = celý měsíc", "1");
+  if (choice === null) return;
+  const range = { 1: "den", 2: "tyden", 3: "mesic" }[choice.trim()];
+  if (!range) { toast("Zadejte 1, 2 nebo 3."); return; }
+
+  const btn = document.getElementById("exportBtn");
+  btn.disabled = true;
+  try {
+    const [from, to] = exportRange(range);
+    // Do exportu jdou jen lekce – směny lektorů u stolu jsou provozní
+    // poznámka k rozvrhu, ne odučená výuka, a v tabulce jen zavazely.
+    const lessons = (await provider.getLessonsRange(from, to))
+      .filter(isLesson)
+      .sort((a, b) => a.starts_at - b.starts_at);
+
+    const rows = lessons.map((l) => {
+      const room = roomById(l.room_id);
+      return [
+        dayKey(l.starts_at),
+        DAYS_FULL[l.starts_at.getDay()],
+        fmtTime(l.starts_at),
+        fmtTime(l.ends_at),
+        (minutesBetween(l.starts_at, l.ends_at) / 60).toFixed(2).replace(".", ","),
+        room ? room.name : "",
+        l.student_names || "",
+        l.student_phone || "",
+        l.student_grade || "",
+        l.student_category || "",
+        l.subject || "",
+        l.lector_name || "",
+        l.mode === "online" ? "online" : "osobní",
+        STATUS_LABELS[l.status] || l.status || "",
+        l.done ? "ano" : "ne",
+        l.description || "",
+      ];
+    });
+    if (!rows.length) { toast("V tomto období nejsou žádné lekce."); return; }
+
+    const cols = ["Datum", "Den", "Od", "Do", "Hodin", "Stůl / učebna", "Žák", "Telefon",
+      "Třída / ročník", "Kategorie", "Předmět", "Lektor", "Režim", "Stav", "Odučeno", "Poznámka"];
+    const csv = [cols.map(csvEscape).join(";")]
+      .concat(rows.map((r) => r.map(csvEscape).join(";")))
+      .join("\r\n");
+
+    const name = "rozvrh-" + range + "-" + dayKey(state.date) + ".csv";
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast("Staženo " + rows.length + " řádků do " + name);
+  } catch (e) {
+    toast("Export selhal: " + (e.message || e));
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Období exportu jako [od, do) – načte se jedním dotazem.
+function exportRange(range) {
+  const d0 = new Date(state.date); d0.setHours(0, 0, 0, 0);
+  if (range === "den") {
+    const to = new Date(d0); to.setDate(to.getDate() + 1);
+    return [d0, to];
+  }
+  if (range === "tyden") {
+    const monday = new Date(d0);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    const to = new Date(monday); to.setDate(monday.getDate() + 7);
+    return [monday, to];
+  }
+  return [
+    new Date(d0.getFullYear(), d0.getMonth(), 1),
+    new Date(d0.getFullYear(), d0.getMonth() + 1, 1),
+  ];
+}
+
+// ---------- Opakování lekce (admin) ----------
+// Záměrně jen na následující týden – dál dopředu se rozvrh protahuje
+// tlačítkem „Protáhnout týden →", ať v databázi nevznikají měsíce lekcí,
+// které se stejně budou přehazovat.
+//   denně    = každý další den až +7 dní
+//   týdně    = jednou za 7 dní (1 kopie)
+//   ob týden = jednou za 14 dní (1 kopie)
+function repeatOffsets(mode) {
+  if (mode === "daily") return [1, 2, 3, 4, 5, 6, 7];
+  if (mode === "weekly") return [7];
+  if (mode === "biweekly") return [14];
+  return [];
+}
+
+async function repeatLesson(payload, mode) {
+  let added = 0, skipped = 0;
+  for (const off of repeatOffsets(mode)) {
+    const starts = new Date(payload.starts_at); starts.setDate(starts.getDate() + off);
+    const ends = new Date(payload.ends_at); ends.setDate(ends.getDate() + off);
+    try {
+      const dayLessons = await provider.getLessons(starts);
+      if (payload.kind !== "shift" && findConflict(dayLessons, payload.room_id, starts, ends, null)) {
+        skipped++;
+        continue;
+      }
+      await provider.saveLesson(
+        Object.assign({}, payload, {
+          starts_at: starts, ends_at: ends,
+          status: "planned", done: false,      // kopie jsou vždy nepotvrzené
+          student_fields: null,                // klienta zakládá jen první lekce
+        }),
+        null
+      );
+      added++;
+    } catch (e) { console.error(e); skipped++; }
+  }
+  return { added, skipped };
 }
 
 // ---------- Konec dne: „Vše odučeno" (admin) ----------
@@ -1165,7 +1595,19 @@ async function startApp(user) {
   renderUserBadge();
 
   if (!CFG.USE_SUPABASE) document.getElementById("banner").classList.remove("hidden");
-  state.rooms = await provider.getRooms();
+  // Když se nepodaří načíst číselníky (uspaný projekt, výpadek sítě),
+  // nesmí zůstat prázdná bílá stránka bez vysvětlení.
+  try {
+    state.rooms = await provider.getRooms();
+    await loadStudents();
+  } catch (e) {
+    console.error(e);
+    document.getElementById("viewContainer").innerHTML =
+      '<div class="placeholder">Spojení s databází selhalo: ' + escapeHtml(e.message || e) +
+      '<br><button id="bootRetry" class="primary-btn" style="margin-top:10px;padding:6px 14px;">Zkusit znovu</button></div>';
+    document.getElementById("bootRetry").onclick = () => location.reload();
+    return;
+  }
 
   if (!_appWired) {
     _appWired = true;
@@ -1185,6 +1627,12 @@ async function startApp(user) {
     document.getElementById("doneAllBtn").onclick = markDayDone;
     document.getElementById("selectAllBtn").onclick = selectAllDay;
     document.getElementById("extendWeekBtn").onclick = extendWeekToNext;
+    document.getElementById("exportBtn").onclick = exportSchedule;
+
+    // Datum v liště rozbaluje mini kalendář; klik jinam ho zavře.
+    document.getElementById("navDate").onclick = (e) => { e.stopPropagation(); toggleMiniCalendar(); };
+    document.getElementById("miniCalendar").onclick = (e) => e.stopPropagation();
+    document.addEventListener("click", closeMiniCalendar);
 
     const modeSel = document.getElementById("modeSelect");
     modeSel.value = state.modeFilter;
@@ -1206,7 +1654,11 @@ async function startApp(user) {
     let _resizeT = null;
     window.addEventListener("resize", () => {
       clearTimeout(_resizeT);
-      _resizeT = setTimeout(() => { if (state.view === "den") renderView(); }, 150);
+      _resizeT = setTimeout(() => {
+        if (state.view !== "den") return;
+        invalidateLayout(); // po změně okna se výška hodiny přepočítá
+        renderView();
+      }, 150);
     });
     document.addEventListener("keydown", onKeyDown);
   }
