@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rozvrh – PoraDys osobní výuka</title>
-  <link rel="stylesheet" href="styles.css?v=23" />
+  <link rel="stylesheet" href="styles.css?v=24" />
 </head>
 <body class="app-schedule">
   <!-- Přihlášení -->
@@ -25,16 +25,16 @@
     <code>USE_SUPABASE = true</code>, appka začne číst z tvojí databáze.
   </div>
 
-  <!-- Jedna kompaktní lišta místo původní vysoké hlavičky – ať zbyde co
-       nejvíc místa na samotný rozvrh. Mini kalendář se rozbalí kliknutím
-       na datum, filtr učeben je v rozbalovacím seznamu. -->
+  <!-- Horní pás: vlevo ovládání, vpravo trvale viditelný kalendář.
+       Kalendář je co nejmenší – nese celou výšku pásu, takže každý ušetřený
+       pixel dostane mřížka rozvrhu. -->
+  <div class="topband">
   <nav class="toolbar">
     <span class="app-name">Rozvrh PoraDys</span>
     <button id="prevDay" title="Předchozí den">◀</button>
-    <button id="navDate" class="nav-date" title="Zvolit datum z kalendáře"></button>
+    <span id="navDate" class="nav-date"></span>
     <button id="nextDay" title="Následující den">▶</button>
     <button id="todayBtn">Dnes</button>
-    <div id="miniCalendar" class="mini-calendar hidden"></div>
 
     <!-- Plochá tlačítka, nic se neschovává do nabídek. Popisky jsou krátké,
          aby se lišta vešla na jeden řádek; celý význam je v tooltipu. -->
@@ -68,6 +68,8 @@
       <button id="logoutBtn" title="Odhlásit se">Odhlásit</button>
     </div>
   </nav>
+    <div id="miniCalendar" class="mini-calendar"></div>
+  </div>
 
   <!-- Nápověda k ovládání: sbalená do jednoho řádku, ať nebere výšku -->
   <details id="adminHint" class="admin-hint hidden">
@@ -125,8 +127,8 @@
        kartoteka, diagnostika). Když se rozejde, každý přechod mezi stránkami
        stahuje sdílené soubory znovu a appka může běžet se starým config.js
        nebo styles.css. Při změně JS/CSS zvedni číslo všude naráz. -->
-  <script src="config.js?v=23"></script>
-  <script src="mockData.js?v=23"></script>
-  <script src="app.js?v=23"></script>
+  <script src="config.js?v=24"></script>
+  <script src="mockData.js?v=24"></script>
+  <script src="app.js?v=24"></script>
 </body>
 </html>

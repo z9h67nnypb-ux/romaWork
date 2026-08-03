@@ -355,6 +355,7 @@ async function refresh() {
   }
   invalidateLayout(); // jiný den = může přibýt/zmizet řádek se směnami
   renderRoomFilter();
+  renderMiniCalendar();
   renderToolbar();
   renderView();
 }
@@ -442,25 +443,9 @@ function renderMiniCalendar() {
       const [y, m, day] = cell.dataset.date.split("-").map(Number);
       state.date = new Date(y, m - 1, day);
       clearSelection();
-      closeMiniCalendar();
       refresh();
     };
   });
-}
-
-// Mini kalendář je rozbalovací – otevře se kliknutím na datum v liště.
-function toggleMiniCalendar() {
-  const el = document.getElementById("miniCalendar");
-  if (el.classList.contains("hidden")) {
-    state.miniMonth = new Date(state.date.getFullYear(), state.date.getMonth(), 1);
-    renderMiniCalendar();
-    el.classList.remove("hidden");
-  } else {
-    el.classList.add("hidden");
-  }
-}
-function closeMiniCalendar() {
-  document.getElementById("miniCalendar").classList.add("hidden");
 }
 
 function renderToolbar() {
@@ -1643,11 +1628,6 @@ async function startApp(user) {
     document.getElementById("selectAllBtn").onclick = selectAllDay;
     document.getElementById("extendWeekBtn").onclick = extendWeekToNext;
     document.getElementById("exportBtn").onclick = exportSchedule;
-
-    // Datum v liště rozbaluje mini kalendář; klik jinam ho zavře.
-    document.getElementById("navDate").onclick = (e) => { e.stopPropagation(); toggleMiniCalendar(); };
-    document.getElementById("miniCalendar").onclick = (e) => e.stopPropagation();
-    document.addEventListener("click", closeMiniCalendar);
 
     const modeSel = document.getElementById("modeSelect");
     modeSel.value = state.modeFilter;
