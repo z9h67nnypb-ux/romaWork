@@ -100,13 +100,14 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
   position: relative;          /* kotva pro rozbalený mini kalendář */
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 12px;
+  gap: 6px;
+  padding: 4px 10px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
-.toolbar .app-name { font-weight: 700; color: var(--title); font-size: 13px; }
+/* Název aplikace je první, co ustoupí – v záložce prohlížeče stejně je. */
+.toolbar .app-name { display: none; }
 .toolbar button {
   border: 1px solid var(--line-strong);
   background: #fff;
@@ -116,7 +117,7 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
   font-size: 12px;
 }
 .toolbar button:hover { background: #f2f2f2; }
-.nav-date { font-weight: 600; min-width: 158px; text-transform: capitalize; text-align: center; }
+.nav-date { font-weight: 600; min-width: 138px; text-transform: capitalize; text-align: center; }
 .nav-date::after { content: " ▾"; color: var(--muted); font-weight: 400; }
 .primary-btn {
   background: var(--accent) !important;
@@ -136,8 +137,20 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
 }
 
 .role-switch { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-.role-switch select { padding: 4px 6px; border: 1px solid var(--line-strong); border-radius: 4px; font-size: 12px; }
-.view-tabs { margin-left: auto; display: flex; gap: 4px; }
+/* Rozbalovací seznamy v liště (učebna, režim) – bez popisků, význam nese
+   vybraná hodnota a tooltip. Popisky braly šířku, kterou potřebují tlačítka. */
+.toolbar select {
+  padding: 4px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  font-size: 12px;
+  max-width: 112px;
+}
+/* Svislý oddělovač místo seskupování do nabídek: odděluje akce se dnem,
+   filtry a odkazy na ostatní stránky, aniž by cokoli schovával. */
+.tb-sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 2px; }
+.view-tabs { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+.view-tabs .user-badge { margin-left: 6px; }
 .view-tabs button.active { background: #e7eefb; border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
 /* ---------- Denní rozvrh ---------- */
@@ -157,14 +170,14 @@ body.app-schedule .day-scroll { max-height: none; }
 .col { flex: 1 1 0; min-width: 0; border-right: 1px solid var(--line); }
 .col.time { flex: 0 0 42px; width: 42px; position: sticky; left: 0; z-index: 3; background: var(--bg); }
 .col-head {
-  height: 30px;
+  height: 32px;
   position: sticky;
   top: 0;
   z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 11.5px;
   color: #fff;
   text-align: center;
   padding: 2px 3px;
@@ -189,9 +202,9 @@ body.app-schedule .day-scroll { max-height: none; }
   border-bottom: 1px solid var(--line);
 }
 .shift-chip {
-  font-size: 9.5px;
-  line-height: 12px;
-  height: 13px;
+  font-size: 11px;
+  line-height: 14px;
+  height: 15px;
   flex: 0 0 auto;
   box-sizing: border-box;
   background: #fff;
@@ -207,32 +220,61 @@ body.app-schedule .day-scroll { max-height: none; }
 .shift-chip.editable { cursor: pointer; }
 .shift-chip.editable:hover { background: #eef2fb; }
 
+/* Časová osa je teď jediný zdroj času, tak ať je pořádně čitelná. */
 .time-label {
   position: absolute;
   right: 5px;
-  font-size: 10px;
-  color: var(--muted);
-  transform: translateY(-6px);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  transform: translateY(-7px);
 }
 
+/* V buňce není čas – ten říká pozice bloku a osa vlevo. Uvolněné místo
+   dostalo jméno žáka, které jediné musí být čitelné na první pohled;
+   klientka nosí brýle, tak je o dva stupně větší než zbytek. */
 .event {
   position: absolute;
   left: 2px;
   right: 2px;
   border-radius: 4px;
   color: #fff;
-  padding: 2px 4px;
-  font-size: 10.5px;
-  line-height: 1.15;
+  padding: 3px 6px;
+  font-size: 11px;
+  line-height: 1.25;
   overflow: hidden;
   cursor: pointer;
   border: 1px solid rgba(0, 0, 0, 0.18);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 .event:hover { filter: brightness(1.05); box-shadow: var(--shadow); z-index: 5; }
-.event .e-time { font-weight: 600; }
-.event .e-title { font-weight: 600; }
-.event .e-sub { opacity: 0.9; }
+/* Jméno se smí zalomit na druhý řádek – useknuté jméno je k ničemu.
+   Ořezává se jen u půlhodinových lekcí, kde druhý řádek stejně není. */
+.event .e-title {
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.15;
+  margin-bottom: 1px;
+  overflow-wrap: anywhere;
+}
+.event .e-sub { opacity: 0.92; }
+
+/* Půlhodinová lekce: jméno a předmět na jeden řádek, zbytek do tooltipu.
+   Useknuté jméno na dvou řádcích je horší než jeden úplný řádek. */
+.event.compact {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 6px;
+}
+.event.compact .e-title {
+  font-size: 12px; margin: 0; flex: 0 1 auto;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.event.compact .e-level,
+.event.compact .e-phone,
+.event.compact .e-note { display: none; }
+.event.compact .e-sub { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
 /* Ročník / kategorie klienta – ať je poznat, o jaké doučování jde. */
 .event .e-level { opacity: 0.95; font-weight: 600; }
 .event .e-phone { opacity: 0.85; font-variant-numeric: tabular-nums; }
@@ -330,6 +372,23 @@ body.app-schedule .day-scroll { max-height: none; }
 }
 .field-row { display: flex; gap: 10px; }
 .field-row .field { flex: 1; }
+/* Detail lekce: nahoře to podstatné, pod čarou sbalený zbytek. */
+.detail-main { padding-bottom: 4px; }
+.detail-more {
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+  padding-top: 6px;
+}
+.detail-more > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--accent);
+  font-weight: 600;
+  user-select: none;
+  padding: 2px 0;
+}
+.detail-more[open] > summary { margin-bottom: 4px; }
+
 .role-note {
   background: #f1f5fc;
   border: 1px solid #d6e2f6;
