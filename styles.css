@@ -264,7 +264,8 @@ body.app-schedule .day-scroll { max-height: none; }
 .event > div {
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  /* zadne "..." – tri tecky by sezraly misto pro dalsi dva znaky textu */
+  text-overflow: clip;
 }
 .event .e-title {
   font-weight: 600;
