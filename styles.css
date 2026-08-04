@@ -50,42 +50,49 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
   flex-wrap: wrap;
 }
 
-/* ---------- Mini kalendář (rozbalí se kliknutím na datum) ---------- */
+/* ---------- Horní pás: ovládání vlevo, kalendář vpravo ---------- */
+.topband {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.topband > .toolbar { flex: 1 1 auto; min-width: 0; border-bottom: none; }
+
+/* ---------- Kalendář natrvalo v pravém rohu ----------
+   Drží výšku celého pásu, takže je stlačený na minimum: bez rámečku,
+   drobné písmo, žádné odsazení navíc. Každý ušetřený pixel tady dostane
+   mřížka rozvrhu. */
 .mini-calendar {
-  position: absolute;
-  top: 100%;
-  left: 60px;
-  z-index: 30;
-  width: 208px;
-  background: #fff;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  padding: 6px;
-  font-size: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  flex: 0 0 auto;
+  align-self: center;
+  width: 158px;
+  margin: 1px 8px 1px 4px;
+  padding: 0;
+  font-size: 10px;
 }
 .mini-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 4px;
+  margin-bottom: 1px;
 }
-.mini-head .m-title { font-weight: 600; color: var(--title); }
+.mini-head .m-title { font-weight: 600; color: var(--title); font-size: 10.5px; }
 .mini-head button {
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 11px;
   color: var(--muted);
-  padding: 2px 6px;
+  padding: 0 5px;
 }
-.mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.mini-grid .dow { font-size: 10px; color: var(--muted); text-align: center; padding: 1px 0; }
+.mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+.mini-grid .dow { font-size: 9px; color: var(--muted); text-align: center; line-height: 11px; }
 .mini-grid .day {
   text-align: center;
-  font-size: 11px;
-  padding: 2px 0;
-  border-radius: 4px;
+  font-size: 9.5px;
+  line-height: 14px;
+  border-radius: 3px;
   cursor: pointer;
   background: #2b2b2b;
   color: #fff;
@@ -100,13 +107,14 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
   position: relative;          /* kotva pro rozbalený mini kalendář */
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 12px;
+  gap: 6px;
+  padding: 4px 10px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
-.toolbar .app-name { font-weight: 700; color: var(--title); font-size: 13px; }
+/* Název aplikace je první, co ustoupí – v záložce prohlížeče stejně je. */
+.toolbar .app-name { display: none; }
 .toolbar button {
   border: 1px solid var(--line-strong);
   background: #fff;
@@ -116,8 +124,7 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
   font-size: 12px;
 }
 .toolbar button:hover { background: #f2f2f2; }
-.nav-date { font-weight: 600; min-width: 158px; text-transform: capitalize; text-align: center; }
-.nav-date::after { content: " ▾"; color: var(--muted); font-weight: 400; }
+.nav-date { font-weight: 600; min-width: 138px; text-transform: capitalize; text-align: center; }
 .primary-btn {
   background: var(--accent) !important;
   color: #fff;
@@ -125,19 +132,36 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
   font-weight: 600;
 }
 .primary-btn:hover { background: #244e9e !important; }
-/* Údaje klienta pod polem „Žák" v detailu lekce */
-.student-info { margin: -4px 0 8px; font-size: 12px; }
-.student-info .si-known { color: #1e6b30; background: #eef7f0; border-radius: 5px; padding: 4px 8px; }
-.student-info .si-note { color: var(--muted); font-weight: 400; }
-.student-info .si-new { color: #34507e; background: #eef3fb; border: 1px solid #d9e3f4; border-radius: 5px; padding: 6px 8px; }
-.student-info .si-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+/* Údaje klienta pod polem „Žák" v detailu lekce. Telefon a ročník se z buňky
+   rozvrhu vytratily, takže tohle je hlavní místo, kde se čtou – je proto
+   o stupeň větší než zbytek formuláře. */
+.student-info { margin: -4px 0 8px; font-size: 13.5px; }
+.student-info .si-known {
+  color: #1e6b30; background: #eef7f0; border: 1px solid #cfe6d6;
+  border-radius: 5px; padding: 7px 10px; line-height: 1.45;
+}
+.student-info .si-note { color: var(--muted); font-weight: 400; font-size: 12px; }
+.student-info .si-new { color: #34507e; background: #eef3fb; border: 1px solid #d9e3f4; border-radius: 5px; padding: 7px 9px; }
+.student-info .si-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 7px; }
 .student-info .si-grid input, .student-info .si-grid select {
-  border: 1px solid var(--line-strong); border-radius: 4px; padding: 5px 7px; font-size: 12px; width: 100%; box-sizing: border-box;
+  border: 1px solid var(--line-strong); border-radius: 4px; padding: 6px 8px; font-size: 12.5px; width: 100%; box-sizing: border-box;
 }
 
 .role-switch { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-.role-switch select { padding: 4px 6px; border: 1px solid var(--line-strong); border-radius: 4px; font-size: 12px; }
-.view-tabs { margin-left: auto; display: flex; gap: 4px; }
+/* Rozbalovací seznamy v liště (učebna, režim) – bez popisků, význam nese
+   vybraná hodnota a tooltip. Popisky braly šířku, kterou potřebují tlačítka. */
+.toolbar select {
+  padding: 4px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  font-size: 12px;
+  max-width: 112px;
+}
+/* Svislý oddělovač místo seskupování do nabídek: odděluje akce se dnem,
+   filtry a odkazy na ostatní stránky, aniž by cokoli schovával. */
+.tb-sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 2px; }
+.view-tabs { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+.view-tabs .user-badge { margin-left: 6px; }
 .view-tabs button.active { background: #e7eefb; border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
 /* ---------- Denní rozvrh ---------- */
@@ -157,14 +181,14 @@ body.app-schedule .day-scroll { max-height: none; }
 .col { flex: 1 1 0; min-width: 0; border-right: 1px solid var(--line); }
 .col.time { flex: 0 0 42px; width: 42px; position: sticky; left: 0; z-index: 3; background: var(--bg); }
 .col-head {
-  height: 30px;
+  height: 32px;
   position: sticky;
   top: 0;
   z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 11.5px;
   color: #fff;
   text-align: center;
   padding: 2px 3px;
@@ -189,9 +213,9 @@ body.app-schedule .day-scroll { max-height: none; }
   border-bottom: 1px solid var(--line);
 }
 .shift-chip {
-  font-size: 9.5px;
-  line-height: 12px;
-  height: 13px;
+  font-size: 11px;
+  line-height: 14px;
+  height: 15px;
   flex: 0 0 auto;
   box-sizing: border-box;
   background: #fff;
@@ -207,22 +231,29 @@ body.app-schedule .day-scroll { max-height: none; }
 .shift-chip.editable { cursor: pointer; }
 .shift-chip.editable:hover { background: #eef2fb; }
 
+/* Časová osa je teď jediný zdroj času, tak ať je pořádně čitelná. */
 .time-label {
   position: absolute;
   right: 5px;
-  font-size: 10px;
-  color: var(--muted);
-  transform: translateY(-6px);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  transform: translateY(-7px);
 }
 
+/* V buňce není čas – ten říká pozice bloku a osa vlevo. Řádky se VŽDY
+   ořezávají, nikdy nezalamují: čtyři zalomené řádky se do hodinové lekce
+   nevejdou a půlka obsahu zmizí, kdežto ořezaný řádek pořád nese začátek
+   údaje. Velikosti jsou nastavené tak, aby se do hodiny vešlo jméno,
+   předmět s lektorem, ročník i poznámka. */
 .event {
   position: absolute;
   left: 2px;
   right: 2px;
   border-radius: 4px;
   color: #fff;
-  padding: 2px 4px;
-  font-size: 10.5px;
+  padding: 2px 6px;
+  font-size: 11px;
   line-height: 1.15;
   overflow: hidden;
   cursor: pointer;
@@ -230,12 +261,29 @@ body.app-schedule .day-scroll { max-height: none; }
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 .event:hover { filter: brightness(1.05); box-shadow: var(--shadow); z-index: 5; }
-.event .e-time { font-weight: 600; }
-.event .e-title { font-weight: 600; }
-.event .e-sub { opacity: 0.9; }
+.event > div {
+  white-space: nowrap;
+  overflow: hidden;
+  /* zadne "..." – tri tecky by sezraly misto pro dalsi dva znaky textu */
+  text-overflow: clip;
+}
+.event .e-title {
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.15;
+}
+.event .e-sub { opacity: 0.92; }
+
+/* Půlhodinová lekce: jméno a pod ním předmět s lektorem, obojí přes celou
+   šířku. Vedle sebe se o úzký sloupec praly a ořízly se obě – takhle se
+   do 29 px vejdou dva plné řádky. Ročník a poznámka zůstanou v tooltipu. */
+.event.compact { padding: 1px 5px; }
+.event.compact .e-title { font-size: 11.5px; line-height: 1.15; }
+.event.compact .e-sub { font-size: 10px; line-height: 1.15; }
+.event.compact .e-level,
+.event.compact .e-note { display: none; }
 /* Ročník / kategorie klienta – ať je poznat, o jaké doučování jde. */
 .event .e-level { opacity: 0.95; font-weight: 600; }
-.event .e-phone { opacity: 0.85; font-variant-numeric: tabular-nums; }
 /* Poznámka k lekci – co se do bloku nevejde, ukáže tooltip. */
 .event .e-note { opacity: 0.88; font-style: italic; }
 .event.is-done { opacity: 0.75; }
@@ -330,6 +378,23 @@ body.app-schedule .day-scroll { max-height: none; }
 }
 .field-row { display: flex; gap: 10px; }
 .field-row .field { flex: 1; }
+/* Detail lekce: nahoře to podstatné, pod čarou sbalený zbytek. */
+.detail-main { padding-bottom: 4px; }
+.detail-more {
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+  padding-top: 6px;
+}
+.detail-more > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--accent);
+  font-weight: 600;
+  user-select: none;
+  padding: 2px 0;
+}
+.detail-more[open] > summary { margin-bottom: 4px; }
+
 .role-note {
   background: #f1f5fc;
   border: 1px solid #d6e2f6;

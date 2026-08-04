@@ -355,6 +355,7 @@ async function refresh() {
   }
   invalidateLayout(); // jiný den = může přibýt/zmizet řádek se směnami
   renderRoomFilter();
+  renderMiniCalendar();
   renderToolbar();
   renderView();
 }
@@ -442,25 +443,9 @@ function renderMiniCalendar() {
       const [y, m, day] = cell.dataset.date.split("-").map(Number);
       state.date = new Date(y, m - 1, day);
       clearSelection();
-      closeMiniCalendar();
       refresh();
     };
   });
-}
-
-// Mini kalendář je rozbalovací – otevře se kliknutím na datum v liště.
-function toggleMiniCalendar() {
-  const el = document.getElementById("miniCalendar");
-  if (el.classList.contains("hidden")) {
-    state.miniMonth = new Date(state.date.getFullYear(), state.date.getMonth(), 1);
-    renderMiniCalendar();
-    el.classList.remove("hidden");
-  } else {
-    el.classList.add("hidden");
-  }
-}
-function closeMiniCalendar() {
-  document.getElementById("miniCalendar").classList.add("hidden");
 }
 
 function renderToolbar() {
@@ -472,7 +457,7 @@ function renderToolbar() {
   const doneAll = document.getElementById("doneAllBtn");
   doneAll.classList.toggle("hidden", !isAdmin() || state.view !== "den");
   const pending = isAdmin() ? pendingLessonsOfDay().length : 0;
-  doneAll.textContent = pending ? "✓ Vše odučeno (" + pending + ")" : "✓ Vše odučeno";
+  doneAll.textContent = pending ? "✓ Odučeno (" + pending + ")" : "✓ Odučeno";
   doneAll.disabled = !pending;
   document.getElementById("extendWeekBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("kartotekaBtn").classList.toggle("hidden", !isAdmin());
@@ -571,7 +556,7 @@ function dayHasShifts() {
 function maxShiftsPerRoom() {
   return visibleRooms().reduce((m, r) => Math.max(m, shiftsOf(r.id).length), 0);
 }
-const SHIFT_CHIP_H = 14; // výška jednoho řádku se jménem lektora (px)
+const SHIFT_CHIP_H = 16; // výška jednoho řádku se jménem lektora (px)
 function shiftRowHeight() {
   const n = Math.min(maxShiftsPerRoom(), 4); // víc než 4 lektory u stolu = rolování
   return n ? n * SHIFT_CHIP_H + 5 : 0;
@@ -773,9 +758,18 @@ function buildEvent(l, room) {
   const top = ((startMin - CFG.DAY_START_HOUR * 60) / 60) * HH;
   const height = Math.max(16, ((endMin - startMin) / 60) * HH - 2);
 
+  const sub = [l.subject && l.subject !== "—" ? l.subject : null, l.lector_name].filter(Boolean).join(" · ");
+  const note = (l.description || "").trim();
+  const level = [l.student_grade, l.student_category].filter(Boolean).join(" ").trim();
+  const phone = (l.student_phone || "").trim();
+
   const ev = document.createElement("div");
+  // Krátké lekce (půlhodina a míň) dostanou jednořádkové rozvržení – na dva
+  // řádky tam prostě není místo a useknuté jméno je horší než žádný detail.
+  const compact = height < 36;
   ev.className =
     "event" +
+    (compact ? " compact" : "") +
     (l.done ? " is-done" : "") +
     (l.status === "cancelled" ? " is-cancelled" : "") +
     (state.selection.has(l.id) ? " selected" : "");
@@ -784,28 +778,22 @@ function buildEvent(l, room) {
   ev.style.height = height + "px";
   ev.style.background = room.color;
 
-  // V buňce má být poznat, o jaké doučování jde – proto vedle jména i ročník
-  // a kategorie klienta, a telefon, aby se dalo zavolat bez otvírání karty.
-  // Do bloku se vejde tolik, kolik dovolí jeho výška; celý obsah je v tooltipu.
-  const sub = [l.subject && l.subject !== "—" ? l.subject : null, l.lector_name].filter(Boolean).join(" · ");
-  const note = (l.description || "").trim();
-  const level = [l.student_grade, l.student_category].filter(Boolean).join(" ").trim();
-  const phone = (l.student_phone || "").trim();
-
+  // Buňka má pevné pořadí řádků, každý se ořezává (nikdy nezalamuje), aby se
+  // do hodinové lekce vešly všechny čtyři: jméno / předmět · lektor / ročník /
+  // poznámka. Čas v buňce není – ten říká pozice bloku a časová osa vlevo.
+  // Telefon je jen v detailu lekce, v buňce bral řádek navíc.
   ev.innerHTML =
-    '<div class="e-time">' + fmtRange(l.starts_at, l.ends_at) + "</div>" +
     '<div class="e-title">' + escapeHtml(l.student_names || "") + "</div>" +
-    (level ? '<div class="e-level">' + escapeHtml(level) + "</div>" : "") +
     (sub ? '<div class="e-sub">' + escapeHtml(sub) + "</div>" : "") +
-    (phone ? '<div class="e-phone">' + escapeHtml(phone) + "</div>" : "") +
+    (level ? '<div class="e-level">' + escapeHtml(level) + "</div>" : "") +
     (note ? '<div class="e-note">' + escapeHtml(note) + "</div>" : "") +
     (l.mode === "online" ? '<span class="e-badge">ONLINE</span>' : "");
 
   ev.title = [
+    fmtRange(l.starts_at, l.ends_at) + " · " + (room ? room.name : ""),
     (l.student_names || "—") + (level ? " · " + level : ""),
     phone ? "Tel: " + phone : "",
     sub,
-    fmtRange(l.starts_at, l.ends_at),
     note ? "Poznámka: " + note : "",
   ].filter(Boolean).join("\n");
 
@@ -921,44 +909,54 @@ function defaultStart() {
 function renderAdminForm(l, title) {
   const shift = l.kind === "shift";
   document.getElementById("detailTitle").textContent = title;
+  // Panel je rozdělený na dvě části: nahoře to, co člověk hledá pokaždé
+  // (kdo, kdy, kde, co), pod čarou sbalené věci, které se mění výjimečně
+  // (stav, odučeno, režim, opakování). Dřív bylo všechno v jedné hromadě
+  // a hledalo se v tom špatně.
   document.getElementById("detailBody").innerHTML =
-    field("Typ zápisu",
-      '<select id="fKind"><option value="lesson"' + (shift ? "" : " selected") + ">Lekce</option>" +
-      '<option value="shift"' + (shift ? " selected" : "") + ">Lektor u stolu (kdo tu dnes je)</option></select>") +
-    '<div class="field-row">' +
-      field("Datum", '<input type="date" id="fDate" value="' + dateVal(l.starts_at) + '">') +
-    "</div>" +
-    '<div class="field-row">' +
-      field("Začátek", '<input type="time" id="fStart" value="' + timeVal(l.starts_at) + '">') +
-      field("Konec", '<input type="time" id="fEnd" value="' + timeVal(l.ends_at) + '">') +
-    "</div>" +
-    field(shift ? "Stůl / učebna" : "Místnost / stůl", '<select id="fRoom">' + roomOptions(l.room_id) + "</select>") +
-    '<div id="lessonOnly"' + (shift ? ' class="hidden"' : "") + ">" +
-      field("Žák", '<input type="text" id="fStudent" list="studentsList" value="' + escapeHtml(l.student_names || "") + '">') +
-      '<div id="studentInfo" class="student-info"></div>' +
-    "</div>" +
-    field("Lektor", '<input type="text" id="fLector" value="' + escapeHtml(l.lector_name || "") + '">') +
-    '<div id="lessonOnly2"' + (shift ? ' class="hidden"' : "") + ">" +
-      '<div class="field-row">' +
-        field("Předmět", '<input type="text" id="fSubject" value="' + escapeHtml(l.subject || "") + '">') +
-        field("Režim", '<select id="fMode"><option value="offline"' + (l.mode !== "online" ? " selected" : "") + ">Osobní</option><option value=\"online\"" + (l.mode === "online" ? " selected" : "") + ">Online</option></select>") +
+    '<div class="detail-main">' +
+      '<div id="lessonOnly"' + (shift ? ' class="hidden"' : "") + ">" +
+        field("Žák", '<input type="text" id="fStudent" list="studentsList" value="' + escapeHtml(l.student_names || "") + '">') +
+        '<div id="studentInfo" class="student-info"></div>' +
       "</div>" +
-      field("Stav", '<select id="fStatus">' + statusOptions(l.status) + "</select>") +
-      '<label class="check"><input type="checkbox" id="fDone"' + (l.done ? " checked" : "") + "> Odučeno</label>" +
-    "</div>" +
-    // Opakování dává smysl jen u nově zakládané lekce, ne při úpravě stávající.
-    (state.openLessonId ? "" :
       '<div class="field-row">' +
+        field("Datum", '<input type="date" id="fDate" value="' + dateVal(l.starts_at) + '">') +
+        field("Začátek", '<input type="time" id="fStart" value="' + timeVal(l.starts_at) + '">') +
+        field("Konec", '<input type="time" id="fEnd" value="' + timeVal(l.ends_at) + '">') +
+      "</div>" +
+      field(shift ? "Stůl / učebna" : "Místnost / stůl", '<select id="fRoom">' + roomOptions(l.room_id) + "</select>") +
+      '<div class="field-row">' +
+        '<div id="lessonOnly2"' + (shift ? ' class="hidden"' : "") + ' style="flex:1;">' +
+          field("Předmět", '<input type="text" id="fSubject" value="' + escapeHtml(l.subject || "") + '">') +
+        "</div>" +
+        field("Lektor", '<input type="text" id="fLector" value="' + escapeHtml(l.lector_name || "") + '">') +
+      "</div>" +
+      field(shift ? "Poznámka" : "Popis – co se na lekci dělalo", '<textarea id="fDesc">' + escapeHtml(l.description || "") + "</textarea>") +
+    "</div>" +
+
+    '<details class="detail-more"' + (shift ? " open" : "") + ">" +
+      "<summary>Další nastavení</summary>" +
+      field("Typ zápisu",
+        '<select id="fKind"><option value="lesson"' + (shift ? "" : " selected") + ">Lekce</option>" +
+        '<option value="shift"' + (shift ? " selected" : "") + ">Lektor u stolu (kdo tu dnes je)</option></select>") +
+      '<div id="lessonOnly3"' + (shift ? ' class="hidden"' : "") + ">" +
+        '<div class="field-row">' +
+          field("Stav", '<select id="fStatus">' + statusOptions(l.status) + "</select>") +
+          field("Režim", '<select id="fMode"><option value="offline"' + (l.mode !== "online" ? " selected" : "") + ">Osobní</option><option value=\"online\"" + (l.mode === "online" ? " selected" : "") + ">Online</option></select>") +
+        "</div>" +
+        '<label class="check"><input type="checkbox" id="fDone"' + (l.done ? " checked" : "") + "> Odučeno</label>" +
+      "</div>" +
+      // Opakování dává smysl jen u nově zakládané lekce, ne při úpravě stávající.
+      (state.openLessonId ? "" :
         field("Opakovat", '<select id="fRepeat">' +
           '<option value="">neopakovat</option>' +
           '<option value="daily">denně</option>' +
           '<option value="weekly">týdně</option>' +
           '<option value="biweekly">ob týden</option>' +
         "</select>") +
-      "</div>" +
-      '<div class="role-note">Opakování založí lekce jen na následující týden. Dál dopředu se rozvrh protahuje tlačítkem <b>Protáhnout týden →</b>.</div>') +
-    field(shift ? "Poznámka" : "Popis – co se dělalo", '<textarea id="fDesc">' + escapeHtml(l.description || "") + "</textarea>") +
-    (shift ? '<div class="role-note">Směna se ukáže jako řádek pod názvem stolu. Nepočítá se do odpracovaných hodin ani nečerpá kredit žáka.</div>' : "");
+        '<div class="role-note">Opakování založí lekce jen na následující týden. Dál dopředu se rozvrh protahuje tlačítkem <b>Protáhnout týden</b>.</div>') +
+      (shift ? '<div class="role-note">Směna se ukáže jako řádek pod názvem stolu. Nepočítá se do odpracovaných hodin ani nečerpá kredit žáka.</div>' : "") +
+    "</details>";
 
   // Přepnutí typu překreslí formulář, ať sedí popisky i schovaná pole.
   document.getElementById("fKind").onchange = (e) => {
@@ -1575,7 +1573,9 @@ async function onLogout() {
 function renderUserBadge() {
   const b = document.getElementById("userBadge");
   if (!state.user) { b.textContent = ""; return; }
-  b.innerHTML = escapeHtml(state.user.name) + ' <span class="role">(' + (isAdmin() ? "administrátor" : "lektor") + ")</span>";
+  // V liště jen jméno; role je v tooltipu, ať „(administrátor)" nebere šířku.
+  b.textContent = state.user.name;
+  b.title = isAdmin() ? "Přihlášen jako administrátor" : "Přihlášen jako lektor";
   document.getElementById("adminHint").classList.toggle("hidden", !isAdmin());
 }
 
@@ -1628,11 +1628,6 @@ async function startApp(user) {
     document.getElementById("selectAllBtn").onclick = selectAllDay;
     document.getElementById("extendWeekBtn").onclick = extendWeekToNext;
     document.getElementById("exportBtn").onclick = exportSchedule;
-
-    // Datum v liště rozbaluje mini kalendář; klik jinam ho zavře.
-    document.getElementById("navDate").onclick = (e) => { e.stopPropagation(); toggleMiniCalendar(); };
-    document.getElementById("miniCalendar").onclick = (e) => e.stopPropagation();
-    document.addEventListener("click", closeMiniCalendar);
 
     const modeSel = document.getElementById("modeSelect");
     modeSel.value = state.modeFilter;

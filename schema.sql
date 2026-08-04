@@ -403,16 +403,17 @@ insert into rooms (id, name, color, sort) values
   ('jaz-1','Jazyková stůl 1','#cf9089',4),
   ('jaz-2','Jazyková stůl 2','#c06a61',5),
   ('jaz-3','Jazyková stůl 3','#b34d44',6),
-  ('vse-1','Všeobecná stůl 1','#a7d488',7),
-  ('vse-2','Všeobecná stůl 2','#84c25f',8),
-  ('vse-3','Všeobecná stůl 3','#6cae45',9),
-  ('vse-4','Všeobecná stůl 4','#5a9c39',10),
-  ('mat-1','Matematická stůl 1','#7a97d6',11),
-  ('mat-2','Matematická stůl 2','#6f8fd0',12),
-  ('mat-3','Matematická stůl 3','#6385c8',13),
-  ('mat-4','Matematická stůl 4','#587bc0',14),
-  ('mat-5','Matematická stůl 5','#4f72b8',15),
-  ('mat-6','Matematická stůl 6','#4569b0',16)
+  ('jaz-4','Jazyková stůl 4','#9c3a32',7),
+  ('vse-1','Všeobecná stůl 1','#a7d488',8),
+  ('vse-2','Všeobecná stůl 2','#84c25f',9),
+  ('vse-3','Všeobecná stůl 3','#6cae45',10),
+  ('vse-4','Všeobecná stůl 4','#5a9c39',11),
+  ('mat-1','Matematická stůl 1','#7a97d6',12),
+  ('mat-2','Matematická stůl 2','#6f8fd0',13),
+  ('mat-3','Matematická stůl 3','#6385c8',14),
+  ('mat-4','Matematická stůl 4','#587bc0',15),
+  ('mat-5','Matematická stůl 5','#4f72b8',16),
+  ('mat-6','Matematická stůl 6','#4569b0',17)
 on conflict (id) do nothing;
 
 do $$

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rozvrh – PoraDys osobní výuka</title>
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=29" />
 </head>
 <body class="app-schedule">
   <!-- Přihlášení -->
@@ -21,51 +21,55 @@
   </div>
 
   <div id="banner" class="banner hidden">
-    Ukázkový režim (mock data). Až vyplníš klíče v <code>config.js</code> a nastavíš
-    <code>USE_SUPABASE = true</code>, appka začne číst z tvojí databáze.
+    <b>Ukázkový režim</b> – data jsou smyšlená a nikam se neukládají, klidně si tu cokoli vyzkoušejte.
+    Na skutečnou databázi appku přepnete přidáním <code>?db=1</code> do adresy.
   </div>
 
-  <!-- Jedna kompaktní lišta místo původní vysoké hlavičky – ať zbyde co
-       nejvíc místa na samotný rozvrh. Mini kalendář se rozbalí kliknutím
-       na datum, filtr učeben je v rozbalovacím seznamu. -->
+  <!-- Horní pás: vlevo ovládání, vpravo trvale viditelný kalendář.
+       Kalendář je co nejmenší – nese celou výšku pásu, takže každý ušetřený
+       pixel dostane mřížka rozvrhu. -->
+  <div class="topband">
   <nav class="toolbar">
     <span class="app-name">Rozvrh PoraDys</span>
     <button id="prevDay" title="Předchozí den">◀</button>
-    <button id="navDate" class="nav-date" title="Zvolit datum z kalendáře"></button>
+    <span id="navDate" class="nav-date"></span>
     <button id="nextDay" title="Následující den">▶</button>
     <button id="todayBtn">Dnes</button>
-    <div id="miniCalendar" class="mini-calendar hidden"></div>
 
-    <button id="newLessonBtn" class="primary-btn hidden">+ Nová lekce</button>
-    <button id="newShiftBtn" class="hidden" title="Kdo je dnes u kterého stolu a od kolika do kolika">+ Lektor u stolu</button>
-    <button id="doneAllBtn" class="hidden" title="Označí všechny naplánované lekce zobrazeného dne jako odučené">✓ Vše odučeno</button>
-    <button id="selectAllBtn" class="hidden">Vybrat vše</button>
-    <button id="extendWeekBtn" class="hidden" title="Zkopíruje všechny lekce z aktuálního týdne do týdne následujícího (kolize se přeskočí)">Protáhnout týden →</button>
-    <button id="exportBtn" title="Stáhne rozvrh jako .csv – otevře se v Excelu">⬇ Excel</button>
+    <!-- Plochá tlačítka, nic se neschovává do nabídek. Popisky jsou krátké,
+         aby se lišta vešla na jeden řádek; celý význam je v tooltipu. -->
+    <button id="newLessonBtn" class="primary-btn hidden" title="Založit novou lekci">+ Lekce</button>
+    <button id="newShiftBtn" class="hidden" title="Zapsat, kdo je dnes u kterého stolu a od kolika do kolika">+ Lektor</button>
+    <button id="doneAllBtn" class="hidden" title="Označí všechny naplánované lekce zobrazeného dne jako odučené">✓ Odučeno</button>
+    <button id="selectAllBtn" class="hidden" title="Vybere všechny lekce dne (Ctrl/⌘+A)">Vybrat vše</button>
+    <button id="extendWeekBtn" class="hidden" title="Zkopíruje všechny lekce z aktuálního týdne do týdne následujícího (kolize se přeskočí)">+ Týden</button>
+    <button id="exportBtn" title="Stáhne rozvrh jako .csv – otevře se v Excelu">Excel</button>
 
-    <label class="role-switch" for="roomSelect">Učebna:
-      <select id="roomSelect"></select>
-    </label>
-    <label class="role-switch" for="modeSelect">Výuka:
-      <select id="modeSelect">
-        <option value="offline">Osobní</option>
-        <option value="online">Online</option>
-      </select>
-    </label>
-    <button id="diagBtn" title="Diagnostický test – plán přípravy žáka">🧪 Diagnostika</button>
-    <button id="kartotekaBtn" class="hidden" title="Klienti, platby a kredity hodin">📇 Kartotéka</button>
-    <button id="hoursBtn" class="hidden" title="Odpracované hodiny lektorů za měsíc">Výkaz hodin</button>
+    <span class="tb-sep"></span>
 
-    <span id="userBadge" class="user-badge"></span>
-    <button id="logoutBtn">Odhlásit</button>
+    <select id="roomSelect" title="Zobrazit jen jednu učebnu / stůl"></select>
+    <select id="modeSelect" title="Prezenční nebo online výuka">
+      <option value="offline">Osobní</option>
+      <option value="online">Online</option>
+    </select>
 
+    <span class="tb-sep"></span>
+
+    <button id="diagBtn" title="Diagnostické testy a plán přípravy žáka">Diagnostika</button>
+    <button id="kartotekaBtn" class="hidden" title="Klienti, platby a kredity hodin">Kartotéka</button>
+    <button id="hoursBtn" class="hidden" title="Odpracované hodiny lektorů za měsíc">Výkaz</button>
+
+    <!-- Pohledy Týden a Měsíc byly jen zástupné (ukazovaly hlášku, že jsou
+         zatím náhled). Nic neuměly a braly místo, tak jsou pryč. -->
     <div class="view-tabs">
       <button data-view="den" class="active">Den</button>
       <button data-view="agenda">Agenda</button>
-      <button data-view="tyden">Týden</button>
-      <button data-view="mesic">Měsíc</button>
+      <span id="userBadge" class="user-badge"></span>
+      <button id="logoutBtn" title="Odhlásit se">Odhlásit</button>
     </div>
   </nav>
+    <div id="miniCalendar" class="mini-calendar"></div>
+  </div>
 
   <!-- Nápověda k ovládání: sbalená do jednoho řádku, ať nebere výšku -->
   <details id="adminHint" class="admin-hint hidden">
@@ -123,8 +127,8 @@
        kartoteka, diagnostika). Když se rozejde, každý přechod mezi stránkami
        stahuje sdílené soubory znovu a appka může běžet se starým config.js
        nebo styles.css. Při změně JS/CSS zvedni číslo všude naráz. -->
-  <script src="config.js?v=12"></script>
-  <script src="mockData.js?v=12"></script>
-  <script src="app.js?v=12"></script>
+  <script src="config.js?v=29"></script>
+  <script src="mockData.js?v=29"></script>
+  <script src="app.js?v=29"></script>
 </body>
 </html>

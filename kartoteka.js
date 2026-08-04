@@ -3,7 +3,7 @@
 //
 // Data: v ostrém režimu Supabase (pohled student_credit + tabulky students,
 // payments; čerpání kreditu plní databázové triggery z rozvrhu). V ukázkovém
-// režimu (?mock=1 nebo USE_SUPABASE=false) běží na datech v paměti.
+// režimu (výchozí, nebo USE_SUPABASE=false) běží na datech v paměti.
 // ---------------------------------------------------------------------------
 
 const CFG = window.APP_CONFIG || {};
