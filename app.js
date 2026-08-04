@@ -778,14 +778,14 @@ function buildEvent(l, room) {
   ev.style.height = height + "px";
   ev.style.background = room.color;
 
-  // Čas v buňce NENÍ – kdy lekce je, říká pozice bloku a časová osa vlevo.
-  // Ušetřený řádek dostane jméno žáka, které je jediné, co musí být čitelné
-  // na první pohled. Přesný čas je v tooltipu a v detailu lekce.
+  // Buňka má pevné pořadí řádků, každý se ořezává (nikdy nezalamuje), aby se
+  // do hodinové lekce vešly všechny čtyři: jméno / předmět · lektor / ročník /
+  // poznámka. Čas v buňce není – ten říká pozice bloku a časová osa vlevo.
+  // Telefon je jen v detailu lekce, v buňce bral řádek navíc.
   ev.innerHTML =
     '<div class="e-title">' + escapeHtml(l.student_names || "") + "</div>" +
-    (level ? '<div class="e-level">' + escapeHtml(level) + "</div>" : "") +
     (sub ? '<div class="e-sub">' + escapeHtml(sub) + "</div>" : "") +
-    (phone ? '<div class="e-phone">' + escapeHtml(phone) + "</div>" : "") +
+    (level ? '<div class="e-level">' + escapeHtml(level) + "</div>" : "") +
     (note ? '<div class="e-note">' + escapeHtml(note) + "</div>" : "") +
     (l.mode === "online" ? '<span class="e-badge">ONLINE</span>' : "");
 
