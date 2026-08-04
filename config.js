@@ -11,9 +11,15 @@
 //   4) přepni USE_SUPABASE na true a obnov stránku.
 // ---------------------------------------------------------------------------
 window.APP_CONFIG = {
-  // Přidáním ?mock=1 do adresy se appka přepne na ukázková data –
-  // hodí se na zkoušení novinek bez zápisu do ostré databáze.
-  USE_SUPABASE: !new URLSearchParams(location.search).has("mock"),
+  // UKÁZKOVÝ REŽIM JE VÝCHOZÍ – appka běží na datech v paměti (mockData.js).
+  // Takhle jde nasadit na Netlify a nechat si ji proklikat, aniž by se sáhlo
+  // na ostrou databázi nebo bylo potřeba se přihlašovat do Supabase.
+  //
+  // Přidáním ?db=1 do adresy se appka připojí ke skutečné databázi:
+  //   https://…/index.html?db=1
+  // Až se bude nasazovat naostro, změň řádek níž natvrdo na:
+  //   USE_SUPABASE: true,
+  USE_SUPABASE: new URLSearchParams(location.search).has("db"),
 
   // Jen čistá adresa projektu – BEZ /rest/v1/ na konci (cesty si klient přidává sám).
   SUPABASE_URL: "https://smdcqnankroajubawqng.supabase.co",
