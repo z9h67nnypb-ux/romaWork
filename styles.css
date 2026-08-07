@@ -212,24 +212,42 @@ body.app-schedule .day-scroll { max-height: none; }
   background: #f4f6fa;
   border-bottom: 1px solid var(--line);
 }
+/* Proužek lektora: nahoře jméno, pod ním čas. Výšky řádků jsou natvrdo
+   v pixelech – SHIFT_CHIP_H v app.js z nich počítá výšku celého pásu, takže
+   při změně těchhle čísel se musí změnit i tam. 12 + 10 + 2 (rámeček) = 24. */
 .shift-chip {
-  font-size: 11px;
-  line-height: 14px;
-  height: 15px;
+  height: 24px;
   flex: 0 0 auto;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   background: #fff;
   border: 1px solid var(--line-strong);
   border-left: 3px solid var(--accent);
   border-radius: 3px;
   padding: 0 3px;
   color: var(--text);
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
+/* Oba řádky se ořezávají, nikdy nezalamují – zalomení by proužek rozhodilo. */
+.shift-chip > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.shift-chip .sc-name { font-size: 10.5px; line-height: 12px; font-weight: 600; }
+.shift-chip .sc-time { font-size: 9.5px; line-height: 10px; color: var(--muted); }
 .shift-chip.editable { cursor: pointer; }
 .shift-chip.editable:hover { background: #eef2fb; }
+
+/* Hlavní lektor dne – jeden proužek v celém dni, který admin označí
+   hvězdičkou v detailu. Barva i hvězdička, ať je vidět koutkem oka
+   a přežije i černobílý tisk. */
+.shift-chip.lead {
+  background: #ffdf7e;
+  border-color: #d9a300;
+  border-left-color: #b37f00;
+}
+.shift-chip.lead .sc-name { font-weight: 700; color: #4a3600; }
+.shift-chip.lead .sc-time { color: #6b5000; }
+.shift-chip.lead.editable:hover { background: #ffd45c; }
 
 /* Časová osa je teď jediný zdroj času, tak ať je pořádně čitelná. */
 .time-label {
@@ -242,10 +260,10 @@ body.app-schedule .day-scroll { max-height: none; }
 }
 
 /* V buňce není čas – ten říká pozice bloku a osa vlevo. Řádky se VŽDY
-   ořezávají, nikdy nezalamují: čtyři zalomené řádky se do hodinové lekce
-   nevejdou a půlka obsahu zmizí, kdežto ořezaný řádek pořád nese začátek
-   údaje. Velikosti jsou nastavené tak, aby se do hodiny vešlo jméno,
-   předmět s lektorem, ročník i poznámka. */
+   ořezávají, nikdy nezalamují: zalomený řádek by odsunul ty pod sebou a
+   půlka obsahu by zmizela, kdežto ořezaný řádek pořád nese začátek údaje.
+   Jméno je proto rozdělené na dva řádky (příjmení / křestní) – do úzkého
+   sloupce se celé nevejde a ořezávalo se právě to podstatné. */
 .event {
   position: absolute;
   left: 2px;
@@ -267,37 +285,32 @@ body.app-schedule .day-scroll { max-height: none; }
   /* zadne "..." – tri tecky by sezraly misto pro dalsi dva znaky textu */
   text-overflow: clip;
 }
-.event .e-title {
-  font-weight: 600;
-  font-size: 12px;
-  line-height: 1.15;
-}
-.event .e-sub { opacity: 0.92; }
+/* Pevné pořadí řádků v buňce: příjmení / jméno / lektor / předmět / poznámka.
+   Výšky řádků jsou natvrdo v pixelech, protože z nich JS počítá, jak vysoká
+   musí být hodina, aby se první čtyři řádky vešly vždycky (EV_MIN_H v app.js).
+   Když se tyhle hodnoty změní, musí se změnit i tam. */
+.event .e-last  { font-weight: 700; font-size: 11.5px; line-height: 13px; }
+.event .e-first { font-weight: 700; font-size: 11.5px; line-height: 13px; }
+.event .e-lector,
+.event .e-subject { font-size: 10px; line-height: 11px; opacity: 0.95; }
+/* Poznámka je jediný nepovinný řádek – vykreslí se, jen když na ni zbude
+   místo. Celá je vždycky v tooltipu a v detailu lekce. */
+.event .e-note { font-size: 10px; line-height: 11px; opacity: 0.88; font-style: italic; }
 
-/* Půlhodinová lekce: jméno a pod ním předmět s lektorem, obojí přes celou
-   šířku. Vedle sebe se o úzký sloupec praly a ořízly se obě – takhle se
-   do 29 px vejdou dva plné řádky. Ročník a poznámka zůstanou v tooltipu. */
-.event.compact { padding: 1px 5px; }
-.event.compact .e-title { font-size: 11.5px; line-height: 1.15; }
-.event.compact .e-sub { font-size: 10px; line-height: 1.15; }
-.event.compact .e-level,
-.event.compact .e-note { display: none; }
-/* Ročník / kategorie klienta – ať je poznat, o jaké doučování jde. */
-.event .e-level { opacity: 0.95; font-weight: 600; }
-/* Poznámka k lekci – co se do bloku nevejde, ukáže tooltip. */
-.event .e-note { opacity: 0.88; font-style: italic; }
+/* Záchranná brzda pro bloky kratší, než na kolik je mřížka stavěná (lekce
+   pod půl hodiny). Řádky se stáhnou, ale žádný se nezahazuje – radši drobněji
+   než vůbec. */
+.event.compact { padding: 1px 4px; }
+.event.compact .e-last,
+.event.compact .e-first { font-size: 10.5px; line-height: 11px; }
+.event.compact .e-lector,
+.event.compact .e-subject { font-size: 9px; line-height: 10px; }
+/* Odučeno / zrušeno se pozná na řádku s příjmením – ten je v buňce první
+   a jako jediný je tam vždycky, i u žáka bez křestního jména. */
 .event.is-done { opacity: 0.75; }
-.event.is-done .e-title::after { content: " ✓"; }
+.event.is-done .e-last::after { content: " ✓"; }
 .event.is-cancelled { opacity: 0.55; }
-.event.is-cancelled .e-title { text-decoration: line-through; }
-.event .e-badge {
-  display: inline-block;
-  font-size: 9px;
-  background: rgba(255, 255, 255, 0.28);
-  border-radius: 3px;
-  padding: 0 3px;
-  margin-top: 2px;
-}
+.event.is-cancelled .e-last { text-decoration: line-through; }
 
 /* ---------- Agenda ---------- */
 .agenda { padding: 12px 20px; }

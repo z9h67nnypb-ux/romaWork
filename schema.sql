@@ -59,6 +59,12 @@ create index if not exists lessons_room_idx on lessons (room_id);
 -- s lekcemi, takže se lekce dají zakládat uvnitř směny.
 alter table lessons add column if not exists kind text not null default 'lesson';  -- 'lesson' | 'shift'
 
+-- Hlavní lektor dne: jedna ze směn v daném dni, kterou administrátor označí
+-- hvězdičkou. V rozvrhu se zvýrazní žlutě, aby bylo na první pohled vidět,
+-- kdo ten den pobočku „drží". Platí jen pro kind = 'shift'.
+alter table lessons add column if not exists is_lead boolean not null default false;
+create index if not exists lessons_lead_idx on lessons (starts_at) where is_lead;
+
 -- Účast (M:N žák <-> lekce). Běžná lekce = 1 řádek, skupina = více řádků.
 create table if not exists attendance (
   lesson_id  uuid references lessons(id) on delete cascade,
@@ -349,7 +355,8 @@ select
   -- takže se nikde neduplikují (zdrojem zůstává karta klienta)
   coalesce(string_agg(s.phone,    ', ' order by s.name), '') as student_phone,
   coalesce(string_agg(s.grade,    ', ' order by s.name), '') as student_grade,
-  coalesce(string_agg(s.category, ', ' order by s.name), '') as student_category
+  coalesce(string_agg(s.category, ', ' order by s.name), '') as student_category,
+  l.is_lead                                   -- hlavní lektor dne (jen u kind='shift')
 from lessons l
 left join rooms r    on r.id = l.room_id
 left join lectors lec on lec.id = l.lector_id

@@ -171,6 +171,7 @@ const SupabaseProvider = {
       mode: payload.mode,
       status: payload.status,
       done: payload.done,
+      is_lead: !!payload.is_lead,
       description: payload.description,
     };
     let lessonId = id;
@@ -497,8 +498,10 @@ function renderView() {
         const hours = CFG.DAY_END_HOUR - CFG.DAY_START_HOUR;
         const spare = window.innerHeight - grid.getBoundingClientRect().bottom - 8;
         if (Math.abs(spare) < 10) return;
-        // korekce se dopočítá rovnou, žádné opakované přibližování
-        const fixed = Math.max(24, Math.min(80, Math.round(state.hourH + spare / hours)));
+        // korekce se dopočítá rovnou, žádné opakované přibližování.
+        // Dolů se smí jen po requiredHourHeight – pod ním by se z buňky
+        // ztratily povinné řádky, a to je horší než svislé rolování.
+        const fixed = Math.max(requiredHourHeight(), Math.min(80, Math.round(state.hourH + spare / hours)));
         if (fixed === state.hourH) return;
         state.hourH = fixed;
         renderView();
@@ -521,10 +524,40 @@ function matchesMode(l) {
 // plochy pod lištami – rozvrh se pak celý vejde na jednu obrazovku bez
 // svislého rolování. Na malých displejích má spodní mez (radši malý scroll
 // než nečitelně nízké bloky); CFG.HOUR_HEIGHT je záloha, když nejde změřit.
+// Rozměry buňky lekce – MUSÍ sedět s .event ve styles.css.
+// 13 + 13 + 11 + 11 = 48 px na čtyři povinné řádky (příjmení, jméno, lektor,
+// předmět) + 4 px padding + 2 px rámeček.
+const EV_LINE_H = 11;   // výška jednoho řádku s poznámkou
+const EV_MIN_H = 54;    // blok, do kterého se vejdou všechny čtyři řádky
+// Nad tuhle výšku hodiny už nejdeme, i kdyby v rozvrhu byla čtvrthodinová
+// lekce – jinak by se den natáhl do nesmyslné délky kvůli jedinému bloku.
+const HOUR_H_MAX_FIT = 120;
+
+// Nejkratší lekce zobrazeného dne v hodinách (prázdný den = počítej s hodinou).
+function shortestLessonHours() {
+  let m = 1;
+  state.lessons.forEach((l) => {
+    if (!isLesson(l) || !matchesMode(l)) return;
+    const h = (l.ends_at - l.starts_at) / 3600000;
+    if (h > 0 && h < m) m = h;
+  });
+  return m;
+}
+
+// Kolik musí měřit hodina, aby se i do NEJKRATŠÍ lekce dne vešly všechny
+// čtyři povinné řádky. Tohle je tvrdé dno pro výšku mřížky – když se den
+// přestane vejít na obrazovku, radši ať se roluje svisle, než aby se z buňky
+// ztratilo jméno žáka nebo lektor.
+function requiredHourHeight() {
+  // +2 = mezera mezi bloky (buildEvent odečítá 2 px z výšky slotu)
+  return Math.min(Math.ceil((EV_MIN_H + 2) / shortestLessonHours()), HOUR_H_MAX_FIT);
+}
+
 function computeHourHeight(withShiftRow) {
   const hours = CFG.DAY_END_HOUR - CFG.DAY_START_HOUR;
+  const minHH = requiredHourHeight();
   const vc = document.getElementById("viewContainer");
-  if (!vc) return CFG.HOUR_HEIGHT;
+  if (!vc) return Math.max(CFG.HOUR_HEIGHT, minHH);
   // Volná výška pod lištami = od horní hrany plochy po spodek okna.
   // Bereme pozici v okně (getBoundingClientRect), ne clientHeight – ta bývá
   // při stavbě ještě nedopočítaná (banner/hint se teprve srovnávají).
@@ -533,7 +566,8 @@ function computeHourHeight(withShiftRow) {
   // záhlaví sloupců + okraje mřížky (+ řádek se směnami, když se zobrazuje)
   const OVERHEAD = 40 + (withShiftRow ? shiftRowHeight() + 1 : 0);
   const fit = Math.floor((avail - OVERHEAD) / hours);
-  return Math.max(24, Math.min(fit, 80));
+  // Dno drží čitelnost buňky, strop (80) brání zbytečně rozvláčné mřížce.
+  return Math.max(minHH, Math.min(fit, 80));
 }
 
 // Ve sloupci je málo místa, tak celé hodiny píšeme bez ":00" (8–12, 12:30–17).
@@ -556,13 +590,16 @@ function dayHasShifts() {
 function maxShiftsPerRoom() {
   return visibleRooms().reduce((m, r) => Math.max(m, shiftsOf(r.id).length), 0);
 }
-const SHIFT_CHIP_H = 16; // výška jednoho řádku se jménem lektora (px)
+// Proužek lektora má dva řádky – jméno a pod ním čas. Na jednom řádku se
+// „Kunkelová 8–13" do úzkého sloupce nevešlo a ořezávalo se právě jméno.
+// Musí sedět s .shift-chip ve styles.css: 12 px jméno + 10 px čas + rámeček.
+const SHIFT_CHIP_H = 25; // výška proužku (24 px) + 1 px mezera
 function shiftRowHeight() {
   const n = Math.min(maxShiftsPerRoom(), 4); // víc než 4 lektory u stolu = rolování
   return n ? n * SHIFT_CHIP_H + 5 : 0;
 }
 
-// Řádek pod názvem stolu: „Kunkelová 8–13 / Šíma 13–17".
+// Řádek pod názvem stolu: kdo je tu dnes a od kolika do kolika.
 // Když v daném dni není ani jedna směna, řádek se nikde nevykreslí; jinak ho
 // dostanou VŠECHNY sloupce (i prázdné), aby zůstaly stejně vysoké.
 function buildShiftRow(room) {
@@ -572,12 +609,17 @@ function buildShiftRow(room) {
   if (!room) return row; // sloupec s časy – jen drží výšku
 
   shiftsOf(room.id).forEach((s) => {
-    const label = (s.lector_name || "?") + " " + fmtHourShort(s.starts_at) + "–" + fmtHourShort(s.ends_at);
+    const name = s.lector_name || "?";
+    const time = fmtHourShort(s.starts_at) + "–" + fmtHourShort(s.ends_at);
     const chip = document.createElement("span");
-    chip.className = "shift-chip";
-    chip.textContent = label;
+    chip.className = "shift-chip" + (s.is_lead ? " lead" : "");
+    // Hvězdička drží význam i tam, kde barva zmizí (tisk, export do PDF).
+    chip.innerHTML =
+      '<span class="sc-name">' + (s.is_lead ? "★ " : "") + escapeHtml(name) + "</span>" +
+      '<span class="sc-time">' + escapeHtml(time) + "</span>";
     // v úzkém sloupci se text ořízne, celý je proto vždy v tooltipu
-    chip.title = label + (s.description ? " – " + s.description : "");
+    chip.title = (s.is_lead ? "Hlavní lektor dne – " : "") +
+      name + " " + time + (s.description ? " – " + s.description : "");
     if (isAdmin()) {
       chip.classList.add("editable");
       chip.onclick = (e) => { e.stopPropagation(); openDetail(s.id); };
@@ -751,6 +793,17 @@ function selectAllDay() {
   toast("Vybráno " + state.selection.size + " lekcí.");
 }
 
+// Rozdělí jméno klienta na příjmení (první slovo) a křestní jméno (zbytek).
+// V kartotéce je zapsané česky, tedy „Hamouz Ondřej" – příjmení vpředu.
+// Skupina (víc jmen oddělených čárkou) se nedělí, jinak by se jména pomíchala.
+function splitStudentName(s) {
+  const t = String(s || "").trim();
+  if (!t || t.includes(",")) return { last: t, first: "" };
+  const i = t.indexOf(" ");
+  if (i < 0) return { last: t, first: "" };
+  return { last: t.slice(0, i), first: t.slice(i + 1).trim() };
+}
+
 function buildEvent(l, room) {
   const startMin = l.starts_at.getHours() * 60 + l.starts_at.getMinutes();
   const endMin = l.ends_at.getHours() * 60 + l.ends_at.getMinutes();
@@ -762,11 +815,14 @@ function buildEvent(l, room) {
   const note = (l.description || "").trim();
   const level = [l.student_grade, l.student_category].filter(Boolean).join(" ").trim();
   const phone = (l.student_phone || "").trim();
+  const who = splitStudentName(l.student_names);
+  const subject = (l.subject && l.subject !== "—" ? l.subject : "") +
+    (l.mode === "online" ? (l.subject && l.subject !== "—" ? " · " : "") + "ONLINE" : "");
 
   const ev = document.createElement("div");
-  // Krátké lekce (půlhodina a míň) dostanou jednořádkové rozvržení – na dva
-  // řádky tam prostě není místo a useknuté jméno je horší než žádný detail.
-  const compact = height < 36;
+  // Záchranná brzda pro bloky kratší, než na kolik je mřížka stavěná (viz
+  // requiredHourHeight) – řádky se stáhnou, ale žádný se nezahazuje.
+  const compact = height < EV_MIN_H;
   ev.className =
     "event" +
     (compact ? " compact" : "") +
@@ -778,16 +834,20 @@ function buildEvent(l, room) {
   ev.style.height = height + "px";
   ev.style.background = room.color;
 
-  // Buňka má pevné pořadí řádků, každý se ořezává (nikdy nezalamuje), aby se
-  // do hodinové lekce vešly všechny čtyři: jméno / předmět · lektor / ročník /
-  // poznámka. Čas v buňce není – ten říká pozice bloku a časová osa vlevo.
-  // Telefon je jen v detailu lekce, v buňce bral řádek navíc.
+  // Pevné pořadí řádků: příjmení / jméno / lektor / předmět / poznámka.
+  // První čtyři jsou VŽDY vidět – výška hodiny se dopočítává tak, aby se do
+  // nejkratší lekce dne vešly (requiredHourHeight). Poznámka je jediná, co se
+  // zahodí, když na ni nezbude místo; celá je pak v tooltipu a v detailu.
+  // Prázdné řádky se nevykreslují, ať nezůstává díra (žák bez křestního
+  // jména, lekce bez lektora). Ročník a telefon jsou v detailu lekce.
+  const noteFits = height >= EV_MIN_H + EV_LINE_H;
+  const row = (cls, txt) => (txt ? '<div class="' + cls + '">' + escapeHtml(txt) + "</div>" : "");
   ev.innerHTML =
-    '<div class="e-title">' + escapeHtml(l.student_names || "") + "</div>" +
-    (sub ? '<div class="e-sub">' + escapeHtml(sub) + "</div>" : "") +
-    (level ? '<div class="e-level">' + escapeHtml(level) + "</div>" : "") +
-    (note ? '<div class="e-note">' + escapeHtml(note) + "</div>" : "") +
-    (l.mode === "online" ? '<span class="e-badge">ONLINE</span>' : "");
+    row("e-last", who.last) +
+    row("e-first", who.first) +
+    row("e-lector", l.lector_name || "") +
+    row("e-subject", subject) +
+    (note && noteFits ? row("e-note", note) : "");
 
   ev.title = [
     fmtRange(l.starts_at, l.ends_at) + " · " + (room ? room.name : ""),
@@ -931,6 +991,15 @@ function renderAdminForm(l, title) {
         "</div>" +
         field("Lektor", '<input type="text" id="fLector" value="' + escapeHtml(l.lector_name || "") + '">') +
       "</div>" +
+      // Hvězdička = hlavní lektor dne. V celém dni může být jen jeden, ostatním
+      // se při uložení odebere. Je to provozní role (kdo dnes „drží" pobočku),
+      // proto patří nahoru k lektorovi, ne do sbalených nastavení.
+      '<div id="shiftOnly"' + (shift ? "" : ' class="hidden"') + ">" +
+        '<label class="check"><input type="checkbox" id="fLead"' + (l.is_lead ? " checked" : "") +
+        "> ★ Hlavní lektor dne</label>" +
+        '<div class="role-note">Proužek se v rozvrhu zvýrazní žlutě a dostane hvězdičku. ' +
+        "Označit jde jen jednoho – ostatním se hvězdička sundá sama.</div>" +
+      "</div>" +
       field(shift ? "Poznámka" : "Popis – co se na lekci dělalo", '<textarea id="fDesc">' + escapeHtml(l.description || "") + "</textarea>") +
     "</div>" +
 
@@ -1066,6 +1135,7 @@ function readAdminForm(kind) {
     mode: g("fMode") ? g("fMode").value : "offline",
     status: g("fStatus") ? g("fStatus").value : "planned",
     done: g("fDone") ? g("fDone").checked : false,
+    is_lead: g("fLead") ? g("fLead").checked : false,
     description: g("fDesc").value,
     kind: kind,
   };
@@ -1151,9 +1221,14 @@ async function saveDetail() {
         mode: shift ? "offline" : document.getElementById("fMode").value,
         status: shift ? "planned" : document.getElementById("fStatus").value,
         done: shift ? false : document.getElementById("fDone").checked,
+        is_lead: shift ? document.getElementById("fLead").checked : false,
         description: document.getElementById("fDesc").value,
       };
-      await provider.saveLesson(payload, state.openLessonId);
+      const savedRow = await provider.saveLesson(payload, state.openLessonId);
+      // Hvězdičku má v každém dni jen jeden – ostatním se sundá.
+      if (payload.is_lead) {
+        await clearOtherLeads(starts, (savedRow && savedRow.id) || state.openLessonId);
+      }
 
       // Opakování (jen u nové lekce) – založí kopie na následující týden.
       const repeatEl = document.getElementById("fRepeat");
@@ -1184,6 +1259,15 @@ async function saveDetail() {
   } finally {
     btn.disabled = false;
   }
+}
+
+// Hvězdičku „hlavní lektor dne" nese jen jeden proužek. Když ji admin dá
+// někomu jinému, ostatním v témž dni se odebere – jinak by v rozvrhu svítily
+// dvě žluté jmenovky a nikdo by nevěděl, která platí.
+async function clearOtherLeads(day, keepId) {
+  const list = await provider.getLessons(day);
+  const others = list.filter((l) => isShift(l) && l.is_lead && l.id !== keepId);
+  for (const l of others) await provider.updateLessonFields(l.id, { is_lead: false });
 }
 
 async function deleteDetail() {
@@ -1319,6 +1403,7 @@ async function repeatLesson(payload, mode) {
         Object.assign({}, payload, {
           starts_at: starts, ends_at: ends,
           status: "planned", done: false,      // kopie jsou vždy nepotvrzené
+          is_lead: false,                      // hvězdičku určuje admin každý den zvlášť
           student_fields: null,                // klienta zakládá jen první lekce
         }),
         null
