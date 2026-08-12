@@ -2,9 +2,17 @@
 <html lang="cs">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Rozvrh se na telefonu NEPŘIZPŮSOBUJE šířce displeje. Kdyby ano, dělilo
+       by se 17 stolů o 375 px, na sloupec by vyšlo ~20 px a z názvu stolu
+       i jména žáka by zbyl svislý sloupec písmen.
+       Místo toho se stránka vykreslí, jako by okno mělo 1200 px, a telefon ji
+       celou zmenší, aby se vešla na šířku. Je pak vidět celý den najednou –
+       drobně, ale se správnými proporcemi, takže přiblížení prsty je čitelné.
+       Přesně tohle dělá SuperSaaS, na který jsme zvyklí.
+       Počítače se to netýká, prohlížeč na desktopu tuhle značku ignoruje. -->
+  <meta name="viewport" content="width=1200" />
   <title>Rozvrh – PoraDys osobní výuka</title>
-  <link rel="stylesheet" href="styles.css?v=32" />
+  <link rel="stylesheet" href="styles.css?v=33" />
 </head>
 <body class="app-schedule">
   <!-- Přihlášení -->
@@ -132,8 +140,8 @@
        rozdělané práce a návratu zpátky. Prohlížeč si cache klíčuje podle URL,
        takže na „app.js?v=30" podruhé podá tu starou verzi a stránka běží
        s kódem, který na disku vůbec není. Vždycky číslo jen zvyšuj. -->
-  <script src="config.js?v=32"></script>
-  <script src="mockData.js?v=32"></script>
-  <script src="app.js?v=32"></script>
+  <script src="config.js?v=33"></script>
+  <script src="mockData.js?v=33"></script>
+  <script src="app.js?v=33"></script>
 </body>
 </html>

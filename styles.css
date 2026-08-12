@@ -597,10 +597,15 @@ body.app-schedule .day-scroll { max-height: none; }
 }
 
 /* ===========================================================================
-   TELEFON A ÚZKÉ DISPLEJE
+   ÚZKÉ OKNO – ZÁLOHA
    ---------------------------------------------------------------------------
-   Celý blok platí JEN pod 820 px. Na počítači se nepoužije vůbec nic z toho,
-   takže tam rozvrh vypadá přesně jako dosud.
+   Pozor: na telefonu se tenhle blok UŽ NEPOUŽIJE. Rozvrh má v index.html
+   pevný viewport (width=1200), takže telefon hlásí 1200 px, ne 375. Blok
+   zůstává jako záchrana pro úzké okno na počítači a pro prohlížeče, které by
+   pevný viewport ignorovaly.
+
+   Celý blok platí JEN pod 820 px. Na počítači v normálním okně se nepoužije
+   vůbec nic z toho, takže tam rozvrh vypadá přesně jako dosud.
 
    Podstata problému: 17 stolů se dělilo o šířku telefonu, takže na sloupec
    vycházelo ~20 px a z názvu stolu i jména žáka zbyl svislý sloupec písmen.
@@ -639,4 +644,39 @@ body.app-schedule .day-scroll { max-height: none; }
 
   /* --- Detail lekce přes celou šířku, ať se do formuláře dá psát --- */
   .detail-panel { width: 100%; max-width: 100%; }
+}
+
+/* ===========================================================================
+   DOTYKOVÝ DISPLEJ S ODDÁLENOU STRÁNKOU
+   ---------------------------------------------------------------------------
+   Rozvrh má v index.html pevný viewport (width=1200), takže telefon celou
+   stránku zmenší asi na třetinu – jen tak je vidět celý den najednou.
+   Jenže se tím zmenší i ovládání: tlačítko „+ Lekce" má na displeji 19 × 8 px
+   a prstem se do něj netrefíš. Lišta, formuláře a hlášky se proto zvětšují
+   zpátky, aby na displeji vyšly v normální velikosti.
+
+   MŘÍŽKY ROZVRHU SE TO NETÝKÁ – ta má zůstat oddálená, přesně o to nám šlo.
+
+   `pointer: coarse` znamená „ovládá se prstem, ne myší". Na počítači se tedy
+   nepoužije nic z tohohle bloku, ani kdyby mělo dotykový displej, protože
+   se na něm míří myší. `min-width: 1000px` blok drží u případu s pevným
+   viewportem a nepustí ho na telefon, který by běžel v běžné responzivní
+   šířce (tam se ovládání zmenšovat nemusí).
+   =========================================================================== */
+@media (pointer: coarse) and (min-width: 1000px) {
+  .topband,
+  .admin-hint,
+  .banner,
+  .toast,
+  .login-card,
+  .detail-panel,
+  .hours-card { zoom: 3; }
+
+  /* Zvětšení samo o sobě nestačí – tlačítko musí mít i vyšší dotykovou
+     plochu, jinak zůstane vysoké pár pixelů a míří se do něj špatně. */
+  .toolbar button { padding: 7px 10px; }
+  .toolbar select { padding: 6px 8px; }
+
+  /* Zvětšený panel by při height:100vh přetekl obrazovku (zoom násobí i vh). */
+  .detail-panel { height: auto; max-height: 100vh; }
 }
