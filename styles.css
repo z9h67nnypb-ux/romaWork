@@ -595,3 +595,48 @@ body.app-schedule .day-scroll { max-height: none; }
   z-index: 15;
   pointer-events: none;
 }
+
+/* ===========================================================================
+   TELEFON A ÚZKÉ DISPLEJE
+   ---------------------------------------------------------------------------
+   Celý blok platí JEN pod 820 px. Na počítači se nepoužije vůbec nic z toho,
+   takže tam rozvrh vypadá přesně jako dosud.
+
+   Podstata problému: 17 stolů se dělilo o šířku telefonu, takže na sloupec
+   vycházelo ~20 px a z názvu stolu i jména žáka zbyl svislý sloupec písmen.
+   Řešení je stejné, jaké používá SuperSaaS – sloupce si nechají čitelnou
+   šířku a mřížka se místo mačkání roluje do strany. Časová osa přitom
+   zůstává přilepená vlevo, takže je pořád vidět, o kterou hodinu jde.
+   Prstem jde stránku i oddálit (viewport nemá user-scalable=no), takže
+   přehled přes celý den se dá získat stejně jako v SuperSaaSu.
+   =========================================================================== */
+@media (max-width: 820px) {
+  /* --- Mřížka: čitelná šířka sloupce místo mačkání --- */
+  .day-grid .col { min-width: 112px; }
+  /* Časová osa má vlastní, menší šířku – jinak by zdědila těch 112 px. */
+  .day-grid .col.time { flex: 0 0 38px; width: 38px; min-width: 38px; }
+  .day-scroll { -webkit-overflow-scrolling: touch; }
+
+  /* --- Ovládací lišta: stejná tlačítka, jen menší ---
+     Na telefonu se lišta zalomí do šesti řádků a sežere půlku displeje,
+     který potřebuje rozvrh. Nic se neschovává, jen se to stáhne. */
+  .toolbar { gap: 4px; padding: 3px 6px; }
+  .toolbar button { padding: 3px 6px; font-size: 11px; }
+  .toolbar select { padding: 3px 4px; font-size: 11px; max-width: 96px; }
+  /* Datum nemusí držet šířku pro nejdelší název dne – vejde se i tak. */
+  .nav-date { min-width: 0; font-size: 12px; }
+  /* Oddělovače na úzkém displeji jen zabírají místo v řádku. */
+  .tb-sep { display: none; }
+  .view-tabs { margin-left: 0; }
+
+  /* --- Kalendář v rohu: menší, ať nebere výšku rozvrhu ---
+     Zůstává VEDLE lišty, ne pod ní. Zalomení pod lištu vypadá logicky, ale
+     naměřeno je horší: pás pak měří 219 px místo 155 px, protože kalendář
+     dostane vlastní řádek, místo aby se schoval do výšky lišty. */
+  .mini-calendar { width: 132px; font-size: 9px; margin: 1px 6px; }
+  .mini-grid .day { font-size: 9px; line-height: 13px; }
+  .mini-grid .dow { font-size: 8px; line-height: 10px; }
+
+  /* --- Detail lekce přes celou šířku, ať se do formuláře dá psát --- */
+  .detail-panel { width: 100%; max-width: 100%; }
+}
