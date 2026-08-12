@@ -22,27 +22,32 @@
 // name (zobrazený text), max (maximum bodů) a focus (na co se zaměřit –
 // poddovednosti z hodnotícího archu; propíšou se do plánu přípravy).
 //
-// ČEŠTINA odpovídá „1. diagnostickému testu z ČJ pro žáky 9. tříd" a
-// „Hodnotícímu archu k průběžnému testu" (PoraDys – Vzdělávací centrum Kladno).
+// ČEŠTINA odpovídá dvojici papírů „Diagnostický test český jazyk – verze 01"
+// (ČJ_9_01) a „Hodnoticí arch k diagnostickému testu ČJ"
+// (PoraDys – Vzdělávací centrum Kladno). Kategorie, maxima i seznamy
+// „na co se zaměřit" jsou opsané z archu, součet dává 45 bodů jako test.
+//
+// Pořadí oblastí = pořadí políček ve formuláři a je schválně stejné jako
+// na papíře, takže se výsledky opisují shora dolů bez přeskakování.
 // ===========================================================================
 const SUBJECTS = {
   cestina: {
     label: "Čeština",
     icon: "📖",
-    grade: "9. třída (průběžný test)",
+    grade: "8.–9. třída – příprava na přijímačky",
     areas: [
       { key: "pravopis", name: "Pravopisné jevy", short: "Pravopis", max: 10, focus: [
-        "psaní i/y v koncovkách",
+        "psaní i/y",
         "předpony s / z",
         "psaní velkých písmen",
-        "významově rozlišená slova",
+        "skupiny bě/bje, vě/vje, mě/mně",
       ] },
-      { key: "tvaroslovi", name: "Tvarosloví", short: "Tvarosloví", max: 20, focus: [
+      { key: "tvaroslovi", name: "Tvarosloví", short: "Tvarosloví", max: 10, focus: [
         "tvary přídavných jmen",
         "určování slovních druhů",
         "mluvnické kategorie podstatných jmen",
         "mluvnické kategorie sloves",
-        "kořen a předpony",
+        "stavba slova",
       ] },
       { key: "vetnastavba", name: "Větná stavba", short: "Větná stavba", max: 10, focus: [
         "rozlišování věty jednoduché a souvětí",
@@ -51,24 +56,23 @@ const SUBJECTS = {
         "významové poměry mezi větami",
         "interpunkce",
       ] },
-      { key: "slovnizasoba", name: "Slovní zásoba", short: "Slovní zásoba", max: 8, focus: [
+      { key: "slovnizasoba", name: "Slovní zásoba", short: "Slovní zásoba", max: 5, focus: [
         "význam slov v kontextu",
         "spisovná × nespisovná čeština",
         "citové zabarvení slov",
       ] },
-      { key: "stylistika", name: "Stylistika a literatura", short: "Stylistika", max: 14, focus: [
+      // Klíč zůstává "cteni" z dřívějška – ukládá se do databáze, takže se
+      // měnit nesmí, jinak by se dřív uložené testy přestaly párovat.
+      // Zobrazený název i bodování se řídí hodnoticím archem.
+      { key: "cteni", name: "Porozumění textu", short: "Porozumění", max: 5, focus: [
+        "porozumění smyslu textu",
+        "vyhledávání a ověřování informací",
+        "porozumění souvislostem v textu",
+      ] },
+      { key: "stylistika", name: "Stylistika", short: "Stylistika", max: 5, focus: [
         "rozlišení druhů textů",
         "obrazná pojmenování",
         "základní literární pojmy",
-      ] },
-      // Pořadí oblastí = pořadí políček ve formuláři. Pokud má hodnotící arch
-      // čtení jinde než na konci, přesuňte tenhle blok výš – zadávání pak jde
-      // shora dolů přesně podle papíru.
-      { key: "cteni", name: "Čtení", short: "Čtení", max: 10, focus: [
-        "porozumění přečtenému textu",
-        "vyhledávání informací v textu",
-        "hlavní myšlenka a shrnutí textu",
-        "čtenářské tempo a pozornost",
       ] },
     ],
   },
@@ -207,9 +211,10 @@ const MockStore = {
     { id: "m6", name: "Zvonař František", school: "SPŠ Kladno", grade: "3. ročník", category: "SŠ", subjects: "ČJ", lector_name: "Tampír", phone: "702999000", status: "former" },
   ],
   seed: [
-    { id: "s1", student_id: "m4", student_name: "Bezdičková Ela", subject: "cestina", grade: "9. tř. – přijímačky", school: "ZŠ Zákostelní, Kladno", date: "2026-02-10", note: "vstupní test", scores: { pravopis: 4, tvaroslovi: 9, vetnastavba: 3, slovnizasoba: 5, stylistika: 8 } },
-    { id: "s2", student_id: "m4", student_name: "Bezdičková Ela", subject: "cestina", grade: "9. tř. – přijímačky", school: "ZŠ Zákostelní, Kladno", date: "2026-04-14", note: "", scores: { pravopis: 6, tvaroslovi: 12, vetnastavba: 5, slovnizasoba: 6, stylistika: 10 } },
-    { id: "s3", student_id: "m4", student_name: "Bezdičková Ela", subject: "cestina", grade: "9. tř. – přijímačky", school: "ZŠ Zákostelní, Kladno", date: "2026-06-16", note: "po 8 týdnech přípravy", scores: { pravopis: 8, tvaroslovi: 16, vetnastavba: 7, slovnizasoba: 7, stylistika: 12 } },
+    // Body odpovídají maximům z hodnoticího archu (10/10/10/5/5/5 = 45).
+    { id: "s1", student_id: "m4", student_name: "Bezdičková Ela", subject: "cestina", grade: "9. tř. – přijímačky", school: "ZŠ Zákostelní, Kladno", date: "2026-02-10", note: "vstupní test", scores: { pravopis: 4, tvaroslovi: 5, vetnastavba: 3, slovnizasoba: 3, cteni: 3, stylistika: 2 } },
+    { id: "s2", student_id: "m4", student_name: "Bezdičková Ela", subject: "cestina", grade: "9. tř. – přijímačky", school: "ZŠ Zákostelní, Kladno", date: "2026-04-14", note: "", scores: { pravopis: 6, tvaroslovi: 7, vetnastavba: 5, slovnizasoba: 3, cteni: 4, stylistika: 3 } },
+    { id: "s3", student_id: "m4", student_name: "Bezdičková Ela", subject: "cestina", grade: "9. tř. – přijímačky", school: "ZŠ Zákostelní, Kladno", date: "2026-06-16", note: "po 8 týdnech přípravy", scores: { pravopis: 8, tvaroslovi: 8, vetnastavba: 7, slovnizasoba: 4, cteni: 4, stylistika: 4 } },
     { id: "s4", student_id: "m2", student_name: "Balík Petr", subject: "matematika", grade: "7. třída", school: "ZŠ Moskevská, Kladno", date: "2026-05-20", note: "", scores: { pocty: 15, zlomky: 7, slovni: 9, geometrie: 13, rovnice: 6 } },
   ],
   _local() {
@@ -252,8 +257,8 @@ const Store = useDb ? DbStore : MockStore;
 // Vyhodnocení
 // ---------------------------------------------------------------------------
 // Oblasti, které daný test opravdu obsahuje. Když se do předmětu přidá nová
-// kategorie (např. Čtení), starší testy ji ve `scores` nemají – ty se pak
-// vyhodnocují jen z oblastí, které v nich jsou, aby jim nová oblast
+// kategorie (např. Porozumění textu), starší testy ji ve `scores` nemají – ty
+// se pak vyhodnocují jen z oblastí, které v nich jsou, aby jim nová oblast
 // nepřipadla jako 0 bodů a neshodila celkové procento.
 function areasOf(subjKey, scores) {
   const all = SUBJECTS[subjKey].areas;
