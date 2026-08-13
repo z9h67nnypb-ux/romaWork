@@ -677,6 +677,12 @@ body.app-schedule .day-scroll { max-height: none; }
   .toolbar button { padding: 7px 10px; }
   .toolbar select { padding: 6px 8px; }
 
-  /* Zvětšený panel by při height:100vh přetekl obrazovku (zoom násobí i vh). */
-  .detail-panel { height: auto; max-height: 100vh; }
+  /* Výška panelu se musí počítat v JEHO soustavě, ne v soustavě stránky.
+     Uvnitř prvku se zoomem 3 vyjde 100vh trojnásobně, takže by panel přerostl
+     displej a spodní lišta s tlačítkem Uložit by zůstala mimo obrazovku
+     (u karty klienta v kartotéce vycházelo 1621 px na 812px displeji).
+     Dělíme proto stejným číslem, jaké je v `zoom` výš – když se změní jedno,
+     musí se změnit i druhé. Uvnitř se pak posouvá jen tělo panelu, přesně
+     jako na počítači. */
+  .detail-panel { height: calc(100vh / 3); }
 }

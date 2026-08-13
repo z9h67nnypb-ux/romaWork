@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Diagnostika – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=34" />
+  <link rel="stylesheet" href="styles.css?v=35" />
   <style>
     /* Styly jen pro stránku diagnostiky */
     .diag-wrap { max-width: 1180px; margin: 0 auto; padding: 14px 20px 60px; }
@@ -55,6 +55,20 @@
     .diag-table col.c-cnt { width: 9%; }
     .diag-table col.c-last { width: 18%; }
     .diag-table td.num, .diag-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* Telefon: zbytek stránky se skládá do jednoho sloupce sám (viz media
+       queries níž u .res-grid, .bar-row a .score-grid), ale tabulka se
+       seznamem žáků se mačkala – šest sloupců po ~73 px a ořezaných 24
+       z 30 buněk, včetně jména a školy. Drží si proto čitelnou šířku
+       a posouvá se do strany uvnitř svého rámečku; stránka jako celek
+       nikam neuhýbá.
+       Rozvrh a kartotéka to mají jinak (pevný viewport a zmenšení celé
+       stránky) – tam se do šířky nevejde 17 sloupců a jde o přehled celku,
+       kdežto tady se čte řádek po řádku. */
+    @media (max-width: 700px) {
+      .diag-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .diag-table { min-width: 620px; }
+    }
 
     /* ---------- Karta žáka ---------- */
     .diag-card {
@@ -381,7 +395,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N musí být stejné ve všech třech stránkách – viz index.html -->
-  <script src="config.js?v=34"></script>
-  <script src="diagnostika.js?v=34"></script>
+  <script src="config.js?v=35"></script>
+  <script src="diagnostika.js?v=35"></script>
 </body>
 </html>
