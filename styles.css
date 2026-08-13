@@ -647,6 +647,41 @@ body.app-schedule .day-scroll { max-height: none; }
 }
 
 /* ===========================================================================
+   POLE NA PSANÍ MAJÍ NA DOTYKU ASPOŇ 16 px
+   ---------------------------------------------------------------------------
+   iOS Safari sám přiblíží celou stránku, jakmile se klepne do textového pole
+   s písmem menším než 16 px. Přiblížení pak zůstane – takže po přihlášení
+   (e-mail měl 14 px) se rozvrh vykreslil správně, ale koukalo se na něj
+   zvětšený a rozházený, dokud se stránka neobnovila. Odtud to „vidím to
+   správně až napodruhé".
+
+   Týká se to jen polí, do kterých se opravdu píše. Rozbalovací seznamy
+   a datum/čas otevírají na telefonu vlastní volič a stránku nezvětšují,
+   takže se jich to nedotýká a nemění se rozvržení lišty ani tabulky.
+   =========================================================================== */
+@media (pointer: coarse) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  textarea,
+  /* Tyhle dvě musí být vypsané zvlášť: `.field textarea` a `.imp-card
+     textarea` mají vyšší specificitu než holé `textarea`, takže by samotný
+     obecný selektor prohrál a pole na popis lekce by zůstalo na 13 px. */
+  /* Tyhle dvě musí být vypsané zvlášť: mají vyšší specificitu než holé
+     `textarea` / `input`, takže by obecný selektor prohrál a pole na popis
+     lekce nebo na údaje nového klienta by zůstala pod 16 px. */
+  .field textarea,
+  .student-info .si-grid input { font-size: 16px; }
+}
+/* Pozn.: stejné pravidlo si musí každá stránka doplnit i pro svoje vlastní
+   pole (kartotéka, diagnostika). Jejich styly jsou ve <style> uvnitř té
+   stránky, tedy až ZA tímhle souborem – odsud se přebít nedají. */
+
+/* ===========================================================================
    DOTYKOVÝ DISPLEJ S ODDÁLENOU STRÁNKOU
    ---------------------------------------------------------------------------
    Rozvrh má v index.html pevný viewport (width=1200), takže telefon celou

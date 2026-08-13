@@ -10,7 +10,7 @@
        prsty je čitelné. Počítač tuhle značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Kartotéka – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=35" />
+  <link rel="stylesheet" href="styles.css?v=36" />
   <style>
     /* Styly jen pro kartotéku */
     .kt-wrap { max-width: 1500px; margin: 0 auto; padding: 14px 20px 60px; }
@@ -215,6 +215,15 @@
       .card-fields,
       .pay-form { grid-template-columns: 1fr; }
     }
+
+    /* iOS Safari přiblíží celou stránku, když se klepne do pole s písmem
+       menším než 16 px, a přiblížení pak zůstane. Obecné pravidlo je
+       v styles.css, ale tahle dvě pole mají styl tady – a tenhle <style>
+       se načítá až za ním, takže se odtamtud přebít nedají. */
+    @media (pointer: coarse) {
+      .kt-controls input[type="text"],
+      .imp-card textarea { font-size: 16px; }
+    }
   </style>
 </head>
 <body>
@@ -312,7 +321,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N musí být stejné ve všech třech stránkách – viz index.html -->
-  <script src="config.js?v=35"></script>
-  <script src="kartoteka.js?v=35"></script>
+  <script src="config.js?v=36"></script>
+  <script src="kartoteka.js?v=36"></script>
 </body>
 </html>
