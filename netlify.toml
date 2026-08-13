@@ -12,6 +12,14 @@
 #
 # Proto se HTML musí u serveru vždycky ověřit. Je to jeden dotaz navíc,
 # zpravidla s odpovědí 304 Not Modified, takže se stejně nic nestahuje.
+#
+# POZOR, ať to někdo nepovažuje za lék: Netlify tuhle hlavičku u HTML posílá
+# i bez tohohle souboru (ověřeno měřením – `cache-control: public,max-age=0,
+# must-revalidate`). Zdejší nastavení to jen zamyká, aby se to nezměnilo pod
+# rukama. Když telefon ukazuje starou verzi, tímhle se to NESPRAVÍ – Safari
+# obnovuje karty z minulé relace mimo HTTP cache a na hlavičky se přitom
+# neptá. Jediné, co pomůže, je tu kartu zavřít nebo stránku otevřít na
+# adrese, kterou prohlížeč ještě neviděl.
 # ---------------------------------------------------------------------------
 
 [build]
