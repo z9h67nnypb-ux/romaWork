@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------------------
+# Nastavení hostingu na Netlify
+# ---------------------------------------------------------------------------
+# Appka je statická – nic se nebuilduje, servírují se soubory z kořene repa.
+#
+# Jediné, co tu opravdu řešíme, je CACHE. Sdílené soubory (app.js, styles.css…)
+# se načítají s ?v=N v adrese, takže při změně čísla si prohlížeč stáhne novou
+# verzi sám. Jenže samotné HTML žádné ?v= nemá – a právě ono to číslo nese.
+# Když prohlížeč podá staré index.html z cache, přijdou s ním i staré odkazy
+# a appka běží s kódem, který už dávno neplatí: uživatel vidí starou verzi
+# a spraví to teprve ruční obnovení stránky.
+#
+# Proto se HTML musí u serveru vždycky ověřit. Je to jeden dotaz navíc,
+# zpravidla s odpovědí 304 Not Modified, takže se stejně nic nestahuje.
+# ---------------------------------------------------------------------------
+
+[build]
+  publish = "."
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Kořenová adresa (poradys.netlify.app/) servíruje index.html, ale pravidlu
+# výš neodpovídá, protože v cestě žádné ".html" není.
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
