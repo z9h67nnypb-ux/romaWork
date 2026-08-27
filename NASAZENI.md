@@ -154,10 +154,12 @@ alter view student_credit set (security_invoker = on);
 3. V [`config.js`](config.js) nastav:
 
    ```js
-   USE_SUPABASE: true,
    SUPABASE_URL: "https://tvuj-projekt.supabase.co",
    SUPABASE_ANON_KEY: "eyJ...",
    ```
+
+   Databáze je výchozí režim – `USE_SUPABASE` se nepřepíná. Appku jde
+   proklikat na smyšlených datech přidáním `?demo=1` do adresy.
 
 > **Co smí a nesmí do kódu:** `anon` klíč je veřejný záměrně – bezpečnost
 > zajišťují politiky z kroku 4 (bez přihlášení klíč nic nepřečte). Naopak
@@ -221,7 +223,8 @@ jen připojíš, nic jiného se nemění.)*
 - [ ] `hourly_rate` vyplněny
 - [ ] RLS politiky z kroku 4 nasazeny (proto_all pryč)
 - [ ] pg_cron úklid naplánován
-- [ ] `config.js`: URL + anon klíč, `USE_SUPABASE: true`
+- [ ] `config.js`: URL + anon klíč (databáze je výchozí, `?demo=1` = ukázkový režim)
+- [ ] spuštěné migrace `migrace_*.sql` (naposledy `migrace_typ_lekce.sql`)
 - [ ] Web běží na GitHub Pages / Netlify
 - [ ] Test z kroku 8 prošel (appka i SQL ukazují stejné hodiny)
 - [ ] První záloha stažena

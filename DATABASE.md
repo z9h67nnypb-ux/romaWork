@@ -134,7 +134,7 @@ starých lekcí je odpojí. Ověřuje to kontrola č. 6 ve Variantě A.
 
 ### c) Ověření z appky proti Supabase
 
-Až bude `USE_SUPABASE: true` (config.js): admin založí lekci, lektor ji
+V ostrém režimu (appka bez `?demo=1` v adrese): admin založí lekci, lektor ji
 potvrdí a tlačítko **„Výkaz hodin"** musí ukázat stejná čísla jako dotaz
 `select * from lector_monthly_hours;` v SQL editoru. Když sedí, celý řetězec
 appka → trigger → výkaz funguje.
@@ -303,7 +303,9 @@ spolehlivé a zadarmo.
 2. Spustit celý [`schema.sql`](schema.sql) v SQL editoru.
 3. Založit účty lektorů (Authentication → Users), adminovi zvednout roli.
 4. Vyplnit `lectors.hourly_rate` u každého lektora.
-5. V [`config.js`](config.js) vyplnit URL + anon klíč, `USE_SUPABASE: true`.
+5. V [`config.js`](config.js) vyplnit URL + anon klíč (databáze je výchozí;
+   ukázkový režim se zapíná `?demo=1` v adrese) a spustit migrace
+   `migrace_*.sql`.
 6. **Zpřísnit RLS** – spustit blok „PRÁVA K DIAGNOSTICKÝM TESTŮM A KARTÁM
    ŽÁKŮ" na konci `schema.sql` (zápis testů a žáků jen admin) a nahradit
    zbylé prototypové `proto_all` politiky vzorem úplně na konci souboru

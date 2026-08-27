@@ -6,12 +6,16 @@ zaškrtne **odučeno (done)**, případně změní stav (zrušeno apod.).
 
 Aplikace běží ve dvou režimech:
 
-- **Ukázkový (mock)** – výchozí, funguje hned, bez nastavení. Data jsou v `mockData.js`.
-- **Supabase** – čte/zapisuje do tvojí databáze. Stačí vyplnit klíče a přepnout přepínač.
+- **Supabase** – **výchozí**. Čte/zapisuje do ostré databáze, chce přihlášení
+  účtem ze Supabase Auth.
+- **Ukázkový (mock)** – zapne se přidáním `?demo=1` do adresy. Data jsou
+  smyšlená (`mockData.js`) a drží se jen v prohlížeči (`DemoStore`,
+  localStorage), takže rozvrh i kartotéka vidí to samé a kredit se opravdu
+  odečítá. Vyčistit je jde v konzoli přes `DemoStore.reset()`.
 
 ---
 
-## 1) Jak prototyp spustit (mock režim)
+## 1) Jak prototyp spustit (ukázkový režim)
 
 Soubory jsou čisté HTML/CSS/JS, není potřeba nic instalovat. Stačí je servírovat
 přes malý lokální server (kvůli načítání souborů a Supabase klienta):
@@ -21,7 +25,8 @@ cd /Users/filipniedoba/romaWork
 python3 -m http.server 5050
 ```
 
-Pak otevři v prohlížeči: <http://localhost:5050>
+Pak otevři v prohlížeči: <http://localhost:5050/index.html?demo=1>
+(bez `?demo=1` se appka připojí k ostré databázi)
 
 (Alternativně přes Node: `npx serve` nebo `npx http-server`.)
 
@@ -54,8 +59,16 @@ Po přihlášení uvidíš žlutý pruh „Ukázkový režim" – běžíš na m
 - **Agenda** – seznamový pohled na daný den.
 - **Dropdown „Výuka"** – přepíná zobrazení: prezenční / online (vždy jen jeden
   režim, ať se lekce nemíchají v jednom sloupci).
-- **Protáhnout týden →** (admin) – zkopíruje všechny lekce aktuálního týdne do
-  týdne následujícího (zrušené se vynechají, kolize přeskočí).
+- **Druh lekce** – u každé lekce se vybírá **klasická (opakovaná)** nebo
+  **mimořádná (jednorázová)**. U klasické jde rovnou naplánovat několik
+  dalších termínů dopředu – stejný den v týdnu i čas, obsazené termíny se
+  přeskočí. U už založené lekce to udělá tlačítko **„Naplánovat další
+  termíny"** v jejím detailu. Mimořádná lekce má v rozvrhu zlatý proužek
+  vlevo a do dalšího týdne se nekopíruje.
+- **Pravidelná lekce z karty klienta** – při zakládání klienta v kartotéce jde
+  rovnou zadat den, čas, stůl a počet lekcí; série se založí do rozvrhu.
+- **Protáhnout týden →** (admin) – zkopíruje pravidelné lekce aktuálního týdne
+  do týdne následujícího (mimořádné a zrušené se vynechají, kolize přeskočí).
 - **Výkaz hodin** (admin) – měsíční součet potvrzených hodin po lektorech,
   podklad pro výplaty. Smazání lekce hodiny odebere; roční úklid je zachová.
   Detail návrhu v [`DATABASE.md`](DATABASE.md).
@@ -91,6 +104,10 @@ Po přihlášení uvidíš žlutý pruh „Ukázkový režim" – běžíš na m
 2. Zkopíruj celý obsah souboru [`schema.sql`](schema.sql) a dej **Run**.
    - Vytvoří se tabulky (`rooms`, `lectors`, `students`, `lessons`, `attendance`,
      `notifications`), pohled `lesson_details` a pár ukázkových řádků.
+3. Na databázi, která už běží, se `schema.sql` **nespouští znovu** – místo toho
+   se pustí migrace `migrace_*.sql` (naposledy
+   [`migrace_typ_lekce.sql`](migrace_typ_lekce.sql) – druh lekce
+   mimořádná/opakovaná).
 
 ### b) Vlož klíče
 
@@ -98,10 +115,11 @@ Po přihlášení uvidíš žlutý pruh „Ukázkový režim" – běžíš na m
 2. Zkopíruj **Project URL** a **anon public** klíč.
 3. Otevři [`config.js`](config.js) a vyplň:
    ```js
-   USE_SUPABASE: true,
    SUPABASE_URL: "https://tvuj-projekt.supabase.co",
    SUPABASE_ANON_KEY: "...",
    ```
+   (`USE_SUPABASE` se nepřepíná – databáze je výchozí, ukázkový režim se
+   zapíná `?demo=1` v adrese.)
 4. Obnov stránku. Žlutý pruh zmizí a data se načítají z databáze.
    Změny v detailu lekce (popis/odučeno/stav) se ukládají přímo do Supabase.
 

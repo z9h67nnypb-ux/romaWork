@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rozvrh – PoraDys osobní výuka</title>
-  <link rel="stylesheet" href="styles.css?v=29" />
+  <link rel="stylesheet" href="styles.css?v=35" />
 </head>
 <body class="app-schedule">
   <!-- Přihlášení -->
@@ -21,8 +21,8 @@
   </div>
 
   <div id="banner" class="banner hidden">
-    <b>Ukázkový režim</b> – data jsou smyšlená a nikam se neukládají, klidně si tu cokoli vyzkoušejte.
-    Na skutečnou databázi appku přepnete přidáním <code>?db=1</code> do adresy.
+    <b>Ukázkový režim</b> – data jsou smyšlená a zůstávají jen ve vašem prohlížeči, klidně si tu cokoli vyzkoušejte.
+    Zpátky na ostrou databázi se vrátíte odebráním <code>?demo=1</code> z adresy.
   </div>
 
   <!-- Horní pás: vlevo ovládání, vpravo trvale viditelný kalendář.
@@ -42,7 +42,7 @@
     <button id="newShiftBtn" class="hidden" title="Zapsat, kdo je dnes u kterého stolu a od kolika do kolika">+ Lektor</button>
     <button id="doneAllBtn" class="hidden" title="Označí všechny naplánované lekce zobrazeného dne jako odučené">✓ Odučeno</button>
     <button id="selectAllBtn" class="hidden" title="Vybere všechny lekce dne (Ctrl/⌘+A)">Vybrat vše</button>
-    <button id="extendWeekBtn" class="hidden" title="Zkopíruje všechny lekce z aktuálního týdne do týdne následujícího (kolize se přeskočí)">+ Týden</button>
+    <button id="extendWeekBtn" class="hidden" title="Zkopíruje pravidelné lekce z aktuálního týdne do týdne následujícího (mimořádné a kolize se přeskočí)">+ Týden</button>
     <button id="exportBtn" title="Stáhne rozvrh jako .csv – otevře se v Excelu">Excel</button>
 
     <span class="tb-sep"></span>
@@ -120,15 +120,16 @@
     </div>
   </aside>
 
-  <!-- Supabase klient (použije se až po přepnutí USE_SUPABASE = true) -->
+  <!-- Supabase klient – appka jede naostro proti databázi, v ukázkovém režimu (?demo=1) se nepoužije -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N nutí prohlížeč stáhnout čerstvé soubory místo verze z cache.
        DŮLEŽITÉ: číslo musí být STEJNÉ ve všech třech stránkách (index,
        kartoteka, diagnostika). Když se rozejde, každý přechod mezi stránkami
        stahuje sdílené soubory znovu a appka může běžet se starým config.js
        nebo styles.css. Při změně JS/CSS zvedni číslo všude naráz. -->
-  <script src="config.js?v=29"></script>
-  <script src="mockData.js?v=29"></script>
-  <script src="app.js?v=29"></script>
+  <script src="config.js?v=35"></script>
+  <script src="mockData.js?v=35"></script>
+  <script src="opakovani.js?v=35"></script>
+  <script src="app.js?v=35"></script>
 </body>
 </html>

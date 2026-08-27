@@ -1,25 +1,23 @@
 // ---------------------------------------------------------------------------
 // Konfigurace aplikace
 // ---------------------------------------------------------------------------
-// Dokud je USE_SUPABASE = false, appka běží na ukázkových datech (mockData.js)
-// a funguje hned po otevření, bez jakéhokoli nastavení.
+// Appka běží NAOSTRO proti Supabase. Ukázkový (demo) režim s daty v paměti
+// se zapíná parametrem ?demo=1 v adrese – hodí se na proklikání bez zásahu
+// do ostrých dat.
 //
-// Až budeš chtít připojit Supabase:
-//   1) spusť schema.sql v Supabase SQL Editoru,
-//   2) v Supabase: Project Settings -> API -> zkopíruj "Project URL" a "anon public" klíč,
-//   3) vyplň je níže,
-//   4) přepni USE_SUPABASE na true a obnov stránku.
+// Databáze musí mít spuštěné schema.sql a všechny migrace z migrace_*.sql
+// (naposledy migrace_typ_lekce.sql – druh lekce mimořádná/opakovaná).
 // ---------------------------------------------------------------------------
 window.APP_CONFIG = {
-  // UKÁZKOVÝ REŽIM JE VÝCHOZÍ – appka běží na datech v paměti (mockData.js).
-  // Takhle jde nasadit na Netlify a nechat si ji proklikat, aniž by se sáhlo
-  // na ostrou databázi nebo bylo potřeba se přihlašovat do Supabase.
+  // OSTRÝ REŽIM JE VÝCHOZÍ – appka pracuje se skutečnou databází (Supabase)
+  // a chce přihlášení účtem z Supabase Auth.
   //
-  // Přidáním ?db=1 do adresy se appka připojí ke skutečné databázi:
-  //   https://…/index.html?db=1
-  // Až se bude nasazovat naostro, změň řádek níž natvrdo na:
-  //   USE_SUPABASE: true,
-  USE_SUPABASE: new URLSearchParams(location.search).has("db"),
+  // Ukázkový režim (data v paměti, nic se neukládá) se zapne přidáním
+  // ?demo=1 do adresy:
+  //   https://…/index.html?demo=1
+  // Odkazy mezi stránkami si parametr nesou s sebou, takže se v ukázkovém
+  // režimu zůstane i po přechodu do kartotéky nebo diagnostiky.
+  USE_SUPABASE: !new URLSearchParams(location.search).has("demo"),
 
   // Jen čistá adresa projektu – BEZ /rest/v1/ na konci (cesty si klient přidává sám).
   SUPABASE_URL: "https://smdcqnankroajubawqng.supabase.co",
@@ -33,7 +31,7 @@ window.APP_CONFIG = {
   DAY_END_HOUR: 20,
   HOUR_HEIGHT: 32,
 
-  // Demo účty pro přihlášení v ukázkovém režimu (USE_SUPABASE = false).
+  // Demo účty pro přihlášení v ukázkovém režimu (?demo=1).
   // V ostré verzi (Supabase) se NEPOUŽIJÍ – účty se zakládají v Supabase Auth
   // a role se čte z tabulky profiles.
   DEMO_USERS: [

@@ -286,6 +286,16 @@ body.app-schedule .day-scroll { max-height: none; }
 .event .e-level { opacity: 0.95; font-weight: 600; }
 /* Poznámka k lekci – co se do bloku nevejde, ukáže tooltip. */
 .event .e-note { opacity: 0.88; font-style: italic; }
+/* Mimořádná (jednorázová) lekce – celá buňka žlutá, ať je v rozvrhu vidět
+   na dálku. Barvu místnosti tím ztratí, ale tu nese sloupec, ve kterém blok
+   stojí. Na žlutém podkladu musí být text tmavý, jinak by se bílé písmo
+   z ostatních bloků ztratilo. */
+.event.is-extra {
+  background: #ffd23f;
+  color: #2f2600;
+  text-shadow: none;
+  border-color: rgba(0, 0, 0, 0.3);
+}
 .event.is-done { opacity: 0.75; }
 .event.is-done .e-title::after { content: " ✓"; }
 .event.is-cancelled { opacity: 0.55; }
@@ -298,6 +308,8 @@ body.app-schedule .day-scroll { max-height: none; }
   padding: 0 3px;
   margin-top: 2px;
 }
+/* Na žluté mimořádné lekci by se světlý odznak ztratil. */
+.event.is-extra .e-badge { background: rgba(0, 0, 0, 0.14); }
 
 /* ---------- Agenda ---------- */
 .agenda { padding: 12px 20px; }
@@ -582,3 +594,29 @@ body.app-schedule .day-scroll { max-height: none; }
   z-index: 15;
   pointer-events: none;
 }
+
+/* ---------- Opakovaná lekce: naplánování na několik týdnů dopředu ---------- */
+/* Blok se v detailu lekce ukáže jen u klasické (opakované) lekce – u mimořádné
+   nemá co dělat. Odsazení a linka vlevo ho oddělí od ostatních polí. */
+.repeat-box {
+  margin: 6px 0 2px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--accent);
+  background: #f6f8fc;
+  border-radius: 0 6px 6px 0;
+}
+.repeat-box .field { margin-bottom: 6px; }
+.repeat-box .role-note { margin-top: 2px; }
+.repeat-box .check { margin-bottom: 6px; }
+.series-btn {
+  border: 1px solid var(--accent);
+  background: #fff;
+  color: var(--accent);
+  border-radius: 5px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.series-btn:hover { background: var(--accent); color: #fff; }
+.series-btn:disabled { opacity: 0.5; cursor: default; }

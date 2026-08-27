@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
 // Kartotéka – klienti, platby a kredit hodin (nahrazuje Excel "KARTOTÉKA").
 //
-// Data: v ostrém režimu Supabase (pohled student_credit + tabulky students,
-// payments; čerpání kreditu plní databázové triggery z rozvrhu). V ukázkovém
-// režimu (výchozí, nebo USE_SUPABASE=false) běží na datech v paměti.
+// Data: naostro ze Supabase (pohled student_credit + tabulky students,
+// payments; čerpání kreditu plní databázové triggery z rozvrhu). Ukázkový
+// režim (?demo=1) běží na sdíleném demo úložišti – viz DemoStore v mockData.js.
 // ---------------------------------------------------------------------------
 
 const CFG = window.APP_CONFIG || {};
@@ -47,44 +47,44 @@ function flagOptions(selected) {
   }).join("");
 }
 
-// ---------- Provider: MOCK (ukázková data v paměti) ----------
+// ---------- Provider: MOCK (sdílené ukázkové úložiště) ----------
+// Klienty, platby i lekce drží DemoStore (mockData.js) společně s rozvrhem.
+// Dřív měla kartotéka vlastní seznam klientů a natvrdo zapsané „vyčerpané
+// hodiny", takže odučení lekce v rozvrhu se do zůstatku nikdy nepropsalo.
+// Teď se vyčerpané hodiny počítají z potvrzených lekcí – stejně jako to
+// v ostré verzi dělá databáze (tabulka credit_log plněná triggery).
 const MockKt = {
-  _seq: 1,
-  students: [
-    { id: "m1", name: "Aftanas Lukáš", phone: "777050743", category: "ZŠ", grade: "5. třída", school: "ZŠ Norská, Kladno", subjects: "AJ", lector_name: "Štruncová", price_hour: 420, price_hour_discount: 430, payment_method: "hotově", status: "active", note: "", flag: "inperson" },
-    { id: "m2", name: "Balík Petr", phone: "723111222", category: "ZŠ", grade: "7. třída", school: "ZŠ Moskevská, Kladno", subjects: "MAT", lector_name: "Kunkelová", price_hour: 440, price_hour_discount: 420, payment_method: "účet PoraDys", status: "active", note: "", flag: "online" },
-    { id: "m3", name: "Berchak Anna", phone: "605333444", category: "SŠ", grade: "2. ročník", school: "Gymnázium Kladno", subjects: "ČJ, MAT", lector_name: "Mužíková", price_hour: 450, price_hour_discount: 430, payment_method: "účet DR", status: "active", note: "přijímačky na VŠ", flag: "contacted" },
-    { id: "m4", name: "Bezdičková Ela", phone: "776555666", category: "ZŠ", grade: "9. tř. - přijímačky", school: "ZŠ Zákostelní, Kladno", subjects: "ČJ, MAT", lector_name: "Šíma", price_hour: 430, price_hour_discount: 420, payment_method: "účet jazykovka", status: "active", note: "", flag: "problem" },
-    { id: "m5", name: "Vondrušková Melissa", phone: "731777888", category: "ZŠ", grade: "8. třída", school: "ZŠ Amálská, Kladno", subjects: "MAT", lector_name: "Machalíková", price_hour: 420, price_hour_discount: 410, payment_method: "hotově", status: "active", note: "", flag: "" },
-    { id: "m6", name: "Zvonař František", phone: "702999000", category: "SŠ", grade: "3. roč.", school: "SPŠ Kladno", subjects: "ČJ, NAT", lector_name: "Tampír", price_hour: 420, price_hour_discount: 410, payment_method: "účet PoraDys", status: "former", note: "ukončeno 6/2026", flag: "ending" },
-  ],
-  payments: [
-    { id: "p1", student_id: "m1", paid_at: "2026-05-02", amount_czk: 3900, hours_credit: 10, method: "hotově", note: "" },
-    { id: "p2", student_id: "m1", paid_at: "2026-06-14", amount_czk: 4200, hours_credit: 10, method: "účet PoraDys", note: "" },
-    { id: "p3", student_id: "m2", paid_at: "2026-06-20", amount_czk: 4400, hours_credit: 10, method: "účet PoraDys", note: "" },
-    { id: "p4", student_id: "m3", paid_at: "2026-04-11", amount_czk: 4500, hours_credit: 10, method: "účet DR", note: "" },
-    { id: "p5", student_id: "m4", paid_at: "2026-07-01", amount_czk: 8600, hours_credit: 20, method: "účet jazykovka", note: "" },
-    { id: "p6", student_id: "m5", paid_at: "2026-03-05", amount_czk: 4200, hours_credit: 10, method: "hotově", note: "počáteční zůstatek z Excelu" },
-  ],
-  used: { m1: 20, m2: 9, m3: 11, m4: 8.5, m5: 9, m6: 4 },
-  lessons: {
-    m1: [
-      { date: "2026-07-16 14:00", subject: "AJ", lector: "Štruncová", hours: 1, done: true },
-      { date: "2026-07-09 14:00", subject: "AJ", lector: "Štruncová", hours: 1, done: true },
-      { date: "2026-06-25 14:00", subject: "AJ", lector: "Moravcová za Štruncovou", hours: 1, done: true },
-    ],
-    m4: [
-      { date: "2026-07-15 16:00", subject: "MAT", lector: "Šíma", hours: 1.5, done: true },
-      { date: "2026-07-08 16:00", subject: "ČJ", lector: "Šíma", hours: 1, done: true },
-    ],
+  get students() { return window.DemoStore.clients(); },
+  get payments() { return window.DemoStore.payments(); },
+
+  // Lekce klienta z rozvrhu (podle jména – v ukázkovém režimu není docházka).
+  _lessonsOf(s) {
+    const name = String((s && s.name) || "").trim().toLowerCase();
+    if (!name) return [];
+    return window.DemoStore.lessons()
+      .filter((l) => (l.kind || "lesson") !== "shift")
+      .filter((l) => String(l.student_names || "").trim().toLowerCase() === name)
+      .map((l) => ({
+        date: l.starts_at,
+        starts: l.starts_at,
+        subject: l.subject || "—",
+        lector: l.lector_name || "—",
+        hours: Math.round(((l.ends_at - l.starts_at) / 3600000) * 100) / 100,
+        done: !!l.done,
+      }))
+      .sort((a, b) => b.starts - a.starts);
   },
+
   _credit(s) {
     const paid = this.payments.filter((p) => p.student_id === s.id);
     const paid_hours = paid.reduce((x, p) => x + Number(p.hours_credit), 0);
     const paid_czk = paid.reduce((x, p) => x + Number(p.amount_czk), 0);
-    const used_hours = this.used[s.id] || 0;
+    const used_hours = Math.round(
+      this._lessonsOf(s).filter((l) => l.done).reduce((x, l) => x + l.hours, 0) * 100
+    ) / 100;
     return { ...s, student_id: s.id, paid_hours, paid_czk, used_hours, balance_hours: paid_hours - used_hours };
   },
+
   async list() { return this.students.map((s) => this._credit(s)); },
   async getCard(id) {
     const s = this.students.find((x) => x.id === id);
@@ -92,17 +92,58 @@ const MockKt = {
       student: s,
       credit: this._credit(s),
       payments: this.payments.filter((p) => p.student_id === id).sort((a, b) => b.paid_at.localeCompare(a.paid_at)),
-      lessons: this.lessons[id] || [],
+      lessons: this._lessonsOf(s).slice(0, 60),
     };
   },
   async saveStudent(fields, id) {
-    if (id) { Object.assign(this.students.find((x) => x.id === id), fields); return id; }
-    const s = { id: "mnew" + this._seq++, status: "active", ...fields };
+    if (id) {
+      Object.assign(this.students.find((x) => x.id === id), fields);
+      window.DemoStore.save();
+      return id;
+    }
+    const s = { id: window.DemoStore.newId("k"), status: "active", ...fields };
     this.students.push(s);
+    window.DemoStore.save();
     return s.id;
   },
-  async addPayment(p) { this.payments.push({ ...p, id: "pnew" + this._seq++ }); },
-  async deletePayment(id) { this.payments = this.payments.filter((x) => x.id !== id); },
+  async addPayment(p) {
+    this.payments.push({ ...p, id: window.DemoStore.newId("p") });
+    window.DemoStore.save();
+  },
+  async deletePayment(id) {
+    const arr = this.payments;
+    const i = arr.findIndex((x) => x.id === id);
+    if (i >= 0) arr.splice(i, 1);
+    window.DemoStore.save();
+  },
+
+  // --- rozvrh (pravidelná lekce zakládaná z karty klienta) ---
+  async rooms() { return [...window.ROOMS].sort((a, b) => a.sort - b.sort); },
+  async lessonsInRange(from, to) {
+    return window.DemoStore.lessons().filter((l) => l.starts_at >= from && l.starts_at < to);
+  },
+  async createLesson(row) {
+    window.DemoStore.lessons().push({
+      id: window.DemoStore.newId("mock-new"),
+      kind: "lesson",
+      lesson_type: row.lesson_type || "regular",
+      room_id: row.room_id || null,
+      starts_at: row.starts_at,
+      ends_at: row.ends_at,
+      student_names: row.student_name || "",
+      student_phone: row.student_phone || "",
+      student_grade: row.student_grade || "",
+      student_category: row.student_category || "",
+      subject: row.subject || "",
+      lector_name: row.lector_name || "",
+      mode: row.mode || "offline",
+      status: "planned",
+      done: false,
+      description: "",
+    });
+    window.DemoStore.save();
+  },
+  async finishLessons() { window.DemoStore.save(); },
 };
 
 // ---------- Provider: SUPABASE ----------
@@ -163,6 +204,64 @@ const DbKt = {
     const { error } = await this._c().from("payments").delete().eq("id", id);
     if (error) throw error;
   },
+
+  // --- rozvrh (pravidelná lekce zakládaná z karty klienta) ---
+  async rooms() {
+    const { data, error } = await this._c().from("rooms").select("*").order("sort");
+    if (error) throw error;
+    return data;
+  },
+  // Existující lekce v rozsahu – kvůli kontrole kolizí u série termínů.
+  async lessonsInRange(from, to) {
+    const { data, error } = await this._c().from("lessons")
+      .select("id, room_id, starts_at, ends_at, kind")
+      .gte("starts_at", from.toISOString())
+      .lt("starts_at", to.toISOString());
+    if (error) throw error;
+    return (data || []).map((l) => ({ ...l, starts_at: new Date(l.starts_at), ends_at: new Date(l.ends_at) }));
+  },
+  // Lektor se dohledá podle jména, případně se založí (stejně jako v rozvrhu).
+  async _resolveLector(name) {
+    if (!name) return null;
+    const c = this._c();
+    const { data } = await c.from("lectors").select("id").eq("name", name).limit(1);
+    if (data && data.length) return data[0].id;
+    const { data: ins, error } = await c.from("lectors").insert({ name }).select("id").single();
+    if (error) throw error;
+    return ins.id;
+  },
+  // Sloupec lesson_type má jen databáze po migraci_typ_lekce.sql; bez něj
+  // appka jede dál, jen bez rozlišení mimořádná/opakovaná.
+  _noLessonType: false,
+  async createLesson(row) {
+    const c = this._c();
+    const lector_id = await this._resolveLector(row.lector_name);
+    const base = {
+      kind: "lesson",
+      starts_at: row.starts_at.toISOString(),
+      ends_at: row.ends_at.toISOString(),
+      subject: row.subject || null,
+      room_id: row.room_id || null,
+      lector_id,
+      mode: row.mode || "offline",
+      status: "planned",
+      done: false,
+      description: null,
+    };
+    if (!this._noLessonType) base.lesson_type = row.lesson_type || "regular";
+    let res = await c.from("lessons").insert(base).select("id").single();
+    if (res.error && /lesson_type/.test(String(res.error.message || res.error))) {
+      this._noLessonType = true;
+      delete base.lesson_type;
+      res = await c.from("lessons").insert(base).select("id").single();
+    }
+    if (res.error) throw res.error;
+    if (row.student_id) {
+      const { error } = await c.from("attendance").insert({ lesson_id: res.data.id, student_id: row.student_id });
+      if (error) throw error;
+    }
+  },
+  async finishLessons() {},
 };
 
 const useDb = !!CFG.USE_SUPABASE;
@@ -369,8 +468,19 @@ function methodOptions(sel) {
     (sel && !PAY_METHODS.includes(sel) ? '<option value="' + escapeHtml(sel) + '" selected>' + escapeHtml(sel) + "</option>" : "");
 }
 
+let _toastTimer = null;
+function ktToast(msg) {
+  const t = $("toast");
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.remove("hidden");
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.add("hidden"), 4000);
+}
+
 async function openCardPanel(id) {
   openId = id;
+  await ensureRooms(); // seznam stolů pro blok pravidelné lekce
   if (id) {
     try { openCard = await kt.getCard(id); }
     catch (e) { alert("Kartu se nepodařilo načíst: " + (e.message || e)); return; }
@@ -453,7 +563,9 @@ function renderCard() {
   // se nepřidávají, aby čísla v kartě vždy odpovídala tomu, co se doopravdy
   // odučilo. Oprava se dělá u konkrétní lekce v rozvrhu.
   const usedH = fmtH((cr && cr.used_hours) || 0);
-  let lessonsHtml = '<div class="kt-section-h">Odučené hodiny (z rozvrhu) · ' + usedH + " h</div>";
+  // V seznamu jsou i lekce naplánované dopředu, proto „lekce v rozvrhu" –
+  // kredit čerpají jen ty potvrzené jako odučené.
+  let lessonsHtml = '<div class="kt-section-h">Lekce v rozvrhu · odučeno ' + usedH + " h</div>";
   if (openId) {
     if (openCard.lessons.length) {
       let lastMonth = "";
@@ -477,15 +589,18 @@ function renderCard() {
     }
   }
 
+  const recHtml = recurringHtml(s);
+
   // Celá karta ve dvou sloupcích (údaje | platby+výuka) – ať se vejde bez rolování.
   let html = stateHtml;
   if (openId) {
     html += '<div class="card-main">' +
-      '<div class="card-col">' + fieldsHtml + "</div>" +
+      '<div class="card-col">' + fieldsHtml + recHtml + "</div>" +
       '<div class="card-col">' + payHtml + lessonsHtml + "</div>" +
       "</div>";
   } else {
-    html += fieldsHtml + '<p style="font-size:12.5px;color:#777;">Po uložení karty půjde přidat první platba (kredit hodin).</p>';
+    html += fieldsHtml + recHtml +
+      '<p style="font-size:12.5px;color:#777;">Po uložení karty půjde přidat první platba (kredit hodin).</p>';
   }
 
   $("cardBody").innerHTML = html;
@@ -504,6 +619,29 @@ function renderCard() {
       } catch (err) { alert("Smazání selhalo: " + (err.message || err)); }
     };
   });
+  // Pravidelná lekce – přepočítávat náhled při každé změně.
+  ["rEnabled", "rDow", "rTimeFrom", "rTimeTo", "rWeeks", "rEvery", "rFrom", "rRoom"].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener("change", updateRecurringInfo);
+  });
+  updateRecurringInfo();
+  const rCreate = $("rCreate");
+  if (rCreate) rCreate.onclick = async () => {
+    rCreate.disabled = true;
+    try {
+      const r = await createRecurring(openId, openCard.student || {});
+      if (!r) { alert("Nejdřív zapněte „Chodí pravidelně“ a vyplňte termín."); return; }
+      $("cardSaved").textContent = "Do rozvrhu založeno " + r.added + " " + ktLessonWord(r.added) +
+        (r.skipped ? " (" + r.skipped + " přeskočeno kvůli kolizi)" : "") + " ✓";
+      openCard = await kt.getCard(openId);
+      renderCard();
+    } catch (e) {
+      alert("Založení lekcí selhalo: " + (e.message || e));
+    } finally {
+      rCreate.disabled = false;
+    }
+  };
+
   const pAdd = $("pAdd");
   if (pAdd) pAdd.onclick = async () => {
     const hours = Number($("pHours").value);
@@ -522,6 +660,131 @@ function renderCard() {
       refreshList();
     } catch (err) { alert("Uložení platby selhalo: " + (err.message || err)); }
   };
+}
+
+// ---------- Pravidelná lekce zakládaná rovnou z karty klienta ----------
+// Většina klientů chodí pořád ve stejný den a čas. Tady se to zadá jednou
+// a lekce se rovnou naplánují na několik týdnů dopředu do rozvrhu – dřív se
+// musely klikat po jedné.
+
+let ktRooms = null;
+
+async function ensureRooms() {
+  if (ktRooms) return ktRooms;
+  // Při chybě se nic nekešuje, ať to jde příště zkusit znovu.
+  try { ktRooms = await kt.rooms(); }
+  catch (e) { console.error(e); return []; }
+  return ktRooms;
+}
+
+function ktRoomOptions(sel) {
+  return '<option value="">— bez místnosti (online) —</option>' +
+    (ktRooms || []).map((r) =>
+      '<option value="' + escapeHtml(r.id) + '"' + (r.id === sel ? " selected" : "") + ">" + escapeHtml(r.name) + "</option>"
+    ).join("");
+}
+
+function todayIso() { return new Date().toISOString().slice(0, 10); }
+
+function recurringHtml(s) {
+  const O = window.Opakovani;
+  return '<div class="kt-section-h">Pravidelná lekce v rozvrhu</div>' +
+    '<div class="rec-box">' +
+      '<label class="check"><input type="checkbox" id="rEnabled"> Chodí pravidelně – naplánovat do rozvrhu</label>' +
+      '<div id="rFields" class="rec-grid hidden">' +
+        '<label>Den v týdnu<select id="rDow">' + O.dowOptions(1) + "</select></label>" +
+        '<label>První termín od<input type="date" id="rFrom" value="' + todayIso() + '"></label>' +
+        '<label>Od<input type="time" id="rTimeFrom" value="15:00"></label>' +
+        '<label>Do<input type="time" id="rTimeTo" value="16:00"></label>' +
+        '<label>Stůl / učebna<select id="rRoom">' + ktRoomOptions("") + "</select></label>" +
+        '<label>Předmět<input type="text" id="rSubject" value="' + escapeHtml(s.subjects || "") + '"></label>' +
+        '<label>Lektor/ka<input type="text" id="rLector" value="' + escapeHtml(s.lector_name || "") + '"></label>' +
+        '<label>Režim<select id="rMode"><option value="offline"' + (s.flag === "online" ? "" : " selected") + ">Osobní</option>" +
+          '<option value="online"' + (s.flag === "online" ? " selected" : "") + ">Online</option></select></label>" +
+        '<label>Počet lekcí<input type="number" id="rWeeks" min="1" max="52" value="10"></label>' +
+        '<label>Interval<select id="rEvery"><option value="1">každý týden</option><option value="2">ob týden</option></select></label>' +
+      "</div>" +
+      '<div class="rec-info" id="rInfo"></div>' +
+      (openId ? '<button type="button" id="rCreate" class="rec-btn">Založit termíny do rozvrhu</button>' : "") +
+    "</div>";
+}
+
+// Termíny podle rozdělaného formuláře (prázdné, když je blok vypnutý).
+function recurringSeries() {
+  const on = $("rEnabled") && $("rEnabled").checked;
+  if (!on) return [];
+  const [y, mo, d] = ($("rFrom").value || todayIso()).split("-").map(Number);
+  const first = window.Opakovani.nextDow(new Date(y, mo - 1, d), $("rDow").value);
+  const step = Number($("rEvery").value) === 2 ? 2 : 1;
+  const n = Number($("rWeeks").value) || 0;
+  if (!n) return [];
+  return window.Opakovani.series(first, $("rTimeFrom").value, $("rTimeTo").value, n, step);
+}
+
+function updateRecurringInfo() {
+  const box = $("rInfo");
+  if (!box) return;
+  const on = $("rEnabled").checked;
+  $("rFields").classList.toggle("hidden", !on);
+  const btn = $("rCreate");
+  if (btn) btn.classList.toggle("hidden", !on);
+  if (!on) { box.textContent = ""; return; }
+
+  // Předmět a lektorku převezmeme z rozdělané karty – u nového klienta se
+  // vyplňují až po otevření panelu, takže při vykreslení bloku ještě prázdné byly.
+  if (!$("rSubject").value.trim()) $("rSubject").value = $("kSubjects").value.trim();
+  if (!$("rLector").value.trim()) $("rLector").value = $("kLector").value.trim();
+
+  const list = recurringSeries();
+  if (!list.length) { box.textContent = "Zkontrolujte časy – konec musí být po začátku – a počet lekcí."; return; }
+  const step = Number($("rEvery").value) === 2 ? 2 : 1;
+  box.innerHTML = "Do rozvrhu se založí <b>" + list.length + " " + ktLessonWord(list.length) + "</b> – " +
+    escapeHtml(window.Opakovani.describe(list, step)) + ". Obsazené termíny se přeskočí." +
+    ($("rRoom").value ? "" : " <b>Bez stolu</b> se lekce zapíší jako online a kolize se nekontrolují.");
+}
+
+function ktLessonWord(n) { return n === 1 ? "lekce" : n >= 2 && n <= 4 ? "lekce" : "lekcí"; }
+
+// Založí sérii do rozvrhu. Vrací { added, skipped } nebo null, když je blok vypnutý.
+async function createRecurring(studentId, student) {
+  const list = recurringSeries();
+  if (!list.length) return null;
+  const roomId = $("rRoom").value || null;
+  const last = new Date(list[list.length - 1].ends_at);
+  last.setDate(last.getDate() + 1);
+
+  let existing = [];
+  try { existing = await kt.lessonsInRange(list[0].starts_at, last); }
+  catch (e) { console.error(e); }
+
+  const row = {
+    room_id: roomId,
+    subject: $("rSubject").value.trim(),
+    lector_name: $("rLector").value.trim(),
+    mode: $("rMode").value,
+    lesson_type: "regular",
+    student_id: studentId,
+    student_name: student.name,
+    student_phone: student.phone || "",
+    student_grade: student.grade || "",
+    student_category: student.category || "",
+  };
+
+  let added = 0, skipped = 0;
+  for (const t of list) {
+    // Kolize hlídáme jen v místnosti – online lekce (bez stolu) se nekryjí.
+    const clash = roomId && existing.some((l) =>
+      (l.kind || "lesson") !== "shift" && l.room_id === roomId &&
+      t.starts_at < l.ends_at && l.starts_at < t.ends_at);
+    if (clash) { skipped++; continue; }
+    try {
+      await kt.createLesson({ ...row, starts_at: t.starts_at, ends_at: t.ends_at });
+      existing.push({ kind: "lesson", room_id: roomId, starts_at: t.starts_at, ends_at: t.ends_at });
+      added++;
+    } catch (e) { console.error(e); skipped++; }
+  }
+  await kt.finishLessons();
+  return { added, skipped };
 }
 
 async function saveCard() {
@@ -545,14 +808,38 @@ async function saveCard() {
   const btn = $("cardSave");
   btn.disabled = true;
   try {
-    const id = await kt.saveStudent(fields, openId);
     const isNew = !openId;
+    // Sérii je potřeba přečíst z formuláře ještě před překreslením karty.
+    const wantSeries = isNew && $("rEnabled") && $("rEnabled").checked;
+    const id = await kt.saveStudent(fields, openId);
+
+    let series = null;
+    if (wantSeries) {
+      try { series = await createRecurring(id, { ...fields, id }); }
+      catch (e) { console.error(e); }
+    }
+
     openId = id;
+
+    const seriesInfo = series
+      ? " Do rozvrhu založeno " + series.added + " " + ktLessonWord(series.added) +
+        (series.skipped ? " (" + series.skipped + " přeskočeno kvůli kolizi)" : "") + "."
+      : "";
+
+    if (isNew) {
+      // Nový klient: karta se zavře a výsledek se ukáže v hlášce nad tabulkou.
+      // Platbu přidáte otevřením klienta v seznamu, kam právě přibyl.
+      closeCard();
+      await refreshList();
+      ktToast("Klient „" + name + "\u201c uložen." + seriesInfo +
+        " Kredit hodin přidáte otevřením jeho karty.");
+      return;
+    }
+
     openCard = await kt.getCard(id);
     renderCard();
-    $("cardSaved").textContent = "Uloženo ✓";
     await refreshList();
-    if (isNew) $("cardSaved").textContent = "Uloženo ✓ – teď přidejte první platbu.";
+    $("cardSaved").textContent = "Uloženo ✓" + seriesInfo;
   } catch (e) {
     $("cardSaved").textContent = "Chyba: " + (e.message || e);
   } finally {

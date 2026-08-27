@@ -24,19 +24,46 @@ window.ROOMS = [
   { id: "mat-6",    name: "Matematická stůl 6",  color: "#4569b0", sort: 17 },
 ];
 
-// Klienti z kartotéky – rozvrh z nich bere telefon a ročník k lekci.
-// V ostré verzi je nahradí tabulka `students`.
+// Klienti – JEDEN seznam pro rozvrh i kartotéku. Dřív měla každá stránka svůj
+// vlastní a čísla se nemohla potkat (kartotéka pak neuměla odečíst vyčerpané
+// hodiny z lekcí zapsaných v rozvrhu). V ostré verzi je nahradí tabulka
+// `students`, která má stejné sloupce.
 window.MOCK_CLIENTS = [
-  { id: "c1", name: "Novák Petr",         phone: "777111222", grade: "7. třída",            category: "ZŠ", payment_method: "hotově",         status: "active" },
-  { id: "c2", name: "Svobodová Anna",     phone: "605222333", grade: "9. tř. – přijímačky", category: "ZŠ", payment_method: "účet PoraDys",   status: "active" },
-  { id: "c3", name: "Dvořák Jakub",       phone: "731333444", grade: "2. ročník",           category: "SŠ", payment_method: "účet DR",        status: "active" },
-  { id: "c4", name: "Černá Eliška",       phone: "776444555", grade: "5. třída",            category: "ZŠ", payment_method: "hotově",         status: "active" },
-  { id: "c5", name: "Procházka Tomáš",    phone: "702555666", grade: "3. ročník",           category: "SŠ", payment_method: "účet jazykovka", status: "active" },
-  { id: "c6", name: "Kučerová Tereza",    phone: "608666777", grade: "8. třída",            category: "ZŠ", payment_method: "účet PoraDys",   status: "active" },
-  { id: "c7", name: "Opata Jiří",         phone: "777333444", grade: "1. ročník",           category: "SŠ", payment_method: "účet DR",        status: "active" },
-  { id: "c8", name: "Bezdičková Ela",     phone: "776555666", grade: "9. tř. – přijímačky", category: "ZŠ", payment_method: "účet jazykovka", status: "active" },
-  { id: "c9", name: "Milka Stanislav",    phone: "605777888", grade: "6. třída",            category: "ZŠ", payment_method: "hotově",         status: "active" },
-  { id: "c10", name: "Kimlová Nela",      phone: "739888999", grade: "4. ročník",           category: "SŠ", payment_method: "účet PoraDys",   status: "active" },
+  { id: "k1",  name: "Aftanas Lukáš",       phone: "777050743", category: "ZŠ", grade: "5. třída",            school: "ZŠ Norská, Kladno",     subjects: "AJ",       lector_name: "Štruncová",   price_hour: 420, price_hour_discount: 410, payment_method: "hotově",         status: "active", note: "",                  flag: "inperson" },
+  { id: "k2",  name: "Balík Petr",          phone: "723111222", category: "ZŠ", grade: "7. třída",            school: "ZŠ Moskevská, Kladno",  subjects: "MAT",      lector_name: "Kunkelová",   price_hour: 440, price_hour_discount: 420, payment_method: "účet PoraDys",   status: "active", note: "",                  flag: "online" },
+  { id: "k3",  name: "Berchak Anna",        phone: "605333444", category: "SŠ", grade: "2. ročník",           school: "Gymnázium Kladno",      subjects: "ČJ, MAT",  lector_name: "Mužíková",    price_hour: 450, price_hour_discount: 430, payment_method: "účet DR",        status: "active", note: "přijímačky na VŠ",  flag: "contacted" },
+  { id: "k4",  name: "Bezdičková Ela",      phone: "776555666", category: "ZŠ", grade: "9. tř. – přijímačky", school: "ZŠ Zákostelní, Kladno", subjects: "ČJ, MAT",  lector_name: "Šíma",        price_hour: 430, price_hour_discount: 420, payment_method: "účet jazykovka", status: "active", note: "",                  flag: "problem" },
+  { id: "k5",  name: "Vondrušková Melissa", phone: "731777888", category: "ZŠ", grade: "8. třída",            school: "ZŠ Amálská, Kladno",    subjects: "MAT",      lector_name: "Machalíková", price_hour: 420, price_hour_discount: 410, payment_method: "hotově",         status: "active", note: "",                  flag: "" },
+  { id: "k6",  name: "Zvonař František",    phone: "702999000", category: "SŠ", grade: "3. roč.",             school: "SPŠ Kladno",            subjects: "ČJ, MAT",  lector_name: "Tampír",      price_hour: 420, price_hour_discount: 410, payment_method: "účet PoraDys",   status: "former", note: "ukončeno 6/2026",   flag: "ending" },
+  { id: "k7",  name: "Novák Petr",          phone: "777111222", category: "ZŠ", grade: "7. třída",            school: "ZŠ Norská, Kladno",     subjects: "MAT",      lector_name: "Kunkelová",   price_hour: 430, price_hour_discount: 420, payment_method: "hotově",         status: "active", note: "",                  flag: "" },
+  { id: "k8",  name: "Svobodová Anna",      phone: "605222333", category: "ZŠ", grade: "9. tř. – přijímačky", school: "ZŠ Moskevská, Kladno",  subjects: "ČJ, MAT",  lector_name: "Mužíková",    price_hour: 440, price_hour_discount: 420, payment_method: "účet PoraDys",   status: "active", note: "",                  flag: "inperson" },
+  { id: "k9",  name: "Dvořák Jakub",        phone: "731333444", category: "SŠ", grade: "2. ročník",           school: "Gymnázium Kladno",      subjects: "MAT, FYZ", lector_name: "Snížková",    price_hour: 450, price_hour_discount: 430, payment_method: "účet DR",        status: "active", note: "",                  flag: "" },
+  { id: "k10", name: "Černá Eliška",        phone: "776444555", category: "ZŠ", grade: "5. třída",            school: "ZŠ Amálská, Kladno",    subjects: "ČJ",       lector_name: "Bečková",     price_hour: 420, price_hour_discount: 410, payment_method: "hotově",         status: "active", note: "",                  flag: "online" },
+  { id: "k11", name: "Procházka Tomáš",     phone: "702555666", category: "SŠ", grade: "3. ročník",           school: "SPŠ Kladno",            subjects: "AJ",       lector_name: "Snížková",    price_hour: 440, price_hour_discount: 420, payment_method: "účet jazykovka", status: "active", note: "",                  flag: "" },
+  { id: "k12", name: "Kučerová Tereza",     phone: "608666777", category: "ZŠ", grade: "8. třída",            school: "ZŠ Zákostelní, Kladno", subjects: "AJ, NJ",   lector_name: "Bečková",     price_hour: 430, price_hour_discount: 420, payment_method: "účet PoraDys",   status: "active", note: "",                  flag: "" },
+  { id: "k13", name: "Opata Jiří",          phone: "777333444", category: "SŠ", grade: "1. ročník",           school: "SPŠ Kladno",            subjects: "MAT",      lector_name: "Jenčíková",   price_hour: 440, price_hour_discount: 430, payment_method: "účet DR",        status: "active", note: "",                  flag: "contacted" },
+  { id: "k14", name: "Milka Stanislav",     phone: "605777888", category: "ZŠ", grade: "6. třída",            school: "ZŠ Norská, Kladno",     subjects: "AJ",       lector_name: "Šíma",        price_hour: 420, price_hour_discount: 410, payment_method: "hotově",         status: "active", note: "",                  flag: "" },
+  { id: "k15", name: "Kimlová Nela",        phone: "739888999", category: "SŠ", grade: "4. ročník",           school: "Gymnázium Kladno",      subjects: "MAT",      lector_name: "Machalíková", price_hour: 450, price_hour_discount: 430, payment_method: "účet PoraDys",   status: "active", note: "",                  flag: "" },
+];
+
+// Zaplacené kredity hodin (v ostré verzi tabulka `payments`).
+window.MOCK_PAYMENTS = [
+  { id: "p1",  student_id: "k1",  paid_at: "2026-05-02", amount_czk: 4200, hours_credit: 10, method: "hotově",         note: "" },
+  { id: "p2",  student_id: "k1",  paid_at: "2026-07-14", amount_czk: 4200, hours_credit: 10, method: "hotově",         note: "" },
+  { id: "p3",  student_id: "k2",  paid_at: "2026-06-20", amount_czk: 4400, hours_credit: 10, method: "účet PoraDys",   note: "" },
+  { id: "p4",  student_id: "k3",  paid_at: "2026-04-11", amount_czk: 4500, hours_credit: 10, method: "účet DR",        note: "" },
+  { id: "p5",  student_id: "k4",  paid_at: "2026-07-01", amount_czk: 8600, hours_credit: 20, method: "účet jazykovka", note: "" },
+  { id: "p6",  student_id: "k5",  paid_at: "2026-03-05", amount_czk: 4200, hours_credit: 10, method: "hotově",         note: "počáteční zůstatek z Excelu" },
+  { id: "p7",  student_id: "k6",  paid_at: "2026-02-10", amount_czk: 4200, hours_credit: 10, method: "účet PoraDys",   note: "" },
+  { id: "p8",  student_id: "k7",  paid_at: "2026-06-02", amount_czk: 4300, hours_credit: 10, method: "hotově",         note: "" },
+  { id: "p9",  student_id: "k8",  paid_at: "2026-06-30", amount_czk: 8800, hours_credit: 20, method: "účet PoraDys",   note: "" },
+  { id: "p10", student_id: "k9",  paid_at: "2026-05-18", amount_czk: 4500, hours_credit: 10, method: "účet DR",        note: "" },
+  { id: "p11", student_id: "k10", paid_at: "2026-07-06", amount_czk: 4200, hours_credit: 10, method: "hotově",         note: "" },
+  { id: "p12", student_id: "k11", paid_at: "2026-05-25", amount_czk: 4400, hours_credit: 10, method: "účet jazykovka", note: "" },
+  { id: "p13", student_id: "k12", paid_at: "2026-06-08", amount_czk: 4300, hours_credit: 10, method: "účet PoraDys",   note: "" },
+  { id: "p14", student_id: "k13", paid_at: "2026-07-02", amount_czk: 8800, hours_credit: 20, method: "účet DR",        note: "" },
+  { id: "p15", student_id: "k14", paid_at: "2026-04-20", amount_czk: 4200, hours_credit: 10, method: "hotově",         note: "" },
+  { id: "p16", student_id: "k15", paid_at: "2026-07-09", amount_czk: 4500, hours_credit: 10, method: "účet PoraDys",   note: "" },
 ];
 
 function _client(name) { return window.MOCK_CLIENTS.find((c) => c.name === name) || null; }
@@ -71,12 +98,10 @@ function _mulberry32(seed) {
   };
 }
 
-const MOCK_STUDENTS = [
-  "Novák Petr", "Svobodová Anna", "Dvořák Jakub", "Černá Eliška", "Procházka Tomáš",
-  "Kučerová Tereza", "Veselý Martin", "Horáková Lucie", "Němec Filip", "Pokorná Karolína",
-  "Marek Vojtěch", "Pospíšilová Natálie", "Hájek Ondřej", "Králová Adéla", "Beneš Šimon",
-  "Fialová Viktorie", "Sedláček Matyáš", "Doležalová Ema", "Zeman Daniel", "Kolářová Sofie",
-];
+// Žáci v náhodných lekcích jsou přímo klienti z kartotéky – jen tak je vidět,
+// že potvrzená lekce ubere kredit na jejich kartě.
+const MOCK_STUDENTS = window.MOCK_CLIENTS.filter((c) => c.status === "active").map((c) => c.name);
+
 const MOCK_LECTORS = [
   "Kunkelová", "Mužíková", "Snížková", "Bečková", "Machalíková",
   "Jenčíková", "Feireislová", "Koncelíková", "Šíma", "Selicharová",
@@ -169,6 +194,8 @@ function _buildRandomLessons(d) {
       subject: pick(MOCK_SUBJECTS),
       lector_name: pick(MOCK_LECTORS),
       mode: rnd() < 0.18 ? "online" : "offline",
+      // většina lekcí je klasická opakovaná, občas se přihodí mimořádná
+      lesson_type: rnd() < 0.15 ? "extra" : "regular",
       status: status,
       done: done,
       // poznámka i u naplánovaných lekcí – ukazuje se rovnou v buňce rozvrhu
@@ -199,6 +226,7 @@ window.buildMockLessons = function (date) {
         subject: subject,
         lector_name: lector,
         mode: "offline",
+        lesson_type: "regular",
         status: "planned",
         done: false,
         description: "",
@@ -265,3 +293,106 @@ window.buildMockLessons = function (date) {
     L("mat-6", 13, 0, 15, 0, "Filipenský Matěj", "MAT", "Koncelíková", { mode: "online" }),
   ];
 };
+
+// ---------------------------------------------------------------------------
+// DEMO ÚLOŽIŠTĚ – jediná zásoba dat pro celý ukázkový režim (?demo=1).
+// ---------------------------------------------------------------------------
+// Rozvrh (index.html) i kartotéka (kartoteka.html) jsou samostatné stránky,
+// takže si data v paměti předat nedokážou. Bez společného úložiště kartotéka
+// neviděla lekce zapsané v rozvrhu a nemohla z nich odečíst vyčerpané hodiny –
+// zůstatky se prostě nehýbaly. Tady leží klienti, platby i lekce pohromadě
+// v localStorage prohlížeče; v ostré verzi tuhle roli hraje Supabase.
+//
+// Data jsou jen v prohlížeči toho, kdo si appku prohlíží. Vyčistit je jde
+// zavoláním DemoStore.reset() v konzoli (nebo smazáním dat stránky).
+// ---------------------------------------------------------------------------
+const _DEMO_KEY = "poradys_demo_v1";
+
+window.DemoStore = {
+  _d: null,
+  _seq: 1,
+
+  _fresh() {
+    return {
+      clients: window.MOCK_CLIENTS.map((c) => ({ ...c })),
+      payments: window.MOCK_PAYMENTS.map((p) => ({ ...p })),
+      lessons: [],
+      seeded: [],
+    };
+  },
+
+  _data() {
+    if (this._d) return this._d;
+    let raw = null;
+    try { raw = localStorage.getItem(_DEMO_KEY); } catch (e) { /* privátní režim */ }
+    if (raw) {
+      try {
+        const d = JSON.parse(raw);
+        d.lessons = (d.lessons || []).map((l) => ({
+          ...l, starts_at: new Date(l.starts_at), ends_at: new Date(l.ends_at),
+        }));
+        d.clients = d.clients || [];
+        d.payments = d.payments || [];
+        d.seeded = d.seeded || [];
+        this._d = d;
+        return d;
+      } catch (e) { /* poškozená data – začneme načisto */ }
+    }
+    this._d = this._fresh();
+    // Kus historie, ať kartotéka hned ukazuje smysluplně vyčerpané hodiny.
+    for (const day of _demoHistoryDays()) this.ensureDay(day);
+    this.save();
+    return this._d;
+  },
+
+  save() {
+    const d = this._d;
+    if (!d) return;
+    try {
+      localStorage.setItem(_DEMO_KEY, JSON.stringify({
+        clients: d.clients,
+        payments: d.payments,
+        seeded: d.seeded,
+        lessons: d.lessons.map((l) => ({
+          ...l, starts_at: l.starts_at.toISOString(), ends_at: l.ends_at.toISOString(),
+        })),
+      }));
+    } catch (e) { /* plné úložiště – demo pojede aspoň do zavření stránky */ }
+  },
+
+  reset() {
+    try { localStorage.removeItem(_DEMO_KEY); } catch (e) {}
+    this._d = null;
+  },
+
+  // Den se ukázkovými lekcemi se vygeneruje jednou a pak se drží (aby se
+  // úpravy neztrácely a obě stránky viděly totéž).
+  // Vrací true, když se den teď doopravdy doplnil – volající pak ví, že se
+  // vyplatí uložit (jinak by se při každém překreslení serializovalo všechno).
+  ensureDay(date) {
+    const store = this._d || this._data();
+    const key = _localKey(date);
+    if (store.seeded.includes(key)) return false;
+    store.seeded.push(key);
+    window.buildMockLessons(date).forEach((l, i) => {
+      store.lessons.push({ ...l, id: "mock-" + key + "-" + i });
+    });
+    return true;
+  },
+
+  lessons() { return this._data().lessons; },
+  clients() { return this._data().clients; },
+  payments() { return this._data().payments; },
+
+  newId(prefix) { return prefix + "-" + Date.now().toString(36) + "-" + this._seq++; },
+};
+
+// Dny, které se do dema předgenerují jako "historie" (rozsah náhodných dat).
+function _demoHistoryDays() {
+  const out = [];
+  const [fy, fm, fd] = RANDOM_FROM.split("-").map(Number);
+  const [ty, tm, td] = RANDOM_TO.split("-").map(Number);
+  const to = new Date(ty, tm - 1, td);
+  for (let d = new Date(fy, fm - 1, fd); d <= to; d.setDate(d.getDate() + 1)) out.push(new Date(d));
+  return out;
+}

@@ -7,24 +7,16 @@
 const CFG = window.APP_CONFIG;
 
 // ---------- Data provider: MOCK ----------
-// Drží lekce v paměti napříč dny; každý navštívený den se jednou naplní
-// ukázkovými daty, založené/upravené lekce zůstávají.
+// Čte a zapisuje do sdíleného demo úložiště (mockData.js -> DemoStore), aby
+// kartotéka viděla přesně ty lekce, které jsou v rozvrhu – jinak by z nich
+// neuměla odečíst vyčerpané hodiny.
 const MockProvider = {
-  _all: [],
-  _seeded: new Set(),
-  _seq: 1,
   async getRooms() {
     return [...window.ROOMS].sort((a, b) => a.sort - b.sort);
   },
   async getLessons(date) {
-    const key = dayKey(date);
-    if (!this._seeded.has(key)) {
-      // ID musí být unikátní napříč všemi dny (jinak by se pletlo mazání/úpravy)
-      const seeded = window.buildMockLessons(date).map((l, idx) => ({ ...l, id: "mock-" + key + "-" + idx }));
-      this._all.push(...seeded);
-      this._seeded.add(key);
-    }
-    return this._all.filter((l) => sameDay(l.starts_at, date));
+    if (window.DemoStore.ensureDay(date)) window.DemoStore.save();
+    return window.DemoStore.lessons().filter((l) => sameDay(l.starts_at, date));
   },
   async getLessonsRange(start, end) {
     const out = [];
@@ -34,38 +26,46 @@ const MockProvider = {
     return out;
   },
   async updateLessonFields(id, fields) {
-    const l = this._all.find((x) => x.id === id);
+    const l = window.DemoStore.lessons().find((x) => x.id === id);
     if (l) Object.assign(l, fields);
+    window.DemoStore.save();
   },
   async saveLesson(payload, id) {
     // Nový klient z rozvrhu se v ukázkovém režimu přidá do seznamu klientů,
     // ať se chová stejně jako v ostré verzi (propíše se do kartotéky).
-    if (payload.student_names && !window.MOCK_CLIENTS.some((s) => s.name === payload.student_names)) {
-      window.MOCK_CLIENTS.push(Object.assign(
-        { id: "c-" + this._seq++, name: payload.student_names, status: "active" },
+    const clients = window.DemoStore.clients();
+    if (payload.student_names && !clients.some((s) => s.name === payload.student_names)) {
+      clients.push(Object.assign(
+        { id: window.DemoStore.newId("c"), name: payload.student_names, status: "active" },
         payload.student_fields || {}
       ));
     }
-    const client = window.MOCK_CLIENTS.find((s) => s.name === payload.student_names);
+    const client = clients.find((s) => s.name === payload.student_names);
     const enriched = Object.assign({}, payload, {
       student_phone: (client && client.phone) || "",
       student_grade: (client && client.grade) || "",
       student_category: (client && client.category) || "",
     });
+    delete enriched.student_fields;
+    const all = window.DemoStore.lessons();
+    let l;
     if (id) {
-      const l = this._all.find((x) => x.id === id);
+      l = all.find((x) => x.id === id);
       if (l) Object.assign(l, enriched);
-      return l;
+    } else {
+      l = Object.assign({ id: window.DemoStore.newId("mock-new") }, enriched);
+      all.push(l);
     }
-    const l = Object.assign({ id: "mock-new-" + this._seq++ }, enriched);
-    this._all.push(l);
+    window.DemoStore.save();
     return l;
   },
   async deleteLesson(id) {
-    const i = this._all.findIndex((x) => x.id === id);
-    if (i >= 0) this._all.splice(i, 1);
+    const all = window.DemoStore.lessons();
+    const i = all.findIndex((x) => x.id === id);
+    if (i >= 0) all.splice(i, 1);
+    window.DemoStore.save();
   },
-  async getStudents() { return window.MOCK_CLIENTS.slice(); },
+  async getStudents() { return window.DemoStore.clients().slice(); },
   // Součet potvrzených (done) lekcí za měsíc po lektorech.
   // Nejdřív doseje všechny dny měsíce, aby výkaz nezávisel na tom,
   // které dny už uživatel navštívil. month je 0-based (jako v JS Date).
@@ -73,8 +73,8 @@ const MockProvider = {
     const days = new Date(year, month + 1, 0).getDate();
     for (let d = 1; d <= days; d++) await this.getLessons(new Date(year, month, d));
     const map = new Map();
-    this._all.forEach((l) => {
-      if (!l.done) return;
+    window.DemoStore.lessons().forEach((l) => {
+      if (!l.done || isShift(l)) return;
       if (l.starts_at.getFullYear() !== year || l.starts_at.getMonth() !== month) return;
       const key = l.lector_name || "(bez lektora)";
       const cur = map.get(key) || { hours: 0, lessons: 0 };
@@ -157,31 +157,54 @@ const SupabaseProvider = {
     if (error) throw error;
     return ins.id;
   },
-  // Plné založení / úprava lekce (administrátor).
-  async saveLesson(payload, id) {
-    const c = this._init();
-    const lector_id = await this._resolveLector(payload.lector_name);
+  // Databáze, na které ještě neproběhla migrace_typ_lekce.sql, sloupec
+  // lesson_type nezná. Místo tvrdého pádu ho po první takové chybě přestaneme
+  // posílat – appka pak jede dál, jen bez rozlišení mimořádná/opakovaná.
+  _noLessonType: false,
+  _isMissingLessonType(error) {
+    return !!error && /lesson_type/.test(String(error.message || error));
+  },
+  _lessonRow(payload) {
     const row = {
       kind: payload.kind || "lesson",
       starts_at: payload.starts_at.toISOString(),
       ends_at: payload.ends_at.toISOString(),
       subject: payload.subject,
       room_id: payload.room_id || null,
-      lector_id,
+      lector_id: payload.lector_id,
       mode: payload.mode,
       status: payload.status,
       done: payload.done,
       description: payload.description,
     };
+    if (!this._noLessonType) row.lesson_type = payload.lesson_type || "regular";
+    return row;
+  },
+
+  // Plné založení / úprava lekce (administrátor).
+  async saveLesson(payload, id) {
+    const c = this._init();
+    const lector_id = await this._resolveLector(payload.lector_name);
+    const row = this._lessonRow(Object.assign({}, payload, { lector_id }));
     let lessonId = id;
     if (id) {
-      const { error } = await c.from("lessons").update(row).eq("id", id);
+      let { error } = await c.from("lessons").update(row).eq("id", id);
+      if (this._isMissingLessonType(error)) {
+        this._noLessonType = true;
+        delete row.lesson_type;
+        ({ error } = await c.from("lessons").update(row).eq("id", id));
+      }
       if (error) throw error;
       await c.from("attendance").delete().eq("lesson_id", id);
     } else {
-      const { data, error } = await c.from("lessons").insert(row).select("id").single();
-      if (error) throw error;
-      lessonId = data.id;
+      let res = await c.from("lessons").insert(row).select("id").single();
+      if (this._isMissingLessonType(res.error)) {
+        this._noLessonType = true;
+        delete row.lesson_type;
+        res = await c.from("lessons").insert(row).select("id").single();
+      }
+      if (res.error) throw res.error;
+      lessonId = res.data.id;
     }
     // Žák (prototyp počítá s jedním jménem; skupinu lze rozšířit)
     if (payload.student_names) {
@@ -767,16 +790,21 @@ function buildEvent(l, room) {
   // Krátké lekce (půlhodina a míň) dostanou jednořádkové rozvržení – na dva
   // řádky tam prostě není místo a useknuté jméno je horší než žádný detail.
   const compact = height < 36;
+  const extra = isLesson(l) && l.lesson_type === "extra";
   ev.className =
     "event" +
     (compact ? " compact" : "") +
+    (extra ? " is-extra" : "") +
     (l.done ? " is-done" : "") +
     (l.status === "cancelled" ? " is-cancelled" : "") +
     (state.selection.has(l.id) ? " selected" : "");
   ev.dataset.id = l.id;
   ev.style.top = top + "px";
   ev.style.height = height + "px";
-  ev.style.background = room.color;
+  // Mimořádná lekce je celá žlutá – barvu místnosti u ní nepotřebujeme,
+  // tu nese už sloupec, ve kterém blok stojí. Barvu dává třída .is-extra,
+  // proto se tady inline pozadí nenastavuje (jinak by CSS přebilo).
+  if (!extra) ev.style.background = room.color;
 
   // Buňka má pevné pořadí řádků, každý se ořezává (nikdy nezalamuje), aby se
   // do hodinové lekce vešly všechny čtyři: jméno / předmět · lektor / ročník /
@@ -791,6 +819,7 @@ function buildEvent(l, room) {
 
   ev.title = [
     fmtRange(l.starts_at, l.ends_at) + " · " + (room ? room.name : ""),
+    extra ? "MIMOŘÁDNÁ lekce (jednorázová)" : "",
     (l.student_names || "—") + (level ? " · " + level : ""),
     phone ? "Tel: " + phone : "",
     sub,
@@ -903,11 +932,14 @@ function defaultStart() {
 }
 
 // Formulář pro administrátora (plná editace).
-// Přepínač Typ rozhoduje, jestli jde o lekci, nebo jen o zápis „kdo je u stolu
-// od kolika do kolika" – u směny nemá smysl žák, předmět ani odučeno, tak se
-// ta pole schovají.
+// Jestli jde o lekci, nebo o zápis „kdo je u stolu od kolika do kolika",
+// určuje tlačítko, kterým se formulář otevřel („+ Lekce" / „+ Lektor") –
+// ručně se to už nepřepíná, jen se to nese v skrytém poli. U směny nemá smysl
+// žák, předmět ani odučeno, tak se ta pole schovají.
 function renderAdminForm(l, title) {
   const shift = l.kind === "shift";
+  const isNew = !state.openLessonId;
+  const lessonType = l.lesson_type === "extra" ? "extra" : "regular";
   document.getElementById("detailTitle").textContent = title;
   // Panel je rozdělený na dvě části: nahoře to, co člověk hledá pokaždé
   // (kdo, kdy, kde, co), pod čarou sbalené věci, které se mění výjimečně
@@ -924,6 +956,18 @@ function renderAdminForm(l, title) {
         field("Začátek", '<input type="time" id="fStart" value="' + timeVal(l.starts_at) + '">') +
         field("Konec", '<input type="time" id="fEnd" value="' + timeVal(l.ends_at) + '">') +
       "</div>" +
+      // Druh lekce: klasická se opakuje každý týden ve stejný čas, mimořádná
+      // je jednorázová. Jen u lekcí – směna lektora žádný druh nemá.
+      '<div id="typeBox"' + (shift ? ' class="hidden"' : "") + ">" +
+        field("Druh lekce",
+          '<select id="fLessonType">' +
+            '<option value="regular"' + (lessonType === "regular" ? " selected" : "") + ">Klasická – opakovaná (chodí pravidelně)</option>" +
+            '<option value="extra"' + (lessonType === "extra" ? " selected" : "") + ">Mimořádná – jednorázová</option>" +
+          "</select>") +
+        '<div id="repeatBox" class="repeat-box' + (lessonType === "regular" ? "" : " hidden") + '">' +
+          repeatBoxHtml(isNew) +
+        "</div>" +
+      "</div>" +
       field(shift ? "Stůl / učebna" : "Místnost / stůl", '<select id="fRoom">' + roomOptions(l.room_id) + "</select>") +
       '<div class="field-row">' +
         '<div id="lessonOnly2"' + (shift ? ' class="hidden"' : "") + ' style="flex:1;">' +
@@ -936,9 +980,6 @@ function renderAdminForm(l, title) {
 
     '<details class="detail-more"' + (shift ? " open" : "") + ">" +
       "<summary>Další nastavení</summary>" +
-      field("Typ zápisu",
-        '<select id="fKind"><option value="lesson"' + (shift ? "" : " selected") + ">Lekce</option>" +
-        '<option value="shift"' + (shift ? " selected" : "") + ">Lektor u stolu (kdo tu dnes je)</option></select>") +
       '<div id="lessonOnly3"' + (shift ? ' class="hidden"' : "") + ">" +
         '<div class="field-row">' +
           field("Stav", '<select id="fStatus">' + statusOptions(l.status) + "</select>") +
@@ -946,22 +987,13 @@ function renderAdminForm(l, title) {
         "</div>" +
         '<label class="check"><input type="checkbox" id="fDone"' + (l.done ? " checked" : "") + "> Odučeno</label>" +
       "</div>" +
-      // Opakování dává smysl jen u nově zakládané lekce, ne při úpravě stávající.
-      (state.openLessonId ? "" :
-        field("Opakovat", '<select id="fRepeat">' +
-          '<option value="">neopakovat</option>' +
-          '<option value="daily">denně</option>' +
-          '<option value="weekly">týdně</option>' +
-          '<option value="biweekly">ob týden</option>' +
-        "</select>") +
-        '<div class="role-note">Opakování založí lekce jen na následující týden. Dál dopředu se rozvrh protahuje tlačítkem <b>Protáhnout týden</b>.</div>') +
       (shift ? '<div class="role-note">Směna se ukáže jako řádek pod názvem stolu. Nepočítá se do odpracovaných hodin ani nečerpá kredit žáka.</div>' : "") +
-    "</details>";
+    "</details>" +
+    // Lekce vs. směna se nepřepíná ručně – nese to tlačítko, kterým se
+    // formulář otevřel.
+    '<input type="hidden" id="fKind" value="' + (shift ? "shift" : "lesson") + '">';
 
-  // Přepnutí typu překreslí formulář, ať sedí popisky i schovaná pole.
-  document.getElementById("fKind").onchange = (e) => {
-    renderAdminForm(readAdminForm(e.target.value), e.target.value === "shift" ? "Lektor u stolu" : "Lekce");
-  };
+  if (!shift) bindRepeatBox();
 
   // Konec se drží délky lekce – při posunu začátku se posune s ním.
   // Nová lekce startuje s hodinou, takže z 9:00 je automaticky 9:00–10:00.
@@ -981,6 +1013,112 @@ function renderAdminForm(l, title) {
 
   document.getElementById("detailDelete").classList.toggle("hidden", !state.openLessonId);
   document.getElementById("detailSaved").textContent = "";
+}
+
+// ---------- Opakovaná lekce: naplánování na několik týdnů dopředu ----------
+// Klasická lekce chodí každý týden ve stejný den a čas, takže se rovnou
+// založí i další termíny. Mimořádná lekce je jednorázová – blok se schová.
+
+function repeatBoxHtml(isNew) {
+  const interval =
+    field("Interval", '<select id="fEvery"><option value="1">každý týden</option><option value="2">ob týden</option></select>');
+  const count = field("Počet dalších lekcí", '<input type="number" id="fWeeks" min="1" max="52" value="8">');
+  if (isNew) {
+    return '<label class="check"><input type="checkbox" id="fSeries" checked> Naplánovat rovnou i další termíny</label>' +
+      '<div class="field-row" id="fSeriesOpts">' + count + interval + "</div>" +
+      '<div class="role-note" id="fSeriesInfo"></div>';
+  }
+  // U už založené lekce se termíny přidávají zvlášť tlačítkem, ať se při
+  // každém uložení úpravy nezaloží série znovu.
+  return '<div class="field-row">' + count + interval + "</div>" +
+    '<button type="button" id="fSeriesBtn" class="series-btn">Naplánovat další termíny</button>' +
+    '<div class="role-note" id="fSeriesInfo"></div>';
+}
+
+function bindRepeatBox() {
+  const type = document.getElementById("fLessonType");
+  const box = document.getElementById("repeatBox");
+  if (!type || !box) return;
+  type.onchange = () => {
+    box.classList.toggle("hidden", type.value !== "regular");
+    updateSeriesInfo();
+  };
+  ["fWeeks", "fEvery", "fSeries", "fDate", "fStart", "fEnd"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", updateSeriesInfo);
+  });
+  const btn = document.getElementById("fSeriesBtn");
+  if (btn) btn.onclick = extendSeries;
+  updateSeriesInfo();
+}
+
+// Termíny DALŠÍCH lekcí podle rozdělaného formuláře (ta první je ta v panelu).
+function seriesFromForm() {
+  const g = (id) => document.getElementById(id);
+  if (!g("fWeeks") || !g("fDate") || !g("fDate").value) return [];
+  const chk = g("fSeries");
+  if (chk && !chk.checked) return [];
+  const [y, mo, d] = g("fDate").value.split("-").map(Number);
+  const step = Number(g("fEvery").value) === 2 ? 2 : 1;
+  const n = Math.max(0, Math.min(window.Opakovani.MAX_WEEKS, Number(g("fWeeks").value) || 0));
+  if (!n) return [];
+  const first = new Date(y, mo - 1, d);
+  first.setDate(first.getDate() + step * 7); // první termín NAVÍC, ne ten v panelu
+  return window.Opakovani.series(first, g("fStart").value, g("fEnd").value, n, step);
+}
+
+function updateSeriesInfo() {
+  const box = document.getElementById("fSeriesInfo");
+  if (!box) return;
+  const chk = document.getElementById("fSeries");
+  const opts = document.getElementById("fSeriesOpts");
+  if (opts && chk) opts.classList.toggle("hidden", !chk.checked);
+  if (chk && !chk.checked) { box.textContent = "Založí se jen tahle jedna lekce."; return; }
+
+  const list = seriesFromForm();
+  if (!list.length) { box.textContent = "Vyplňte datum, čas a počet dalších lekcí."; return; }
+  const step = Number(document.getElementById("fEvery").value) === 2 ? 2 : 1;
+  box.innerHTML =
+    (chk ? "Kromě téhle lekce se založí ještě " : "Založí se ") +
+    "<b>" + list.length + " " + lessonWord(list.length) + "</b> – " +
+    escapeHtml(window.Opakovani.describe(list, step)) + ". Obsazené termíny se přeskočí.";
+}
+
+// Založí zadané termíny jako kopie lekce. Kolize v místnosti přeskakuje.
+async function createSeries(payload, list) {
+  let added = 0, skipped = 0;
+  for (const t of list) {
+    try {
+      const dayLessons = await provider.getLessons(t.starts_at);
+      if (findConflict(dayLessons, payload.room_id, t.starts_at, t.ends_at, null)) { skipped++; continue; }
+      await provider.saveLesson(Object.assign({}, payload, {
+        starts_at: t.starts_at,
+        ends_at: t.ends_at,
+        status: "planned",   // kopie jsou vždy nepotvrzené
+        done: false,
+        student_fields: null, // klienta zakládá jen první lekce
+      }), null);
+      added++;
+    } catch (e) { console.error(e); skipped++; }
+  }
+  return { added, skipped };
+}
+
+// Tlačítko „Naplánovat další termíny" u už založené lekce.
+async function extendSeries() {
+  const list = seriesFromForm();
+  if (!list.length) { toast("Vyplňte počet dalších lekcí."); return; }
+  const btn = document.getElementById("fSeriesBtn");
+  btn.disabled = true;
+  const payload = readAdminForm("lesson");
+  payload.student_fields = null;
+  const r = await createSeries(payload, list);
+  btn.disabled = false;
+  await refresh();
+  toast(r.added
+    ? "Naplánováno " + r.added + " " + lessonWord(r.added) +
+      (r.skipped ? ", " + r.skipped + " přeskočeno kvůli kolizi" : "") + "."
+    : "Nic se nezaložilo – všechny termíny už jsou obsazené.");
 }
 
 // Kategorie klienta – stejné hodnoty používá kartotéka.
@@ -1067,6 +1205,7 @@ function readAdminForm(kind) {
     status: g("fStatus") ? g("fStatus").value : "planned",
     done: g("fDone") ? g("fDone").checked : false,
     description: g("fDesc").value,
+    lesson_type: g("fLessonType") ? g("fLessonType").value : "regular",
     kind: kind,
   };
 }
@@ -1152,15 +1291,19 @@ async function saveDetail() {
         status: shift ? "planned" : document.getElementById("fStatus").value,
         done: shift ? false : document.getElementById("fDone").checked,
         description: document.getElementById("fDesc").value,
+        lesson_type: shift ? null : document.getElementById("fLessonType").value,
       };
+      const isNewLesson = !state.openLessonId;
       await provider.saveLesson(payload, state.openLessonId);
 
-      // Opakování (jen u nové lekce) – založí kopie na následující týden.
-      const repeatEl = document.getElementById("fRepeat");
-      if (repeatEl && repeatEl.value) {
-        const r = await repeatLesson(payload, repeatEl.value);
-        if (r.added || r.skipped) {
-          toast("Opakování: založeno " + r.added +
+      // Klasická (opakovaná) lekce se rovnou naplánuje na několik týdnů
+      // dopředu – stejný den v týdnu i čas. Jen u nově zakládané lekce;
+      // u stávající se termíny přidávají tlačítkem v panelu.
+      if (isNewLesson && !shift && payload.lesson_type === "regular") {
+        const list = seriesFromForm();
+        if (list.length) {
+          const r = await createSeries(payload, list);
+          toast("Naplánováno " + r.added + " " + lessonWord(r.added) + " dopředu" +
             (r.skipped ? ", " + r.skipped + " přeskočeno kvůli kolizi" : "") + ".");
         }
       }
@@ -1290,45 +1433,6 @@ function exportRange(range) {
   ];
 }
 
-// ---------- Opakování lekce (admin) ----------
-// Záměrně jen na následující týden – dál dopředu se rozvrh protahuje
-// tlačítkem „Protáhnout týden →", ať v databázi nevznikají měsíce lekcí,
-// které se stejně budou přehazovat.
-//   denně    = každý další den až +7 dní
-//   týdně    = jednou za 7 dní (1 kopie)
-//   ob týden = jednou za 14 dní (1 kopie)
-function repeatOffsets(mode) {
-  if (mode === "daily") return [1, 2, 3, 4, 5, 6, 7];
-  if (mode === "weekly") return [7];
-  if (mode === "biweekly") return [14];
-  return [];
-}
-
-async function repeatLesson(payload, mode) {
-  let added = 0, skipped = 0;
-  for (const off of repeatOffsets(mode)) {
-    const starts = new Date(payload.starts_at); starts.setDate(starts.getDate() + off);
-    const ends = new Date(payload.ends_at); ends.setDate(ends.getDate() + off);
-    try {
-      const dayLessons = await provider.getLessons(starts);
-      if (payload.kind !== "shift" && findConflict(dayLessons, payload.room_id, starts, ends, null)) {
-        skipped++;
-        continue;
-      }
-      await provider.saveLesson(
-        Object.assign({}, payload, {
-          starts_at: starts, ends_at: ends,
-          status: "planned", done: false,      // kopie jsou vždy nepotvrzené
-          student_fields: null,                // klienta zakládá jen první lekce
-        }),
-        null
-      );
-      added++;
-    } catch (e) { console.error(e); skipped++; }
-  }
-  return { added, skipped };
-}
-
 // ---------- Konec dne: „Vše odučeno" (admin) ----------
 // Šéfová to zmáčkne večer a odklikne tím celý den najednou. Bere lekce
 // obou režimů (prezenční i online), ale jen ty naplánované – zrušené,
@@ -1382,6 +1486,7 @@ function copySelection() {
       eh: l.ends_at.getHours(), em: l.ends_at.getMinutes(),
       subject: l.subject, lector_name: l.lector_name,
       student_names: l.student_names, mode: l.mode, kind: l.kind || "lesson",
+      lesson_type: l.lesson_type || "regular",
     }));
   toast("Zkopírováno " + state.clipboard.length + " lekcí. Přepni den a stiskni Ctrl/⌘+V.");
 }
@@ -1400,7 +1505,8 @@ async function pasteClipboard() {
       kind: t.kind || "lesson",
       starts_at: starts, ends_at: ends, room_id: t.room_id,
       student_names: t.student_names, lector_name: t.lector_name,
-      subject: t.subject, mode: t.mode, status: "planned", done: false, description: "",
+      subject: t.subject, mode: t.mode, lesson_type: t.lesson_type || "regular",
+      status: "planned", done: false, description: "",
     };
     const res = await provider.saveLesson(payload, null);
     placed.push({ id: (res && res.id) || "tmp", room_id: t.room_id, starts_at: starts, ends_at: ends });
@@ -1444,8 +1550,8 @@ async function extendWeekToNext() {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   const fmtD = (d) => d.getDate() + ". " + (d.getMonth() + 1) + ".";
-  if (!confirm("Zkopírovat všechny lekce z týdne " + fmtD(monday) + " – " + fmtD(sunday) +
-    " do týdne následujícího?\n(Zrušené lekce se vynechají, kolize se přeskočí.)")) return;
+  if (!confirm("Zkopírovat pravidelné lekce z týdne " + fmtD(monday) + " – " + fmtD(sunday) +
+    " do týdne následujícího?\n(Mimořádné a zrušené lekce se vynechají, kolize se přeskočí.)")) return;
 
   const btn = document.getElementById("extendWeekBtn");
   btn.disabled = true;
@@ -1458,6 +1564,8 @@ async function extendWeekToNext() {
       const placed = [...await provider.getLessons(tgtDay)];
       for (const l of src) {
         if (l.status === "cancelled") continue;
+        // Mimořádná lekce je jednorázová – do dalšího týdne nepatří.
+        if (isLesson(l) && l.lesson_type === "extra") continue;
         const starts = new Date(tgtDay); starts.setHours(l.starts_at.getHours(), l.starts_at.getMinutes(), 0, 0);
         const ends = new Date(tgtDay); ends.setHours(l.ends_at.getHours(), l.ends_at.getMinutes(), 0, 0);
         // Směny se kopírují taky (kdo u kterého stolu bývá), jen nekolidují.
@@ -1466,7 +1574,8 @@ async function extendWeekToNext() {
           kind: l.kind || "lesson",
           starts_at: starts, ends_at: ends, room_id: l.room_id,
           student_names: l.student_names, lector_name: l.lector_name,
-          subject: l.subject, mode: l.mode, status: "planned", done: false, description: "",
+          subject: l.subject, mode: l.mode, lesson_type: l.lesson_type || "regular",
+          status: "planned", done: false, description: "",
         }, null);
         placed.push({ id: (res && res.id) || "tmp", room_id: l.room_id, starts_at: starts, ends_at: ends });
         added++;

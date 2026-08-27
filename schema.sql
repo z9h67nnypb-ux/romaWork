@@ -59,6 +59,11 @@ create index if not exists lessons_room_idx on lessons (room_id);
 -- s lekcemi, takže se lekce dají zakládat uvnitř směny.
 alter table lessons add column if not exists kind text not null default 'lesson';  -- 'lesson' | 'shift'
 
+-- Druh lekce: 'regular' = klasická opakovaná (chodí pravidelně každý týden),
+-- 'extra' = mimořádná jednorázová. Nesouvisí s `kind` výše – ten říká, jestli
+-- jde o lekci, nebo o zápis lektora u stolu.
+alter table lessons add column if not exists lesson_type text not null default 'regular';  -- 'regular' | 'extra'
+
 -- Účast (M:N žák <-> lekce). Běžná lekce = 1 řádek, skupina = více řádků.
 create table if not exists attendance (
   lesson_id  uuid references lessons(id) on delete cascade,
@@ -349,7 +354,8 @@ select
   -- takže se nikde neduplikují (zdrojem zůstává karta klienta)
   coalesce(string_agg(s.phone,    ', ' order by s.name), '') as student_phone,
   coalesce(string_agg(s.grade,    ', ' order by s.name), '') as student_grade,
-  coalesce(string_agg(s.category, ', ' order by s.name), '') as student_category
+  coalesce(string_agg(s.category, ', ' order by s.name), '') as student_category,
+  l.lesson_type
 from lessons l
 left join rooms r    on r.id = l.room_id
 left join lectors lec on lec.id = l.lector_id

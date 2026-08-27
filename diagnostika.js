@@ -192,7 +192,7 @@ function fromDbRow(r) {
   };
 }
 
-// ---------- Ukázkový režim (výchozí; ?db=1 přepne na databázi) ----------
+// ---------- Ukázkový režim (zapíná se ?demo=1; jinak jede databáze) ----------
 // Žáci jsou v paměti (stejná jména jako v kartotéce), testy v localStorage,
 // ať se dá appka vyzkoušet i bez databáze.
 const MOCK_KEY = "poradys_diagnostics_v2";
