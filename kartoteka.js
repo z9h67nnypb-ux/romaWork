@@ -468,6 +468,25 @@ function methodOptions(sel) {
     (sel && !PAY_METHODS.includes(sel) ? '<option value="' + escapeHtml(sel) + '" selected>' + escapeHtml(sel) + "</option>" : "");
 }
 
+// Odhlášení. Session je společná pro rozvrh, kartotéku i diagnostiku, takže
+// se ruší stejně jako v rozvrhu; pak se jde na rozvrh, kde naskočí přihlášení.
+// Chyba serveru odhlášení nezablokuje – session se zruší aspoň v prohlížeči.
+async function pageLogout(btn) {
+  if (btn) btn.disabled = true;
+  if (useDb) {
+    const c = DbKt._c();
+    try {
+      const { error } = await c.auth.signOut();
+      if (error) throw error;
+    } catch (e) {
+      console.error(e);
+      try { await c.auth.signOut({ scope: "local" }); } catch (e2) { console.error(e2); }
+    }
+  }
+  try { sessionStorage.removeItem("poradys_user"); } catch (e) { /* privátní režim */ }
+  location.href = "index.html" + location.search;
+}
+
 let _toastTimer = null;
 function ktToast(msg) {
   const t = $("toast");
@@ -908,12 +927,16 @@ async function runImport() {
 window.addEventListener("DOMContentLoaded", async () => {
   $("backLink").href = "index.html" + location.search;
 
+  // Tlačítko se váže hned – nepřihlášenému se schová, odhlašovat nemá co.
+  $("ktLogout").onclick = () => pageLogout($("ktLogout"));
+
   const badge = $("storeBadge");
   if (useDb) {
     const session = await DbKt.session();
     if (!session) {
       $("lockedBox").classList.remove("hidden");
       $("mainBox").classList.add("hidden");
+      $("ktLogout").classList.add("hidden");
       badge.textContent = "nepřihlášeno";
       return;
     }

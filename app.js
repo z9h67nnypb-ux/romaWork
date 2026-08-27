@@ -269,7 +269,19 @@ const SupabaseAuth = {
     const { data } = await c.from("profiles").select("role, name").eq("id", user.id).maybeSingle();
     return { email: user.email, name: (data && data.name) || user.email, role: (data && data.role) || "lektor" };
   },
-  async signOut() { await SupabaseProvider._init().auth.signOut(); },
+  // Odhlásit se musí jít vždycky. Když server neodpoví (uspaný projekt,
+  // výpadek sítě, propadlá session), zruší se session aspoň v prohlížeči –
+  // jinak by tlačítko Odhlásit vypadalo jako mrtvé.
+  async signOut() {
+    const c = SupabaseProvider._init();
+    try {
+      const { error } = await c.auth.signOut();
+      if (error) throw error;
+    } catch (e) {
+      console.error(e);
+      try { await c.auth.signOut({ scope: "local" }); } catch (e2) { console.error(e2); }
+    }
+  },
 };
 
 const auth = CFG.USE_SUPABASE ? SupabaseAuth : MockAuth;
@@ -1728,6 +1740,8 @@ async function renderHoursReport() {
 // ---------- Přihlašovací obrazovka ----------
 function showLogin() {
   document.getElementById("loginScreen").classList.remove("hidden");
+  document.getElementById("loginPassword").value = "";
+  document.getElementById("loginError").textContent = "";
   if (!CFG.USE_SUPABASE) {
     const h = document.getElementById("loginHint");
     h.classList.remove("hidden");
@@ -1757,16 +1771,40 @@ async function onLogin(e) {
 }
 
 async function onLogout() {
-  await auth.signOut();
+  const btn = document.getElementById("logoutBtn");
+  btn.disabled = true;
+  try {
+    await auth.signOut();
+  } catch (e) {
+    console.error(e); // chyba serveru nesmí odhlášení zablokovat
+  } finally {
+    btn.disabled = false;
+  }
+  // Pojistka pro ukázkový režim i pro případ, že signOut skončil chybou.
+  try { sessionStorage.removeItem("poradys_user"); } catch (e) { /* privátní režim */ }
+
   state.user = null;
   state.selection.clear();
   state.clipboard = [];
-  location.reload();
+  state.lessons = [];
+  state.students = [];
+
+  // Za přihlašovací vrstvou nesmí zůstat viset otevřený panel s daty klienta.
+  closeDetail();
+  document.getElementById("hoursModal").classList.add("hidden");
+  document.getElementById("viewContainer").innerHTML = "";
+  renderUserBadge();
+
+  showLogin();
 }
 
 function renderUserBadge() {
   const b = document.getElementById("userBadge");
-  if (!state.user) { b.textContent = ""; return; }
+  if (!state.user) {
+    b.textContent = "";
+    document.getElementById("adminHint").classList.add("hidden");
+    return;
+  }
   // V liště jen jméno; role je v tooltipu, ať „(administrátor)" nebere šířku.
   b.textContent = state.user.name;
   b.title = isAdmin() ? "Přihlášen jako administrátor" : "Přihlášen jako lektor";

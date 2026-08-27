@@ -634,6 +634,22 @@ body.app-schedule .day-scroll { max-height: none; }
 .series-btn:hover { background: var(--accent); color: #fff; }
 .series-btn:disabled { opacity: 0.5; cursor: default; }
 
+/* Odhlášení na kartotéce a diagnostice – session je společná pro celou appku,
+   takže se nemusí kvůli odhlášení chodit zpátky do rozvrhu. Odsazené doprava,
+   ať se neplete s odkazem „Zpět na rozvrh". */
+.page-logout {
+  margin-left: auto;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  border-radius: 5px;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+  color: var(--text);
+}
+.page-logout:hover { background: #f6f8fc; border-color: var(--accent); color: var(--accent); }
+.page-logout:disabled { opacity: 0.5; cursor: default; }
+
 /* ===========================================================================
    ÚZKÉ OKNO – ZÁLOHA
    ---------------------------------------------------------------------------

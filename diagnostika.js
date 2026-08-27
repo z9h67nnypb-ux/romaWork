@@ -1110,6 +1110,28 @@ function printReport() {
 }
 
 // ---------------------------------------------------------------------------
+// Odhlášení
+// ---------------------------------------------------------------------------
+// Session je společná pro rozvrh, kartotéku i diagnostiku, takže se ruší
+// stejně jako v rozvrhu; pak se jde na rozvrh, kde naskočí přihlášení.
+// Chyba serveru odhlášení nezablokuje – session se zruší aspoň v prohlížeči.
+async function pageLogout(btn) {
+  if (btn) btn.disabled = true;
+  if (useDb) {
+    const c = DbStore._c();
+    try {
+      const { error } = await c.auth.signOut();
+      if (error) throw error;
+    } catch (e) {
+      console.error(e);
+      try { await c.auth.signOut({ scope: "local" }); } catch (e2) { console.error(e2); }
+    }
+  }
+  try { sessionStorage.removeItem("poradys_user"); } catch (e) { /* privátní režim */ }
+  location.href = "index.html" + location.search;
+}
+
+// ---------------------------------------------------------------------------
 // Inicializace
 // ---------------------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", async () => {
@@ -1125,6 +1147,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   state.role = me.role === "admin" ? "admin" : "lektor";
   state.userName = me.name || "";
   $("mainBox").classList.remove("hidden");
+  $("diagLogout").onclick = () => pageLogout($("diagLogout"));
 
   const badge = $("storeBadge");
   if (useDb) { badge.textContent = "databáze"; badge.classList.add("db"); }
