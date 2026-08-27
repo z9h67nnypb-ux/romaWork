@@ -634,6 +634,17 @@ body.app-schedule .day-scroll { max-height: none; }
 .series-btn:hover { background: var(--accent); color: #fff; }
 .series-btn:disabled { opacity: 0.5; cursor: default; }
 
+/* Odkaz z ukázkového režimu ven – bez něj se z něj leze ručním mazáním
+   ?demo=1 z adresy, protože si ho odkazy mezi stránkami nesou s sebou. */
+.banner-exit {
+  margin-left: 8px;
+  font-weight: 600;
+  color: #7a4f00;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.banner-exit:hover { color: #000; }
+
 /* Odhlášení na kartotéce a diagnostice – session je společná pro celou appku,
    takže se nemusí kvůli odhlášení chodit zpátky do rozvrhu. Odsazené doprava,
    ať se neplete s odkazem „Zpět na rozvrh". */

@@ -6,6 +6,18 @@
 
 const CFG = window.APP_CONFIG;
 
+// Poslední pojistka odhlášení: smaže stopy po přihlášení přímo z prohlížeče.
+// supabase-js si session drží v localStorage pod klíčem sb-<projekt>-auth-token;
+// dokud tam je, po obnovení stránky je uživatel zase přihlášený.
+function clearLocalAuth() {
+  try { sessionStorage.removeItem("poradys_user"); } catch (e) { /* privátní režim */ }
+  try {
+    Object.keys(localStorage)
+      .filter((k) => /^sb-.*-auth-token/.test(k))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch (e) { /* privátní režim */ }
+}
+
 // ---------- Data provider: MOCK ----------
 // Čte a zapisuje do sdíleného demo úložiště (mockData.js -> DemoStore), aby
 // kartotéka viděla přesně ty lekce, které jsou v rozvrhu – jinak by z nich
@@ -269,18 +281,11 @@ const SupabaseAuth = {
     const { data } = await c.from("profiles").select("role, name").eq("id", user.id).maybeSingle();
     return { email: user.email, name: (data && data.name) || user.email, role: (data && data.role) || "lektor" };
   },
-  // Odhlásit se musí jít vždycky. Když server neodpoví (uspaný projekt,
-  // výpadek sítě, propadlá session), zruší se session aspoň v prohlížeči –
-  // jinak by tlačítko Odhlásit vypadalo jako mrtvé.
+  // Zneplatnění session na serveru. Volá se „pošli a nečekej" – viz onLogout.
   async signOut() {
     const c = SupabaseProvider._init();
-    try {
-      const { error } = await c.auth.signOut();
-      if (error) throw error;
-    } catch (e) {
-      console.error(e);
-      try { await c.auth.signOut({ scope: "local" }); } catch (e2) { console.error(e2); }
-    }
+    const { error } = await c.auth.signOut();
+    if (error) throw error;
   },
 };
 
@@ -498,7 +503,7 @@ function renderToolbar() {
   document.getElementById("extendWeekBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("kartotekaBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("hoursBtn").classList.toggle("hidden", !isAdmin());
-  document.querySelectorAll(".view-tabs button").forEach((b) => {
+  document.querySelectorAll(".view-tabs button[data-view]").forEach((b) => {
     b.classList.toggle("active", b.dataset.view === state.view);
   });
 }
@@ -1771,17 +1776,13 @@ async function onLogin(e) {
 }
 
 async function onLogout() {
-  const btn = document.getElementById("logoutBtn");
-  btn.disabled = true;
-  try {
-    await auth.signOut();
-  } catch (e) {
-    console.error(e); // chyba serveru nesmí odhlášení zablokovat
-  } finally {
-    btn.disabled = false;
-  }
-  // Pojistka pro ukázkový režim i pro případ, že signOut skončil chybou.
-  try { sessionStorage.removeItem("poradys_user"); } catch (e) { /* privátní režim */ }
+  // Odhlásit se musí jít vždycky a hned. Zneplatnění session na serveru jde
+  // po síti a při uspaném projektu nebo výpadku se umí ZASEKNOUT (ne spadnout),
+  // takže se na něj nečeká – pošle se a odpověď už uživatele nezajímá.
+  // Rozhoduje clearLocalAuth(): co zmizí z prohlížeče, tím je odhlášeno.
+  try { Promise.resolve(auth.signOut()).catch((e) => console.error(e)); }
+  catch (e) { console.error(e); }
+  clearLocalAuth();
 
   state.user = null;
   state.selection.clear();
@@ -1847,7 +1848,10 @@ async function startApp(user) {
     document.getElementById("prevDay").onclick = () => { state.date.setDate(state.date.getDate() - 1); state.date = new Date(state.date); goRefresh(); };
     document.getElementById("nextDay").onclick = () => { state.date.setDate(state.date.getDate() + 1); state.date = new Date(state.date); goRefresh(); };
     document.getElementById("todayBtn").onclick = () => { state.date = new Date(); state.miniMonth = new Date(); goRefresh(); };
-    document.querySelectorAll(".view-tabs button").forEach((b) => {
+    // Jen skutečné přepínače pohledů! Ve .view-tabs sedí i tlačítko Odhlásit
+    // a bez [data-view] mu tenhle řádek přepsal obsluhu na přepnutí pohledu –
+    // odhlášení pak nedělalo nic (a shodilo state.view na undefined).
+    document.querySelectorAll(".view-tabs button[data-view]").forEach((b) => {
       b.onclick = () => { state.view = b.dataset.view; clearSelection(); renderToolbar(); renderView(); };
     });
     document.getElementById("overlay").onclick = closeDetail;

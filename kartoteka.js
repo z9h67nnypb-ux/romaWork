@@ -470,20 +470,37 @@ function methodOptions(sel) {
 
 // Odhlášení. Session je společná pro rozvrh, kartotéku i diagnostiku, takže
 // se ruší stejně jako v rozvrhu; pak se jde na rozvrh, kde naskočí přihlášení.
-// Chyba serveru odhlášení nezablokuje – session se zruší aspoň v prohlížeči.
-async function pageLogout(btn) {
+// signOut() jde po síti a umí se při výpadku zaseknout, ne spadnout – proto
+// se na něj čeká jen omezeně a session se tak jako tak smaže z prohlížeče.
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Vypršel čas čekání na server.")), ms)),
+  ]);
+}
+
+function clearLocalAuth() {
+  try { sessionStorage.removeItem("poradys_user"); } catch (e) { /* privátní režim */ }
+  try {
+    Object.keys(localStorage)
+      .filter((k) => /^sb-.*-auth-token/.test(k))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch (e) { /* privátní režim */ }
+}
+
+async function pageLogout(btn, client) {
   if (btn) btn.disabled = true;
-  if (useDb) {
-    const c = DbKt._c();
+  // Ze stránky stejně odcházíme, tak se na server čeká jen chvilku – když
+  // neodpoví, odhlásí se to lokálně a jde se dál. Zaseknout se to nesmí.
+  if (useDb && client) {
     try {
-      const { error } = await c.auth.signOut();
+      const { error } = await withTimeout(client.auth.signOut(), 2500);
       if (error) throw error;
     } catch (e) {
       console.error(e);
-      try { await c.auth.signOut({ scope: "local" }); } catch (e2) { console.error(e2); }
     }
   }
-  try { sessionStorage.removeItem("poradys_user"); } catch (e) { /* privátní režim */ }
+  clearLocalAuth();
   location.href = "index.html" + location.search;
 }
 
@@ -928,7 +945,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("backLink").href = "index.html" + location.search;
 
   // Tlačítko se váže hned – nepřihlášenému se schová, odhlašovat nemá co.
-  $("ktLogout").onclick = () => pageLogout($("ktLogout"));
+  $("ktLogout").onclick = () => pageLogout($("ktLogout"), useDb ? DbKt._c() : null);
 
   const badge = $("storeBadge");
   if (useDb) {
