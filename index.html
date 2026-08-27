@@ -2,9 +2,17 @@
 <html lang="cs">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Rozvrh se na telefonu NEPŘIZPŮSOBUJE šířce displeje. Kdyby ano, dělilo
+       by se 17 stolů o 375 px, na sloupec by vyšlo ~20 px a z názvu stolu
+       i jména žáka by zbyl svislý sloupec písmen.
+       Místo toho se stránka vykreslí, jako by okno mělo 1200 px, a telefon ji
+       celou zmenší, aby se vešla na šířku. Je pak vidět celý den najednou –
+       drobně, ale se správnými proporcemi, takže přiblížení prsty je čitelné.
+       Přesně tohle dělá SuperSaaS, na který jsme zvyklí.
+       Počítače se to netýká, prohlížeč na desktopu tuhle značku ignoruje. -->
+  <meta name="viewport" content="width=1200" />
   <title>Rozvrh – PoraDys osobní výuka</title>
-  <link rel="stylesheet" href="styles.css?v=35" />
+  <link rel="stylesheet" href="styles.css?v=37" />
 </head>
 <body class="app-schedule">
   <!-- Přihlášení -->
@@ -126,10 +134,15 @@
        DŮLEŽITÉ: číslo musí být STEJNÉ ve všech třech stránkách (index,
        kartoteka, diagnostika). Když se rozejde, každý přechod mezi stránkami
        stahuje sdílené soubory znovu a appka může běžet se starým config.js
-       nebo styles.css. Při změně JS/CSS zvedni číslo všude naráz. -->
-  <script src="config.js?v=35"></script>
-  <script src="mockData.js?v=35"></script>
-  <script src="opakovani.js?v=35"></script>
-  <script src="app.js?v=35"></script>
+       nebo styles.css. Při změně JS/CSS zvedni číslo všude naráz.
+
+       Číslo se NIKDY nesmí použít podruhé na jiný obsah – ani po zahození
+       rozdělané práce a návratu zpátky. Prohlížeč si cache klíčuje podle URL,
+       takže na „app.js?v=30" podruhé podá tu starou verzi a stránka běží
+       s kódem, který na disku vůbec není. Vždycky číslo jen zvyšuj. -->
+  <script src="config.js?v=37"></script>
+  <script src="mockData.js?v=37"></script>
+  <script src="opakovani.js?v=37"></script>
+  <script src="app.js?v=37"></script>
 </body>
 </html>

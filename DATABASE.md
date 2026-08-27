@@ -214,8 +214,19 @@ se ukáže jako proužek pod názvem stolu; zakládá se tlačítkem
 - **kopírují se** tlačítkem *Protáhnout týden →*, takže stálé rozpisy stačí
   nastavit jednou.
 
-Řádek se směnami je ve všech sloupcích stejně vysoký (podle stolu s nejvíc
-lektory) – jinak by se sloupce svisle rozjely proti časové ose.
+Proužek lektora má dva řádky: nahoře jméno, pod ním čas („Kunkelová" /
+„8–13"). Na jednom řádku se do úzkého sloupce nevešel a ořezávalo se právě
+jméno. Řádek se směnami je ve všech sloupcích stejně vysoký (podle stolu
+s nejvíc lektory) – jinak by se sloupce svisle rozjely proti časové ose.
+
+**Hlavní lektor dne.** V detailu směny je zaškrtávátko *★ Hlavní lektor dne*
+(sloupec `lessons.is_lead`). Označený proužek dostane v rozvrhu hvězdičku a
+žluté pozadí – aby bylo na první pohled vidět, kdo ten den pobočku „drží".
+V jednom dni je hlavní lektor **právě jeden**: když ho administrátor přiřadí
+někomu jinému, appka hvězdičku ostatním směnám téhož dne sama odebere.
+Nekopíruje se – ani *Protáhnout týden →*, ani opakování ho nepřenášejí,
+určuje se každý den zvlášť. Do běžící databáze sloupec přidá
+`migrace_hlavni_lektor.sql`.
 
 **Konec dne.** Tlačítko **✓ Vše odučeno (N)** označí naráz všechny naplánované
 lekce zobrazeného dne. Vynechá zrušené, nedostavené i směny a bere lekce obou

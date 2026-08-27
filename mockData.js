@@ -141,6 +141,7 @@ function _buildRandomLessons(d) {
         mode: "offline",
         status: "planned",
         done: false,
+        is_lead: i === 0,   // hlavní lektor dne – v každém dni právě jeden
         description: "",
       });
       // občas se u stolu vystřídají dva lektoři
@@ -236,7 +237,8 @@ window.buildMockLessons = function (date) {
 
   // Směna: kdo je u kterého stolu a od kolika do kolika. Ukáže se jako řádek
   // pod názvem stolu – přesně to, co si šéfová dřív psala jako "lekci" v 8:00.
-  const S = (room, sh, eh, lector, note) => ({
+  // Poslední parametr `lead` = hlavní lektor dne (hvězdička, žlutý proužek).
+  const S = (room, sh, eh, lector, note, lead) => ({
     id: "mock-" + i++,
     kind: "shift",
     room_id: room,
@@ -248,11 +250,12 @@ window.buildMockLessons = function (date) {
     mode: "offline",
     status: "planned",
     done: false,
+    is_lead: !!lead,
     description: note || "",
   });
 
   return [
-    S("office-1", 8, 13, "Kunkelová"),
+    S("office-1", 8, 13, "Kunkelová", "", true),
     S("office-1", 13, 17, "Šíma"),
     S("sam-1", 8, 17, "Mužíková"),
     S("sam-2", 13, 17, "Kunkelová", "zaskakuje za Mužíkovou"),

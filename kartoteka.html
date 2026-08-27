@@ -2,9 +2,15 @@
 <html lang="cs">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Stejný princip jako u rozvrhu (viz index.html): na telefonu se stránka
+       NEPŘIZPŮSOBUJE šířce displeje. Kdyby ano, dělilo by se 13 sloupců
+       tabulky o 375 px, na sloupec by vyšlo ~25 px a nepřečetlo by se nic.
+       Místo toho se vykreslí v šířce 1200 px a telefon ji celou zmenší –
+       tabulka je pak vidět celá a se správnými proporcemi, takže přiblížení
+       prsty je čitelné. Počítač tuhle značku ignoruje. -->
+  <meta name="viewport" content="width=1200" />
   <title>Kartotéka – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=35" />
+  <link rel="stylesheet" href="styles.css?v=37" />
   <style>
     /* Styly jen pro kartotéku */
     .kt-wrap { max-width: 1500px; margin: 0 auto; padding: 14px 20px 60px; }
@@ -194,6 +200,54 @@
     .imp-actions { display: flex; gap: 10px; align-items: center; }
 
     .kt-locked { max-width: 460px; margin: 80px auto; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 26px; text-align: center; }
+
+    /* -------------------------------------------------------------------
+       DOTYKOVÝ DISPLEJ S ODDÁLENOU STRÁNKOU
+       Stránka má pevný viewport 1200 px (viz značka nahoře), takže telefon
+       všechno zmenší asi na třetinu. Tabulka tak má být vidět celá – o to
+       nám jde. Jenže se tím zmenší i ovládání: vyhledávací pole a tlačítka
+       by měla na displeji pár pixelů a prstem se do nich netrefíš. Lišty,
+       souhrny a karta klienta se proto zvětšují zpátky.
+
+       SAMOTNÉ TABULKY SE TO NETÝKÁ – ta má zůstat oddálená.
+
+       `pointer: coarse` = ovládá se prstem, ne myší. Na počítači se z tohohle
+       bloku nepoužije nic. Stejný postup je v styles.css pro rozvrh.
+       ------------------------------------------------------------------- */
+    @media (pointer: coarse) and (min-width: 1000px) {
+      .kt-top,
+      .kt-sub,
+      .kt-controls,
+      .kt-summary,
+      .kt-money,
+      .kt-method-detail,
+      .kt-legend,
+      .imp-card,
+      .kt-locked { zoom: 3; }
+
+      /* Karta klienta dostává zoom už ze styles.css (.detail-panel).
+         Pevných 760 px by po zvětšení přeteklo stránku, tak ať se řídí
+         šířkou displeje. */
+      .kt-panel { width: 100%; max-width: 100%; }
+
+      /* Zvětšený panel je na displeji široký jako telefon, takže se v něm
+         musí chovat jako úzké okno – všechno pod sebe. Ve dvou sloupcích
+         vycházelo na pole 74 px a nedalo se do nich psát. Existující
+         pravidlo pro úzká okna (max-width: 700px) se sem nedostane,
+         protože stránka hlásí šířku 1200 px. */
+      .card-main,
+      .card-fields,
+      .pay-form { grid-template-columns: 1fr; }
+    }
+
+    /* iOS Safari přiblíží celou stránku, když se klepne do pole s písmem
+       menším než 16 px, a přiblížení pak zůstane. Obecné pravidlo je
+       v styles.css, ale tahle dvě pole mají styl tady – a tenhle <style>
+       se načítá až za ním, takže se odtamtud přebít nedají. */
+    @media (pointer: coarse) {
+      .kt-controls input[type="text"],
+      .imp-card textarea { font-size: 16px; }
+    }
   </style>
 </head>
 <body>
@@ -295,12 +349,12 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N musí být stejné ve všech třech stránkách – viz index.html -->
-  <script src="config.js?v=35"></script>
+  <script src="config.js?v=37"></script>
   <!-- mockData.js nese ukázková data i sdílené demo úložiště (DemoStore) –
        díky němu kartotéka vidí lekce zapsané v rozvrhu a umí z nich odečíst
        vyčerpané hodiny. opakovani.js počítá termíny pravidelných lekcí. -->
-  <script src="mockData.js?v=35"></script>
-  <script src="opakovani.js?v=35"></script>
-  <script src="kartoteka.js?v=35"></script>
+  <script src="mockData.js?v=37"></script>
+  <script src="opakovani.js?v=37"></script>
+  <script src="kartoteka.js?v=37"></script>
 </body>
 </html>
