@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
 // Kartotéka – klienti, platby a kredit hodin (nahrazuje Excel "KARTOTÉKA").
 //
-// Data: naostro ze Supabase (pohled student_credit + tabulky students,
-// payments; čerpání kreditu plní databázové triggery z rozvrhu). Ukázkový
-// režim (?demo=1) běží na sdíleném demo úložišti – viz DemoStore v mockData.js.
+// Data: pohled student_credit + tabulky students a payments v Supabase.
+// Čerpání kreditu plní databázové triggery z rozvrhu – kartotéka jen čte,
+// co se odučilo, a zapisuje platby.
 // ---------------------------------------------------------------------------
 
 const CFG = window.APP_CONFIG || {};
@@ -47,105 +47,6 @@ function flagOptions(selected) {
   }).join("");
 }
 
-// ---------- Provider: MOCK (sdílené ukázkové úložiště) ----------
-// Klienty, platby i lekce drží DemoStore (mockData.js) společně s rozvrhem.
-// Dřív měla kartotéka vlastní seznam klientů a natvrdo zapsané „vyčerpané
-// hodiny", takže odučení lekce v rozvrhu se do zůstatku nikdy nepropsalo.
-// Teď se vyčerpané hodiny počítají z potvrzených lekcí – stejně jako to
-// v ostré verzi dělá databáze (tabulka credit_log plněná triggery).
-const MockKt = {
-  get students() { return window.DemoStore.clients(); },
-  get payments() { return window.DemoStore.payments(); },
-
-  // Lekce klienta z rozvrhu (podle jména – v ukázkovém režimu není docházka).
-  _lessonsOf(s) {
-    const name = String((s && s.name) || "").trim().toLowerCase();
-    if (!name) return [];
-    return window.DemoStore.lessons()
-      .filter((l) => (l.kind || "lesson") !== "shift")
-      .filter((l) => String(l.student_names || "").trim().toLowerCase() === name)
-      .map((l) => ({
-        date: l.starts_at,
-        starts: l.starts_at,
-        subject: l.subject || "—",
-        lector: l.lector_name || "—",
-        hours: Math.round(((l.ends_at - l.starts_at) / 3600000) * 100) / 100,
-        done: !!l.done,
-      }))
-      .sort((a, b) => b.starts - a.starts);
-  },
-
-  _credit(s) {
-    const paid = this.payments.filter((p) => p.student_id === s.id);
-    const paid_hours = paid.reduce((x, p) => x + Number(p.hours_credit), 0);
-    const paid_czk = paid.reduce((x, p) => x + Number(p.amount_czk), 0);
-    const used_hours = Math.round(
-      this._lessonsOf(s).filter((l) => l.done).reduce((x, l) => x + l.hours, 0) * 100
-    ) / 100;
-    return { ...s, student_id: s.id, paid_hours, paid_czk, used_hours, balance_hours: paid_hours - used_hours };
-  },
-
-  async list() { return this.students.map((s) => this._credit(s)); },
-  async getCard(id) {
-    const s = this.students.find((x) => x.id === id);
-    return {
-      student: s,
-      credit: this._credit(s),
-      payments: this.payments.filter((p) => p.student_id === id).sort((a, b) => b.paid_at.localeCompare(a.paid_at)),
-      lessons: this._lessonsOf(s).slice(0, 60),
-    };
-  },
-  async saveStudent(fields, id) {
-    if (id) {
-      Object.assign(this.students.find((x) => x.id === id), fields);
-      window.DemoStore.save();
-      return id;
-    }
-    const s = { id: window.DemoStore.newId("k"), status: "active", ...fields };
-    this.students.push(s);
-    window.DemoStore.save();
-    return s.id;
-  },
-  async addPayment(p) {
-    this.payments.push({ ...p, id: window.DemoStore.newId("p") });
-    window.DemoStore.save();
-  },
-  async deletePayment(id) {
-    const arr = this.payments;
-    const i = arr.findIndex((x) => x.id === id);
-    if (i >= 0) arr.splice(i, 1);
-    window.DemoStore.save();
-  },
-
-  // --- rozvrh (pravidelná lekce zakládaná z karty klienta) ---
-  async rooms() { return [...window.ROOMS].sort((a, b) => a.sort - b.sort); },
-  async lessonsInRange(from, to) {
-    return window.DemoStore.lessons().filter((l) => l.starts_at >= from && l.starts_at < to);
-  },
-  async createLesson(row) {
-    window.DemoStore.lessons().push({
-      id: window.DemoStore.newId("mock-new"),
-      kind: "lesson",
-      lesson_type: row.lesson_type || "regular",
-      room_id: row.room_id || null,
-      starts_at: row.starts_at,
-      ends_at: row.ends_at,
-      student_names: row.student_name || "",
-      student_phone: row.student_phone || "",
-      student_grade: row.student_grade || "",
-      student_category: row.student_category || "",
-      subject: row.subject || "",
-      lector_name: row.lector_name || "",
-      mode: row.mode || "offline",
-      status: "planned",
-      done: false,
-      description: "",
-    });
-    window.DemoStore.save();
-  },
-  async finishLessons() { window.DemoStore.save(); },
-};
-
 // ---------- Provider: SUPABASE ----------
 const DbKt = {
   client: null,
@@ -153,9 +54,18 @@ const DbKt = {
     if (!this.client) this.client = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
     return this.client;
   },
+  // Vrátí { role, active } přihlášeného, nebo null. Kartotéka je jen pro
+  // administrátora – lektor se sem umí dostat i přímou adresou, tak se role
+  // musí ověřit tady, ne jen schováním tlačítka v rozvrhu.
   async session() {
-    const { data } = await this._c().auth.getSession();
-    return data && data.session;
+    const c = this._c();
+    const { data } = await c.auth.getSession();
+    if (!data || !data.session) return null;
+    const { data: p } = await c.from("profiles")
+      .select("*").eq("id", data.session.user.id).maybeSingle();
+    // Odebraný přístup (profiles.active = false) session rovnou zneplatní.
+    if (p && p.active === false) { try { await c.auth.signOut(); } catch (e) { console.error(e); } return null; }
+    return { name: (p && p.name) || data.session.user.email, role: (p && p.role) || "lektor" };
   },
   async list() {
     const { data, error } = await this._c().from("student_credit").select("*").order("name");
@@ -264,8 +174,7 @@ const DbKt = {
   async finishLessons() {},
 };
 
-const useDb = !!CFG.USE_SUPABASE;
-const kt = useDb ? DbKt : MockKt;
+const kt = DbKt;
 
 // ---------- Stav ----------
 let rows = [];          // řádky přehledu (student_credit)
@@ -492,7 +401,7 @@ async function pageLogout(btn, client) {
   if (btn) btn.disabled = true;
   // Ze stránky stejně odcházíme, tak se na server čeká jen chvilku – když
   // neodpoví, odhlásí se to lokálně a jde se dál. Zaseknout se to nesmí.
-  if (useDb && client) {
+  if (client) {
     try {
       const { error } = await withTimeout(client.auth.signOut(), 2500);
       if (error) throw error;
@@ -945,23 +854,29 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("backLink").href = "index.html" + location.search;
 
   // Tlačítko se váže hned – nepřihlášenému se schová, odhlašovat nemá co.
-  $("ktLogout").onclick = () => pageLogout($("ktLogout"), useDb ? DbKt._c() : null);
+  $("ktLogout").onclick = () => pageLogout($("ktLogout"), DbKt._c());
 
   const badge = $("storeBadge");
-  if (useDb) {
-    const session = await DbKt.session();
-    if (!session) {
-      $("lockedBox").classList.remove("hidden");
-      $("mainBox").classList.add("hidden");
-      $("ktLogout").classList.add("hidden");
-      badge.textContent = "nepřihlášeno";
-      return;
-    }
-    badge.textContent = "databáze";
-    badge.style.background = "#e6f4ea"; badge.style.color = "#1e6b30";
-  } else {
-    badge.textContent = "ukázková data";
+  const session = await DbKt.session();
+  if (!session) {
+    $("lockedBox").classList.remove("hidden");
+    $("mainBox").classList.add("hidden");
+    $("ktLogout").classList.add("hidden");
+    badge.textContent = "nepřihlášeno";
+    return;
   }
+  if (session.role !== "admin") {
+    $("lockedBox").innerHTML =
+      '<h2 style="margin:0 0 8px;">Jen pro administrátora</h2>' +
+      '<p style="color:#777;font-size:13.5px;">Kartotéka pracuje s platbami klientů, ' +
+      'takže do ní vidí jen administrátor. Zpět na <a href="index.html">rozvrh</a>.</p>';
+    $("lockedBox").classList.remove("hidden");
+    $("mainBox").classList.add("hidden");
+    badge.textContent = "bez oprávnění";
+    return;
+  }
+  badge.textContent = "databáze";
+  badge.style.background = "#e6f4ea"; badge.style.color = "#1e6b30";
 
   $("ktSearch").addEventListener("input", renderTable);
   $("ktShowFormer").addEventListener("change", renderTable);

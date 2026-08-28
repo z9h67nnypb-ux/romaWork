@@ -12,7 +12,7 @@
        Počítače se to netýká, prohlížeč na desktopu tuhle značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Rozvrh – PoraDys osobní výuka</title>
-  <link rel="stylesheet" href="styles.css?v=41" />
+  <link rel="stylesheet" href="styles.css?v=42" />
 </head>
 <body class="app-schedule">
   <!-- Přihlášení -->
@@ -26,14 +26,6 @@
       <div id="loginError" class="login-error"></div>
       <div id="loginHint" class="login-hint hidden"></div>
     </form>
-  </div>
-
-  <!-- Ukázkový režim se pozná podle ?demo=1 v adrese a odkazy mezi stránkami
-       si ho nesou s sebou – jednou zapnutý zůstane, dokud se z adresy neodebere.
-       Proto je tu odkaz ven, ať se z něj nemusí lézt ručně. -->
-  <div id="banner" class="banner hidden">
-    <b>Ukázkový režim</b> – data jsou smyšlená a zůstávají jen ve vašem prohlížeči, klidně si tu cokoli vyzkoušejte.
-    <a href="index.html" class="banner-exit">Přepnout na ostrou verzi →</a>
   </div>
 
   <!-- Horní pás: vlevo ovládání, vpravo trvale viditelný kalendář.
@@ -69,6 +61,7 @@
     <button id="diagBtn" title="Diagnostické testy a plán přípravy žáka">Diagnostika</button>
     <button id="kartotekaBtn" class="hidden" title="Klienti, platby a kredity hodin">Kartotéka</button>
     <button id="hoursBtn" class="hidden" title="Odpracované hodiny lektorů za měsíc">Výkaz</button>
+    <button id="usersBtn" class="hidden" title="Přihlašovací účty lektorů – založit nový, odebrat přístup">Lektoři</button>
 
     <!-- Pohledy Týden a Měsíc byly jen zástupné (ukazovaly hlášku, že jsou
          zatím náhled). Nic neuměly a braly místo, tak jsou pryč. -->
@@ -94,6 +87,9 @@
   <div id="toast" class="toast hidden"></div>
   <!-- Našeptávač jmen klientů z kartotéky (pole Žák v detailu lekce) -->
   <datalist id="studentsList"></datalist>
+  <!-- Našeptávač jmen lektorů (pole Lektor). Výkaz hodin se sčítá podle
+       jména, takže překlep by lektora z přehledu vyřadil. -->
+  <datalist id="lectorsList"></datalist>
 
   <!-- Výkaz hodin lektorů (admin) -->
   <div id="hoursModal" class="hours-modal hidden">
@@ -116,6 +112,42 @@
     </div>
   </div>
 
+  <!-- Přihlašovací účty lektorů (admin) -->
+  <div id="usersModal" class="hours-modal hidden">
+    <div class="hours-card users-card">
+      <div class="hours-head">
+        <h2>Účty lektorů</h2>
+        <button id="usersClose" class="close">×</button>
+      </div>
+
+      <form id="newUserForm" class="user-form">
+        <div class="user-form-row">
+          <label>Jméno<input type="text" id="nuName" placeholder="Příjmení" required autocomplete="off" /></label>
+          <label>E-mail<input type="email" id="nuEmail" placeholder="prijmeni@poradys.cz" required autocomplete="off" /></label>
+          <label>Heslo<input type="text" id="nuPass" placeholder="min. 8 znaků" required autocomplete="new-password" minlength="8" /></label>
+          <label>Role<select id="nuRole">
+            <option value="lektor">lektor</option>
+            <option value="admin">administrátor</option>
+          </select></label>
+          <button type="submit" class="primary-btn" id="nuSubmit">Založit účet</button>
+        </div>
+        <div class="user-form-msg">
+          <span id="nuError" class="login-error"></span>
+          <span id="nuOk" class="saved"></span>
+        </div>
+      </form>
+
+      <div id="usersBody" class="hours-body"></div>
+      <p class="hours-note">
+        Heslo se nikam neukládá – po založení ho <b>předejte lektorovi</b>, jinak se k němu
+        už nikdo nedostane. Změnit si ho může lektor sám přes „Zapomenuté heslo",
+        administrátor přes Supabase&nbsp;→&nbsp;Authentication&nbsp;→&nbsp;Users.
+        <br>Tlačítko <b>Zrušit přístup</b> účet nemaže, jen ho zamkne – odpracované
+        hodiny i historie lekcí zůstanou.
+      </p>
+    </div>
+  </div>
+
   <!-- Detail rezervace -->
   <div id="overlay" class="overlay hidden"></div>
   <aside id="detailPanel" class="detail-panel hidden">
@@ -131,7 +163,7 @@
     </div>
   </aside>
 
-  <!-- Supabase klient – appka jede naostro proti databázi, v ukázkovém režimu (?demo=1) se nepoužije -->
+  <!-- Supabase klient – appka jede naostro proti databázi -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N nutí prohlížeč stáhnout čerstvé soubory místo verze z cache.
        DŮLEŽITÉ: číslo musí být STEJNÉ ve všech třech stránkách (index,
@@ -143,9 +175,8 @@
        rozdělané práce a návratu zpátky. Prohlížeč si cache klíčuje podle URL,
        takže na „app.js?v=30" podruhé podá tu starou verzi a stránka běží
        s kódem, který na disku vůbec není. Vždycky číslo jen zvyšuj. -->
-  <script src="config.js?v=41"></script>
-  <script src="mockData.js?v=41"></script>
-  <script src="opakovani.js?v=41"></script>
-  <script src="app.js?v=41"></script>
+  <script src="config.js?v=42"></script>
+  <script src="opakovani.js?v=42"></script>
+  <script src="app.js?v=42"></script>
 </body>
 </html>

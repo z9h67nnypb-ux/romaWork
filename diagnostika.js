@@ -76,29 +76,87 @@ const SUBJECTS = {
       ] },
     ],
   },
+  // MATEMATIKA odpovídá papírům „Diagnostický test matematika – verze 01"
+  // (DgTest 01) a „Hodnotící arch pro lektora" k němu. Test má 15 otevřených
+  // úloh a 60 bodů, arch je rozděluje do šesti oddílů – oblasti níž jsou ty
+  // oddíly, včetně maxim (8 + 18 + 6 + 10 + 14 + 4 = 60) a formulací
+  // „je schopen / je schopen s chybami / není schopen".
+  //
+  // `tasks` říká, které úlohy z archu do oddílu patří – ukazuje se u políčka
+  // ve formuláři, aby lektor body opsal ze správného rámečku.
   matematika: {
     label: "Matematika",
     icon: "🧮",
-    grade: "",
-    note: "Kategorie a bodování doplníme podle vašeho testu z matematiky (zatím orientační).",
+    grade: "8.–9. třída – příprava na přijímačky",
     areas: [
-      { key: "pocty",     name: "Počítání (základní operace)", short: "Počítání",  max: 20, focus: ["pamětné počítání", "násobilka", "písemné algoritmy"] },
-      { key: "zlomky",    name: "Zlomky a desetinná čísla",    short: "Zlomky",    max: 20, focus: ["krácení a rozšiřování zlomků", "převody na desetinná čísla"] },
-      { key: "slovni",    name: "Slovní úlohy",                short: "Slovní úlohy", max: 20, focus: ["zápis úlohy (co vím / co hledám)", "úměra a trojčlenka"] },
-      { key: "geometrie", name: "Geometrie",                   short: "Geometrie", max: 20, focus: ["obvody a obsahy", "konstrukce", "tělesa"] },
-      { key: "rovnice",   name: "Rovnice a výrazy",            short: "Rovnice",   max: 20, focus: ["úpravy výrazů", "řešení rovnic"] },
+      { key: "cisla", name: "Číselné operace", short: "Číselné operace", max: 8, tasks: "úlohy 1.1, 1.2, 2",
+        can: "provádět základní početní operace napříč číselnými obory", focus: [
+        "pořadí početních operací a závorky",
+        "druhá mocnina a druhá odmocnina",
+        "počítání s desetinnými čísly",
+        "dělení a násobení zpaměti i písemně",
+      ] },
+      { key: "zlomky", name: "Zlomky, poměry, procenta, převody jednotek", short: "Zlomky a procenta", max: 18, tasks: "úlohy 3, 4, 5, 6",
+        can: "počítat se zlomky, desetinnými čísly a převádět jednotky", focus: [
+        "sčítání a odčítání zlomků s různým jmenovatelem",
+        "násobení a dělení zlomků, základní tvar",
+        "výpočet procentové části a postupné slevy",
+        "dělení celku v daném poměru",
+        "porovnání dvou částí v procentech",
+        "převody jednotek hmotnosti, objemu a obsahu",
+      ] },
+      { key: "rovnice", name: "Algebraické výrazy a rovnice", short: "Výrazy a rovnice", max: 6, tasks: "úloha 7 (7.1, 7.2)",
+        can: "pracovat s neznámou a užívat jednoduché vzorce pro algebraické úpravy", focus: [
+        "roznásobení závorky a sloučení členů",
+        "úprava lineární rovnice o jedné neznámé",
+        "rovnice se zlomky a desetinnými čísly",
+        "zkouška správnosti výsledku",
+      ] },
+      { key: "geometrie", name: "Geometrie v rovině a v prostoru", short: "Geometrie", max: 10, tasks: "úlohy 8, 9, 10",
+        can: "užívat vzorce pro výpočetní geometrii v rovině i v prostoru, najít souvislosti v rovinných útvarech a využít znalostí rovinné geometrie při rýsování", focus: [
+        "obsah a obvod obdélníku, čtverce a trojúhelníku",
+        "kruh a kružnice – obsah, poloměr, průměr",
+        "objem a povrch rotačního válce",
+        "konstrukce trojúhelníku a zápis všech řešení",
+        "rovnoramenný trojúhelník, osa úsečky, rovnoběžky",
+      ] },
+      { key: "slovni", name: "Slovní úlohy", short: "Slovní úlohy", max: 14, tasks: "úlohy 11, 12, 13, 14",
+        can: "porozumět textu slovní úlohy, vyčíst z něj čísla a vztahy nutné pro výpočet a sestavit rovnici", focus: [
+        "zápis úlohy – co vím a co hledám",
+        "sestavení rovnice o jedné neznámé",
+        "přímá a nepřímá úměrnost, trojčlenka",
+        "úlohy o pohybu (rychlost, čas, dráha)",
+        "výpočet původní ceny před slevou",
+      ] },
+      { key: "data", name: "Práce s daty a logické úlohy", short: "Práce s daty", max: 4, tasks: "úloha 15",
+        can: "pracovat s daty zadanými ve formě tabulky", focus: [
+        "čtení údajů z tabulky četností",
+        "výpočet průměru z tabulky",
+        "zaokrouhlování na daný počet desetinných míst",
+      ] },
     ],
   },
 };
 
-// Hranice pásem podle hodnotícího archu (zvládá / částečně zvládá / nezvládá).
-const MID_LIMIT = 0.45;    // pod 45 % = nezvládá
-const STRONG_LIMIT = 0.75; // od 75 % = zvládá; mezi tím = částečně zvládá
+// Hranice pásem podle hodnotících archů (tři stupně zvládnutí oblasti).
+const MID_LIMIT = 0.45;    // pod 45 % = nejnižší stupeň
+const STRONG_LIMIT = 0.75; // od 75 % = nejvyšší stupeň; mezi tím = prostřední
 const BAND = {
-  strong: { label: "zvládá", cls: "strong", color: "#2e7d32" },
-  mid:    { label: "částečně zvládá", cls: "mid", color: "#ef6c00" },
-  weak:   { label: "nezvládá", cls: "weak", color: "#c62828" },
+  strong: { cls: "strong", color: "#2e7d32" },
+  mid:    { cls: "mid", color: "#ef6c00" },
+  weak:   { cls: "weak", color: "#c62828" },
 };
+
+// Slovní stupnice je u každého předmětu jiná – opsaná z jeho hodnotícího
+// archu. Čeština: „zvládá / částečně zvládá / nezvládá".
+// Matematika: „je schopen / je schopen s chybami / není schopen".
+const BAND_WORDS = {
+  cestina:    { strong: "zvládá",     mid: "částečně zvládá",      weak: "nezvládá" },
+  matematika: { strong: "je schopen", mid: "je schopen s chybami", weak: "není schopen" },
+};
+function bandLabel(subjKey, band) {
+  return (BAND_WORDS[subjKey] || BAND_WORDS.cestina)[band];
+}
 
 // Celkové hodnocení podle hodnotícího archu (4 stupně).
 function overallAssessment(pct) {
@@ -124,11 +182,9 @@ function today() { return new Date().toISOString().slice(0, 10); }
 function testWord(n) { return n === 1 ? "test" : n >= 2 && n <= 4 ? "testy" : "testů"; }
 
 // ---------------------------------------------------------------------------
-// Úložiště: Supabase (ostrý provoz) nebo ukázková data v paměti / localStorage
+// Úložiště: Supabase (tabulky students a diagnostics)
 // ---------------------------------------------------------------------------
 const CFG = window.APP_CONFIG || {};
-const useDb = !!CFG.USE_SUPABASE;
-
 const DbStore = {
   client: null,
   _c() {
@@ -141,7 +197,10 @@ const DbStore = {
     const { data } = await c.auth.getSession();
     if (!data.session) return null;
     const user = data.session.user;
-    const { data: p } = await c.from("profiles").select("role, name").eq("id", user.id).maybeSingle();
+    const { data: p } = await c.from("profiles").select("*").eq("id", user.id).maybeSingle();
+    // Účet, kterému administrátor odebral přístup (profiles.active = false),
+    // se sem nesmí dostat ani se starou session z prohlížeče.
+    if (p && p.active === false) { try { await c.auth.signOut(); } catch (e) { console.error(e); } return null; }
     return { name: (p && p.name) || user.email, role: (p && p.role) || "lektor" };
   },
   async listStudents() {
@@ -196,62 +255,7 @@ function fromDbRow(r) {
   };
 }
 
-// ---------- Ukázkový režim (zapíná se ?demo=1; jinak jede databáze) ----------
-// Žáci jsou v paměti (stejná jména jako v kartotéce), testy v localStorage,
-// ať se dá appka vyzkoušet i bez databáze.
-const MOCK_KEY = "poradys_diagnostics_v2";
-const MockStore = {
-  _seq: 1,
-  students: [
-    { id: "m1", name: "Aftanas Lukáš", school: "ZŠ Norská, Kladno", grade: "5. třída", category: "ZŠ", subjects: "AJ", lector_name: "Štruncová", phone: "777050743", status: "active" },
-    { id: "m2", name: "Balík Petr", school: "ZŠ Moskevská, Kladno", grade: "7. třída", category: "ZŠ", subjects: "MAT", lector_name: "Kunkelová", phone: "723111222", status: "active" },
-    { id: "m3", name: "Berchak Anna", school: "Gymnázium Kladno", grade: "2. ročník", category: "SŠ", subjects: "ČJ, MAT", lector_name: "Mužíková", phone: "605333444", status: "active" },
-    { id: "m4", name: "Bezdičková Ela", school: "ZŠ Zákostelní, Kladno", grade: "9. tř. – přijímačky", category: "ZŠ", subjects: "ČJ, MAT", lector_name: "Šíma", phone: "776555666", status: "active" },
-    { id: "m5", name: "Vondrušková Melissa", school: "ZŠ Amálská, Kladno", grade: "8. třída", category: "ZŠ", subjects: "MAT", lector_name: "Machalíková", phone: "731777888", status: "active" },
-    { id: "m6", name: "Zvonař František", school: "SPŠ Kladno", grade: "3. ročník", category: "SŠ", subjects: "ČJ", lector_name: "Tampír", phone: "702999000", status: "former" },
-  ],
-  seed: [
-    // Body odpovídají maximům z hodnoticího archu (10/10/10/5/5/5 = 45).
-    { id: "s1", student_id: "m4", student_name: "Bezdičková Ela", subject: "cestina", grade: "9. tř. – přijímačky", school: "ZŠ Zákostelní, Kladno", date: "2026-02-10", note: "vstupní test", scores: { pravopis: 4, tvaroslovi: 5, vetnastavba: 3, slovnizasoba: 3, cteni: 3, stylistika: 2 } },
-    { id: "s2", student_id: "m4", student_name: "Bezdičková Ela", subject: "cestina", grade: "9. tř. – přijímačky", school: "ZŠ Zákostelní, Kladno", date: "2026-04-14", note: "", scores: { pravopis: 6, tvaroslovi: 7, vetnastavba: 5, slovnizasoba: 3, cteni: 4, stylistika: 3 } },
-    { id: "s3", student_id: "m4", student_name: "Bezdičková Ela", subject: "cestina", grade: "9. tř. – přijímačky", school: "ZŠ Zákostelní, Kladno", date: "2026-06-16", note: "po 8 týdnech přípravy", scores: { pravopis: 8, tvaroslovi: 8, vetnastavba: 7, slovnizasoba: 4, cteni: 4, stylistika: 4 } },
-    { id: "s4", student_id: "m2", student_name: "Balík Petr", subject: "matematika", grade: "7. třída", school: "ZŠ Moskevská, Kladno", date: "2026-05-20", note: "", scores: { pocty: 15, zlomky: 7, slovni: 9, geometrie: 13, rovnice: 6 } },
-  ],
-  _local() {
-    try { return JSON.parse(localStorage.getItem(MOCK_KEY)) || []; } catch { return []; }
-  },
-  _saveLocal(items) { localStorage.setItem(MOCK_KEY, JSON.stringify(items)); },
-  // V ukázkovém režimu bereme roli z přihlášení v rozvrhu; bez přihlášení
-  // pouštíme appku jako administrátora, ať jde demo hned vyzkoušet.
-  async me() {
-    try {
-      const s = sessionStorage.getItem("poradys_user");
-      if (s) { const u = JSON.parse(s); return { name: u.name, role: u.role }; }
-    } catch { /* ignorujeme rozbitý obsah sessionStorage */ }
-    return { name: "Ukázkový režim", role: "admin" };
-  },
-  async listStudents() { return this.students.slice(); },
-  async listTests() {
-    return this.seed.concat(this._local()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  },
-  async addStudent(fields) {
-    const s = { id: "mnew" + this._seq++, status: "active", ...fields };
-    this.students.push(s);
-    return s;
-  },
-  async addTest(entry) {
-    const t = { ...entry, id: "local-" + Date.now() };
-    const items = this._local();
-    items.push(t);
-    this._saveLocal(items);
-    return t;
-  },
-  async removeTest(id) {
-    this._saveLocal(this._local().filter((x) => x.id !== id));
-  },
-};
-
-const Store = useDb ? DbStore : MockStore;
+const Store = DbStore;
 
 // ---------------------------------------------------------------------------
 // Vyhodnocení
@@ -275,6 +279,7 @@ function evaluate(subjKey, scores) {
   });
   const byPct = (x, y) => x.pct - y.pct;
   return {
+    subject: subjKey,
     results,
     weaknesses: results.filter((r) => r.band === "weak").sort(byPct),
     mids: results.filter((r) => r.band === "mid").sort(byPct),
@@ -347,12 +352,13 @@ function summaryText(test, ev, plan) {
 // Pruh nese i body a úroveň zvládnutí, takže samostatná tabulka není potřeba.
 function areaBarsHtml(ev) {
   return '<div class="bars">' + ev.results.map((r) => {
+    const lvl = bandLabel(ev.subject, r.band);
     const pct = Math.round(r.pct * 100);
     return '<div class="bar-row">' +
       '<span class="bar-name">' + escapeHtml(r.name) + "</span>" +
       '<span class="bar-track" title="' + pct + ' %"><span class="bar-fill ' + r.band + '" style="width:' + pct + '%"></span></span>' +
       '<span class="bar-val">' + r.points + "/" + r.max + " b. · " + pct + " %</span>" +
-      '<span class="lvl ' + BAND[r.band].cls + '">' + BAND[r.band].label + "</span>" +
+      '<span class="lvl ' + BAND[r.band].cls + '">' + escapeHtml(lvl) + "</span>" +
       "</div>";
   }).join("") + "</div>";
 }
@@ -386,7 +392,7 @@ function trendChartSVG(tests) {
     const h = Math.max(1, (pct / 100) * ih);
     s += '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + (T + ih - h).toFixed(1) + '" width="' + bw.toFixed(1) +
       '" height="' + h.toFixed(1) + '" rx="2.5" fill="' + BAND[band].color + '" opacity=".9">' +
-      "<title>" + fmtDateCz(t.date) + " – " + pct + " % (" + BAND[band].label + ")</title></rect>";
+      "<title>" + fmtDateCz(t.date) + " – " + pct + " % (" + escapeHtml(bandLabel(t.subject, band)) + ")</title></rect>";
     s += '<text x="' + cx.toFixed(1) + '" y="' + (T + ih - h - 5).toFixed(1) +
       '" text-anchor="middle" font-size="9.5" font-weight="700" fill="#333">' + pct + " %</text>";
     const [, mm, dd] = String(t.date).slice(0, 10).split("-").map(Number);
@@ -601,7 +607,8 @@ function resultHtml(test, ev, plan, opts) {
   // Oblasti (vodorovné pruhy) vlevo, vývoj v čase (sloupce) vpravo.
   const barsBlock = '<div class="avoid-break"><h3>Úspěšnost podle oblastí</h3>' +
     areaBarsHtml(ev) +
-    '<p class="chart-cap">Zelená = zvládá (od 75 %), oranžová = zvládá částečně, červená = nezvládá (pod 45 %).</p></div>';
+    '<p class="chart-cap">Zelená = ' + escapeHtml(bandLabel(test.subject, "strong")) + ' (od 75 %), oranžová = ' +
+    escapeHtml(bandLabel(test.subject, "mid")) + ', červená = ' + escapeHtml(bandLabel(test.subject, "weak")) + ' (pod 45 %).</p></div>';
   const trendBlock = trend.length >= 2
     ? '<div class="avoid-break"><h3>Vývoj v čase – ' + S.label + "</h3>" +
       '<div class="chart-box">' + trendChartSVG(trend) + "</div>" +
@@ -615,7 +622,10 @@ function resultHtml(test, ev, plan, opts) {
   html += '<div class="avoid-break focus-wrap"><h3>Na co se zaměřit</h3>' +
     (toWork.length
       ? '<div class="focus-cols">' + toWork.map((r) => '<div class="focus-block"><h4>' + escapeHtml(r.name) +
-          ' <span class="lvl ' + BAND[r.band].cls + '">' + BAND[r.band].label + "</span></h4><ul>" +
+          ' <span class="lvl ' + BAND[r.band].cls + '">' + escapeHtml(bandLabel(test.subject, r.band)) + "</span></h4>" +
+          // Věta z hodnotícího archu: „Žák <je schopen s chybami> <co>."
+          (r.can ? '<p class="focus-can">Žák ' + escapeHtml(bandLabel(test.subject, r.band)) + " " + escapeHtml(r.can) + ".</p>" : "") +
+          "<ul>" +
           (r.focus || []).map((f) => "<li>" + escapeHtml(f) + "</li>").join("") + "</ul></div>").join("") + "</div>"
       : '<span class="diag-note">Všechny oblasti žák zvládá – žádné cílené doplnění není potřeba. 🎉</span>') +
     "</div>";
@@ -624,7 +634,7 @@ function resultHtml(test, ev, plan, opts) {
     '<table class="plan-table"><tr><th>Týden</th><th>Hlavní zaměření</th><th>Co procvičovat na lekcích</th></tr>' +
     plan.weeks.map((w) =>
       "<tr><td>" + w.n + ".</td><td><b>" + escapeHtml(w.focus.name) + "</b> " +
-      '<span class="lvl ' + BAND[w.focus.band].cls + '">' + BAND[w.focus.band].label + "</span></td><td>" +
+      '<span class="lvl ' + BAND[w.focus.band].cls + '">' + escapeHtml(bandLabel(test.subject, w.focus.band)) + "</span></td><td>" +
       escapeHtml(w.exercises) + (w.review ? "<br><b>Kontrolní opakování a mini-test pokroku.</b>" : "") +
       "</td></tr>"
     ).join("") + "</table>" +
@@ -658,7 +668,8 @@ function openNewTestForm() {
 
   const half = Math.ceil(S.areas.length / 2);
   const rowsHtml = (arr) => arr.map((a) =>
-    '<div class="score-row"><label for="s_' + a.key + '">' + escapeHtml(a.name) + "</label>" +
+    '<div class="score-row"><label for="s_' + a.key + '">' + escapeHtml(a.name) +
+    (a.tasks ? '<span class="score-tasks">' + escapeHtml(a.tasks) + "</span>" : "") + "</label>" +
     '<input type="number" id="s_' + a.key + '" min="0" max="' + a.max + '" step="1" />' +
     '<span class="max">z ' + a.max + " b.</span></div>").join("");
 
@@ -892,7 +903,8 @@ function batchRenderScores() {
       "</div>" +
       '<div class="batch-scores">' +
         S.areas.map((a) =>
-          '<div class="sc"><label for="b_' + a.key + '">' + escapeHtml(a.short || a.name) + "</label>" +
+          '<div class="sc"><label for="b_' + a.key + '"' + (a.tasks ? ' title="' + escapeHtml(a.tasks) + '"' : "") + ">" +
+          escapeHtml(a.short || a.name) + "</label>" +
           // bez placeholderu "0" – prázdné pole se nesmí plést se zadanou nulou
           '<input type="number" id="b_' + a.key + '" min="0" max="' + a.max + '" step="1" inputmode="numeric">' +
           '<span class="mx">z ' + a.max + " b.</span></div>"
@@ -1136,7 +1148,7 @@ async function pageLogout(btn, client) {
   if (btn) btn.disabled = true;
   // Ze stránky stejně odcházíme, tak se na server čeká jen chvilku – když
   // neodpoví, odhlásí se to lokálně a jde se dál. Zaseknout se to nesmí.
-  if (useDb && client) {
+  if (client) {
     try {
       const { error } = await withTimeout(client.auth.signOut(), 2500);
       if (error) throw error;
@@ -1164,11 +1176,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   state.role = me.role === "admin" ? "admin" : "lektor";
   state.userName = me.name || "";
   $("mainBox").classList.remove("hidden");
-  $("diagLogout").onclick = () => pageLogout($("diagLogout"), useDb ? DbStore._c() : null);
+  $("diagLogout").onclick = () => pageLogout($("diagLogout"), DbStore._c());
 
   const badge = $("storeBadge");
-  if (useDb) { badge.textContent = "databáze"; badge.classList.add("db"); }
-  else badge.textContent = "ukázková data";
+  badge.textContent = "databáze";
+  badge.classList.add("db");
 
   const rb = $("roleBadge");
   rb.textContent = state.userName + (isAdmin() ? " · administrátor (zadává testy)" : " · lektor (jen čtení)");

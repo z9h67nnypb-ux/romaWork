@@ -103,6 +103,10 @@ create table if not exists work_log (
 );
 create index if not exists work_log_lector_date_idx on work_log (lector_id, work_date);
 
+-- Jméno lektora je klíč, podle kterého rozvrh páruje lekce a výkaz sčítá
+-- hodiny – dvě karty se stejným jménem by výkaz rozdělily na dvě půlky.
+create unique index if not exists lectors_name_uidx on lectors (name);
+
 -- Trigger: potvrzení lekce zapíše/aktualizuje práci, odškrtnutí ji odebere.
 create or replace function log_lesson_work() returns trigger
 language plpgsql security definer as $$
@@ -371,43 +375,11 @@ left join students s  on s.id = a.student_id
 group by l.id, r.name, r.color, lec.name;
 
 -- ===========================================================================
--- BEZPEČNOST (RLS)
+-- ČÍSELNÍK UČEBEN / STOLŮ
 -- ---------------------------------------------------------------------------
--- Níže jsou OTEVŘENÉ politiky jen pro rychlé prototypování – dovolí komukoli
--- s anon klíčem číst i zapisovat. PŘED OSTRÝM PROVOZEM je nahraď přihlášením
--- (auth) a politikami, které čtení/zápis povolí jen přihlášeným lektorům.
--- ===========================================================================
-alter table rooms       enable row level security;
-alter table lectors     enable row level security;
-alter table students    enable row level security;
-alter table lessons     enable row level security;
-alter table attendance  enable row level security;
-alter table work_log    enable row level security;
-alter table diagnostics enable row level security;
-alter table payments    enable row level security;
-alter table credit_log  enable row level security;
-
-drop policy if exists proto_all on rooms;
-create policy proto_all on rooms       for all using (true) with check (true);
-drop policy if exists proto_all on lectors;
-create policy proto_all on lectors     for all using (true) with check (true);
-drop policy if exists proto_all on students;
-create policy proto_all on students    for all using (true) with check (true);
-drop policy if exists proto_all on lessons;
-create policy proto_all on lessons     for all using (true) with check (true);
-drop policy if exists proto_all on attendance;
-create policy proto_all on attendance  for all using (true) with check (true);
-drop policy if exists proto_all on work_log;
-create policy proto_all on work_log    for all using (true) with check (true);
-drop policy if exists proto_all on diagnostics;
-create policy proto_all on diagnostics for all using (true) with check (true);
-drop policy if exists proto_all on payments;
-create policy proto_all on payments    for all using (true) with check (true);
-drop policy if exists proto_all on credit_log;
-create policy proto_all on credit_log  for all using (true) with check (true);
-
--- ===========================================================================
--- UKÁZKOVÁ DATA (seed) – ať po spuštění hned něco vidíš
+-- Sloupce rozvrhu. Není to ukázková data, ale skutečné vybavení pobočky –
+-- proto se zakládá rovnou tady. Nová učebna = další řádek (sort určuje
+-- pořadí zleva doprava, color barvu bloků).
 -- ===========================================================================
 insert into rooms (id, name, color, sort) values
   ('office-1','Office učebna 1','#4d4d4d',1),
@@ -429,61 +401,47 @@ insert into rooms (id, name, color, sort) values
   ('mat-6','Matematická stůl 6','#4569b0',17)
 on conflict (id) do nothing;
 
-do $$
-declare
-  lec_kunkelova uuid;
-  lec_machalik  uuid;
-  stud_sima     uuid;
-  stud_opata    uuid;
-  stud_flek     uuid;
-  les1 uuid; les2 uuid; les3 uuid;
-begin
-  insert into lectors (name, phone) values ('Kunkelová','731571406') returning id into lec_kunkelova;
-  insert into lectors (name, phone) values ('Machalíková','604828001') returning id into lec_machalik;
-
-  insert into students (name, phone, school) values ('Šíma','777111222','ZŠ') returning id into stud_sima;
-  insert into students (name, phone, school) values ('Opata Jiří','777333444','SŠ') returning id into stud_opata;
-  insert into students (name, phone, status) values ('Flekáčová','777555666','active') returning id into stud_flek;
-
-  -- časy = dnešek v místním pásmu (Europe/Prague)
-  insert into lessons (starts_at, ends_at, subject, room_id, lector_id, mode)
-    values ((current_date + time '08:00') at time zone 'Europe/Prague',
-            (current_date + time '09:00') at time zone 'Europe/Prague',
-            'AJ','office-1',lec_kunkelova,'offline') returning id into les1;
-  insert into lessons (starts_at, ends_at, subject, room_id, lector_id, mode)
-    values ((current_date + time '14:00') at time zone 'Europe/Prague',
-            (current_date + time '16:00') at time zone 'Europe/Prague',
-            'MAT','mat-1',lec_machalik,'offline') returning id into les2;
-  insert into lessons (starts_at, ends_at, subject, room_id, lector_id, mode)
-    values ((current_date + time '12:00') at time zone 'Europe/Prague',
-            (current_date + time '13:30') at time zone 'Europe/Prague',
-            'Přír.','vse-3',lec_machalik,'online') returning id into les3;
-
-  insert into attendance (lesson_id, student_id) values (les1, stud_sima), (les2, stud_opata), (les3, stud_flek);
-end $$;
+-- Žádná ukázková data tu nejsou. Databáze začíná prázdná, naplní ji provoz.
 
 -- ===========================================================================
 -- PŘIHLÁŠENÍ A ROLE (administrátor / lektor)
 -- ---------------------------------------------------------------------------
--- Účty se zakládají v Supabase: Authentication -> Users -> Add user
--- (e-mail + heslo). Každý uživatel má v tabulce profiles roli.
+-- Účty lektorů zakládá administrátor přímo v appce (Rozvrh -> „Lektoři"):
+-- vyplní jméno, e-mail a heslo, účet vznikne v auth.users a trigger níž
+-- k němu doplní řádek v profiles. Ručně přes Supabase (Authentication ->
+-- Users -> Add user) se zakládá jen ten úplně první administrátor.
+--
+-- ⚠️ Aby zakládání z appky fungovalo, musí být v Supabase pod
+--    Authentication -> Sign In / Providers -> Email vypnuté „Confirm email".
+--    Jinak účet sice vznikne, ale lektor se do potvrzení odkazem nepřihlásí.
 -- ===========================================================================
 
 create table if not exists profiles (
-  id   uuid primary key references auth.users(id) on delete cascade,
-  name text,
-  role text not null default 'lektor'   -- 'admin' | 'lektor'
+  id     uuid primary key references auth.users(id) on delete cascade,
+  name   text,
+  email  text,
+  role   text not null default 'lektor',  -- 'admin' | 'lektor'
+  active boolean not null default true,   -- false = účet zůstává, ale nepustí dovnitř
+  created_at timestamptz not null default now()
 );
+-- (pro databáze založené starší verzí schématu)
+alter table profiles add column if not exists email      text;
+alter table profiles add column if not exists active     boolean not null default true;
+alter table profiles add column if not exists created_at timestamptz not null default now();
 
--- Profil se založí automaticky po vytvoření uživatele (default role 'lektor').
+-- Profil se založí automaticky po vytvoření uživatele (default role 'lektor';
+-- administrátor si roli hned poté případně přepíše z appky).
 -- POZOR: trigger volá Supabase Auth, který nevidí schéma public – proto musí
 -- být tabulka plně kvalifikovaná a search_path přibitý, jinak založení
 -- uživatele spadne na "Database error creating new user".
 create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.profiles (id, name, role)
-  values (new.id, coalesce(new.raw_user_meta_data->>'name', new.email), 'lektor')
+  insert into public.profiles (id, name, email, role)
+  values (new.id,
+          coalesce(nullif(new.raw_user_meta_data->>'name', ''), new.email),
+          new.email,
+          'lektor')
   on conflict (id) do nothing;
   return new;
 end $$;
@@ -493,80 +451,154 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- Každý smí číst svůj profil (appka z něj zjistí roli a jméno).
-alter table profiles enable row level security;
-drop policy if exists read_own_profile on profiles;
-create policy read_own_profile on profiles for select using (auth.uid() = id);
-
 -- Pomocná funkce: je přihlášený uživatel administrátor?
+-- security definer, protože ji volají politiky nad tabulkou profiles –
+-- bez toho by se politika ptala sama sebe a Postgres skončí na rekurzi.
 create or replace function public.is_admin() returns boolean
-language sql stable set search_path = public as $$
+language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin');
 $$;
 
--- ➜ PO ZALOŽENÍ administrátorského účtu nastav jeho roli (doplň jeho e-mail):
+-- Každý smí číst svůj profil (appka z něj zjistí roli a jméno), administrátor
+-- vidí a mění všechny – zakládá z appky účty lektorů a odebírá přístup.
+-- Vlastní profil nikdo měnit nesmí, jinak by se lektor povýšil na admina.
+alter table profiles enable row level security;
+drop policy if exists read_own_profile  on profiles;
+drop policy if exists prof_read         on profiles;
+drop policy if exists prof_admin_update on profiles;
+drop policy if exists prof_admin_delete on profiles;
+
+create policy prof_read on profiles
+  for select to authenticated using (auth.uid() = id or is_admin());
+create policy prof_admin_update on profiles
+  for update to authenticated using (is_admin()) with check (is_admin());
+create policy prof_admin_delete on profiles
+  for delete to authenticated using (is_admin());
+
+-- ➜ ÚPLNĚ PRVNÍ administrátor: účet založ v Supabase (Authentication -> Users
+--    -> Add user) a pak mu tímhle nastav roli. Další účty už zakládá on sám
+--    v appce (Rozvrh -> „Lektoři").
 --   update profiles set role = 'admin'
---   where id = (select id from auth.users where email = 'admin@poradys.cz');
+--   where id = (select id from auth.users where email = 'sem@dopln.cz');
 
 -- ===========================================================================
--- PRÁVA K DIAGNOSTICKÝM TESTŮM A KARTÁM ŽÁKŮ
+-- BEZPEČNOST (RLS) – OSTRÝ PROVOZ
 -- ---------------------------------------------------------------------------
--- Administrátor zadává výsledky testů a zakládá žáky, lektor smí jen číst
--- (vyhledat žáka, prohlédnout výsledky, vytisknout zprávu pro rodiče).
+-- Pravidlo: anonymní uživatel nevidí NIC. Přihlášený lektor čte rozvrh
+-- a karty žáků (potřebuje to pohled lesson_details i diagnostika) a u své
+-- lekce smí zapsat, že proběhla. Všechno ostatní – zakládání a mazání lekcí,
+-- kartotéka, platby, výkaz hodin – patří administrátorovi.
 --
--- ⚠️ NEJDŘÍV si nastav aspoň jeden účet jako 'admin' příkazem výše, jinak
+-- ⚠️ NEJDŘÍV si nastav aspoň jeden účet jako 'admin' příkazem výš, jinak
 --    po spuštění tohohle bloku nebude moct zapisovat nikdo.
 --
--- Politiky se sčítají (OR), takže "read" pro všechny přihlášené platí i pro
--- administrátora. Zápis pouští jen is_admin() – ta čte roli z `profiles`.
+-- Politiky se sčítají (OR): „read pro všechny přihlášené" platí i pro
+-- administrátora, zápis navíc pouští is_admin().
 -- ===========================================================================
+alter table rooms         enable row level security;
+alter table lectors       enable row level security;
+alter table students      enable row level security;
+alter table lessons       enable row level security;
+alter table attendance    enable row level security;
+alter table work_log      enable row level security;
+alter table diagnostics   enable row level security;
+alter table payments      enable row level security;
+alter table credit_log    enable row level security;
+alter table notifications enable row level security;
 
--- Diagnostické testy
-alter table diagnostics enable row level security;
-drop policy if exists proto_all   on diagnostics;
+-- Prototypové „všechno všem" (i nepřihlášeným) musí zmizet dřív, než se
+-- pustí nová pravidla – politiky se sčítají, takže by je jinak přebilo.
+do $$
+declare t text;
+begin
+  foreach t in array array['rooms','lectors','students','lessons','attendance',
+                           'work_log','diagnostics','payments','credit_log','notifications']
+  loop
+    execute format('drop policy if exists proto_all on %I', t);
+  end loop;
+end $$;
+
+-- ---------- Čtou všichni přihlášení, zapisuje administrátor ----------
+-- (rozvrh, číselníky a karty žáků potřebuje k práci i lektor)
+do $$
+declare t text;
+begin
+  foreach t in array array['rooms','lectors','students','attendance','diagnostics']
+  loop
+    execute format('drop policy if exists %I on %I', t || '_read', t);
+    execute format('drop policy if exists %I on %I', t || '_write', t);
+    execute format('create policy %I on %I for select to authenticated using (true)', t || '_read', t);
+    execute format('create policy %I on %I for all to authenticated using (is_admin()) with check (is_admin())', t || '_write', t);
+  end loop;
+end $$;
+-- Starší názvy politik ze schématu pro diagnostiku a žáky (nahrazeny výše).
 drop policy if exists diag_read   on diagnostics;
 drop policy if exists diag_insert on diagnostics;
 drop policy if exists diag_update on diagnostics;
 drop policy if exists diag_delete on diagnostics;
-
-create policy diag_read   on diagnostics for select to authenticated using (true);
-create policy diag_insert on diagnostics for insert to authenticated with check (is_admin());
-create policy diag_update on diagnostics for update to authenticated using (is_admin()) with check (is_admin());
-create policy diag_delete on diagnostics for delete to authenticated using (is_admin());
-
--- Karty žáků (kartotéka). Lektor je čte – potřebuje to rozvrh (pohled
--- lesson_details jména žáků joinuje) i vyhledávání v diagnostice.
--- Zakládat a měnit je smí jen administrátor.
-alter table students enable row level security;
-drop policy if exists proto_all   on students;
 drop policy if exists stud_read   on students;
 drop policy if exists stud_insert on students;
 drop policy if exists stud_update on students;
 drop policy if exists stud_delete on students;
 
-create policy stud_read   on students for select to authenticated using (true);
-create policy stud_insert on students for insert to authenticated with check (is_admin());
-create policy stud_update on students for update to authenticated using (is_admin()) with check (is_admin());
-create policy stud_delete on students for delete to authenticated using (is_admin());
+-- ---------- Jen administrátor (peníze a mzdy) ----------
+do $$
+declare t text;
+begin
+  foreach t in array array['work_log','payments','credit_log','notifications']
+  loop
+    execute format('drop policy if exists %I on %I', t || '_admin', t);
+    execute format('create policy %I on %I for all to authenticated using (is_admin()) with check (is_admin())', t || '_admin', t);
+  end loop;
+end $$;
+-- Kredit a hodiny plní databázové triggery (security definer), takže je
+-- zavřená tabulka neomezí – zapisují mimo RLS.
 
--- Kontrola po spuštění: kdo je admin?
---   select p.role, u.email from profiles p join auth.users u on u.id = p.id;
+-- ---------- Lekce ----------
+-- Číst smí každý přihlášený, zakládat a mazat jen administrátor.
+-- Upravit smí kdokoli přihlášený, ale lektorovi trigger níž vrátí zpátky
+-- všechno kromě potvrzení a popisu – RLS sama sloupce omezit neumí.
+drop policy if exists less_read   on lessons;
+drop policy if exists less_insert on lessons;
+drop policy if exists less_update on lessons;
+drop policy if exists less_delete on lessons;
 
--- ===========================================================================
--- ZPŘÍSNĚNÍ RLS (až bude appka naostro) – nahradí prototypové "proto_all".
--- Teď zakomentováno, aby prototyp fungoval i bez kompletního přihlášení.
--- ---------------------------------------------------------------------------
--- drop policy if exists proto_all on lessons;
--- create policy read_all on lessons for select to authenticated using (true);
--- create policy admin_write on lessons for all to authenticated
---   using (is_admin()) with check (is_admin());
--- -- Lektor mění JEN popis a potvrzení přes funkci (nezmění čas/učebnu):
--- create or replace function lector_report(p_lesson uuid, p_done boolean, p_desc text)
--- returns void language plpgsql security definer as $$
--- begin
---   update lessons set done = p_done,
---     status = case when p_done and status = 'planned' then 'done' else status end,
---     description = p_desc
---   where id = p_lesson;
--- end $$;
--- ===========================================================================
+create policy less_read   on lessons for select to authenticated using (true);
+create policy less_insert on lessons for insert to authenticated with check (is_admin());
+create policy less_update on lessons for update to authenticated using (true) with check (true);
+create policy less_delete on lessons for delete to authenticated using (is_admin());
+
+-- Lektor u lekce hlásí jen „proběhla" a co se dělalo. Čas, učebnu, žáka ani
+-- lektora měnit nesmí – tady se mu případná změna tiše vrátí na původní
+-- hodnotu, takže rozvrh nemůže rozhodit ani ručně poslaným požadavkem.
+--
+-- auth.uid() is null = zápis mimo appku (SQL Editor, Table Editor, migrace,
+-- service_role). Tam se nekrouhá nic, jinak by opravy z dashboardu tiše
+-- mizely a nikdo by nechápal proč.
+create or replace function public.guard_lesson_update() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  if auth.uid() is null or public.is_admin() then return new; end if;
+  new.starts_at   := old.starts_at;
+  new.ends_at     := old.ends_at;
+  new.subject     := old.subject;
+  new.room_id     := old.room_id;
+  new.lector_id   := old.lector_id;
+  new.mode        := old.mode;
+  new.kind        := old.kind;
+  new.is_lead     := old.is_lead;
+  new.lesson_type := old.lesson_type;
+  new.created_at  := old.created_at;
+  -- zbývá: done, status, description
+  return new;
+end $$;
+
+drop trigger if exists lessons_guard_update on lessons;
+create trigger lessons_guard_update
+  before update on lessons
+  for each row execute function public.guard_lesson_update();
+
+-- Kontrola po spuštění:
+--   select p.name, p.email, p.role, p.active from profiles p order by p.name;
+--   select tablename, policyname, cmd from pg_policies
+--     where schemaname = 'public' order by tablename, policyname;

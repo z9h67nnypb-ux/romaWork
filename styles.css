@@ -32,7 +32,6 @@ body.app-schedule #viewContainer {
   flex-direction: column;
 }
 /* Lišty si drží svou výšku, zmenšuje se jen plocha rozvrhu. */
-body.app-schedule > .banner,
 body.app-schedule > .topbar,
 body.app-schedule > .toolbar,
 body.app-schedule > .admin-hint { flex: 0 0 auto; }
@@ -463,14 +462,6 @@ body.app-schedule .day-scroll { max-height: none; }
 
 .hidden { display: none !important; }
 
-.banner {
-  background: #fff8e1;
-  border-bottom: 1px solid #f0e0a0;
-  color: #6b5800;
-  padding: 6px 20px;
-  font-size: 12px;
-}
-
 /* ---------- Login ---------- */
 .login-screen {
   position: fixed;
@@ -592,6 +583,32 @@ body.app-schedule .day-scroll { max-height: none; }
 .hours-table tr.total td { border-top: 2px solid var(--line-strong); font-weight: 600; }
 .hours-note { font-size: 11.5px; color: var(--muted); padding: 6px 18px 14px; margin: 0; }
 
+/* ---------- Účty lektorů (admin) ---------- */
+/* Širší než výkaz hodin – řádek nese jméno, e-mail, roli i dvě tlačítka. */
+.users-card { width: 620px; }
+.user-form { padding: 12px 18px 4px; border-bottom: 1px solid var(--line); }
+.user-form-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.user-form label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); }
+.user-form input,
+.user-form select {
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: #222;
+}
+.user-form input { width: 150px; }
+.user-form-msg { min-height: 18px; padding: 4px 0 6px; font-size: 12px; }
+.users-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.users-table th, .users-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+.users-table th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.users-table td.acts { text-align: right; white-space: nowrap; }
+.users-table button { border: 1px solid var(--line-strong); background: #fff; border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
+/* Zamčený účet musí být poznat na první pohled, ne až podle textu tlačítka. */
+.users-table tr.off td { color: var(--muted); }
+.role-tag { border-radius: 3px; padding: 1px 6px; font-size: 11px; background: #eef1f6; color: #445; }
+.role-tag.admin { background: #fde9c8; color: #7a4a00; }
+
 /* ---------- Výběr / kopírování ---------- */
 .event.selected {
   outline: 3px solid #1976d2;
@@ -633,17 +650,6 @@ body.app-schedule .day-scroll { max-height: none; }
 }
 .series-btn:hover { background: var(--accent); color: #fff; }
 .series-btn:disabled { opacity: 0.5; cursor: default; }
-
-/* Odkaz z ukázkového režimu ven – bez něj se z něj leze ručním mazáním
-   ?demo=1 z adresy, protože si ho odkazy mezi stránkami nesou s sebou. */
-.banner-exit {
-  margin-left: 8px;
-  font-weight: 600;
-  color: #7a4f00;
-  text-decoration: underline;
-  white-space: nowrap;
-}
-.banner-exit:hover { color: #000; }
 
 /* Odhlášení na kartotéce a diagnostice – session je společná pro celou appku,
    takže se nemusí kvůli odhlášení chodit zpátky do rozvrhu. Odsazené doprava,
@@ -766,11 +772,13 @@ body.app-schedule .day-scroll { max-height: none; }
 @media (pointer: coarse) and (min-width: 1000px) {
   .topband,
   .admin-hint,
-  .banner,
   .toast,
   .login-card,
   .detail-panel,
   .hours-card { zoom: 3; }
+  /* Karta účtů je širší než výkaz; se zoomem 3 by přerostla displej,
+     tak ji srovnáme na stejnou šířku (formulář se uvnitř zalomí). */
+  .users-card { width: 420px; }
 
   /* Zvětšení samo o sobě nestačí – tlačítko musí mít i vyšší dotykovou
      plochu, jinak zůstane vysoké pár pixelů a míří se do něj špatně. */

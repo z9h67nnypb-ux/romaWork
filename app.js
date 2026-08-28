@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
-// Hlavní logika prototypu rozvrhu.
-// Data se čtou přes "provider" – buď mock (paměť), nebo Supabase.
-// Front-end nezajímá, odkud data jsou; oba providery vrací stejný tvar.
+// Hlavní logika rozvrhu.
+// Všechna data jdou přes "provider" – jediné místo, které mluví s databází
+// (Supabase). Zbytek souboru o databázi neví a pracuje jen s objekty.
 // ---------------------------------------------------------------------------
 
 const CFG = window.APP_CONFIG;
@@ -17,88 +17,6 @@ function clearLocalAuth() {
       .forEach((k) => localStorage.removeItem(k));
   } catch (e) { /* privátní režim */ }
 }
-
-// ---------- Data provider: MOCK ----------
-// Čte a zapisuje do sdíleného demo úložiště (mockData.js -> DemoStore), aby
-// kartotéka viděla přesně ty lekce, které jsou v rozvrhu – jinak by z nich
-// neuměla odečíst vyčerpané hodiny.
-const MockProvider = {
-  async getRooms() {
-    return [...window.ROOMS].sort((a, b) => a.sort - b.sort);
-  },
-  async getLessons(date) {
-    if (window.DemoStore.ensureDay(date)) window.DemoStore.save();
-    return window.DemoStore.lessons().filter((l) => sameDay(l.starts_at, date));
-  },
-  async getLessonsRange(start, end) {
-    const out = [];
-    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
-      out.push(...await this.getLessons(new Date(d)));
-    }
-    return out;
-  },
-  async updateLessonFields(id, fields) {
-    const l = window.DemoStore.lessons().find((x) => x.id === id);
-    if (l) Object.assign(l, fields);
-    window.DemoStore.save();
-  },
-  async saveLesson(payload, id) {
-    // Nový klient z rozvrhu se v ukázkovém režimu přidá do seznamu klientů,
-    // ať se chová stejně jako v ostré verzi (propíše se do kartotéky).
-    const clients = window.DemoStore.clients();
-    if (payload.student_names && !clients.some((s) => s.name === payload.student_names)) {
-      clients.push(Object.assign(
-        { id: window.DemoStore.newId("c"), name: payload.student_names, status: "active" },
-        payload.student_fields || {}
-      ));
-    }
-    const client = clients.find((s) => s.name === payload.student_names);
-    const enriched = Object.assign({}, payload, {
-      student_phone: (client && client.phone) || "",
-      student_grade: (client && client.grade) || "",
-      student_category: (client && client.category) || "",
-    });
-    delete enriched.student_fields;
-    const all = window.DemoStore.lessons();
-    let l;
-    if (id) {
-      l = all.find((x) => x.id === id);
-      if (l) Object.assign(l, enriched);
-    } else {
-      l = Object.assign({ id: window.DemoStore.newId("mock-new") }, enriched);
-      all.push(l);
-    }
-    window.DemoStore.save();
-    return l;
-  },
-  async deleteLesson(id) {
-    const all = window.DemoStore.lessons();
-    const i = all.findIndex((x) => x.id === id);
-    if (i >= 0) all.splice(i, 1);
-    window.DemoStore.save();
-  },
-  async getStudents() { return window.DemoStore.clients().slice(); },
-  // Součet potvrzených (done) lekcí za měsíc po lektorech.
-  // Nejdřív doseje všechny dny měsíce, aby výkaz nezávisel na tom,
-  // které dny už uživatel navštívil. month je 0-based (jako v JS Date).
-  async getMonthlyHours(year, month) {
-    const days = new Date(year, month + 1, 0).getDate();
-    for (let d = 1; d <= days; d++) await this.getLessons(new Date(year, month, d));
-    const map = new Map();
-    window.DemoStore.lessons().forEach((l) => {
-      if (!l.done || isShift(l)) return;
-      if (l.starts_at.getFullYear() !== year || l.starts_at.getMonth() !== month) return;
-      const key = l.lector_name || "(bez lektora)";
-      const cur = map.get(key) || { hours: 0, lessons: 0 };
-      cur.hours += (l.ends_at - l.starts_at) / 3600000;
-      cur.lessons += 1;
-      map.set(key, cur);
-    });
-    return [...map.entries()]
-      .map(([name, v]) => ({ lector_name: name, lessons: v.lessons, hours: Math.round(v.hours * 100) / 100 }))
-      .sort((a, b) => b.hours - a.hours);
-  },
-};
 
 // ---------- Data provider: SUPABASE ----------
 const SupabaseProvider = {
@@ -129,7 +47,7 @@ const SupabaseProvider = {
       .lt("starts_at", end.toISOString())
       .order("starts_at");
     if (error) throw error;
-    // Převést ISO řetězce na Date objekty (jako u mocku)
+    // Převést ISO řetězce na Date objekty – zbytek appky počítá s Date.
     return data.map((l) => ({
       ...l,
       starts_at: new Date(l.starts_at),
@@ -219,7 +137,7 @@ const SupabaseProvider = {
       if (res.error) throw res.error;
       lessonId = res.data.id;
     }
-    // Žák (prototyp počítá s jedním jménem; skupinu lze rozšířit)
+    // Žák (počítá se s jedním jménem; skupinu lze rozšířit)
     if (payload.student_names) {
       const student_id = await this._resolveStudent(payload.student_names, payload.student_fields);
       await c.from("attendance").insert({ lesson_id: lessonId, student_id });
@@ -244,41 +162,57 @@ const SupabaseProvider = {
   },
 };
 
-const provider = CFG.USE_SUPABASE ? SupabaseProvider : MockProvider;
+const provider = SupabaseProvider;
 
 // ---------- Přihlášení ----------
-// MOCK: kontroluje proti DEMO_USERS, session drží v sessionStorage.
-const MockAuth = {
-  async signIn(email, password) {
-    const u = (CFG.DEMO_USERS || []).find((x) => x.email === email && x.password === password);
-    if (!u) throw new Error("Neplatný e-mail nebo heslo.");
-    const user = { email: u.email, name: u.name, role: u.role };
-    sessionStorage.setItem("poradys_user", JSON.stringify(user));
-    return user;
-  },
-  async current() {
-    const s = sessionStorage.getItem("poradys_user");
-    return s ? JSON.parse(s) : null;
-  },
-  async signOut() { sessionStorage.removeItem("poradys_user"); },
-};
+// Supabase Auth vrací hlášky anglicky. Appku používají lidi, co anglicky
+// nemluví, tak ty, na které se dá narazit, přeložíme; ostatní projdou tak,
+// jak přišly (radši cizí text než mlčení).
+function authErrorCz(msg) {
+  const m = String(msg || "");
+  if (/Invalid login credentials/i.test(m)) return "Neplatný e-mail nebo heslo.";
+  if (/Email not confirmed/i.test(m)) return "Účet ještě není potvrzený e-mailem.";
+  if (/User already registered|already been registered/i.test(m)) return "Tenhle e-mail už účet má.";
+  if (/Signups not allowed/i.test(m)) return "Zakládání účtů je v Supabase vypnuté (Authentication → Sign In / Providers → Email).";
+  if (/invalid format|is invalid/i.test(m) && /email/i.test(m)) return "E-mail nemá správný tvar.";
+  if (/Password should be at least/i.test(m)) return "Heslo je moc krátké.";
+  if (/you can only request this after/i.test(m)) return "Moc pokusů za sebou – zkuste to za chvíli znovu.";
+  if (/Failed to fetch|NetworkError/i.test(m)) return "Nedaří se spojit s databází. Zkontrolujte připojení k internetu.";
+  return m;
+}
 
 // SUPABASE: skutečné přihlášení e-mailem/heslem, role z tabulky profiles.
 const SupabaseAuth = {
   async signIn(email, password) {
     const c = SupabaseProvider._init();
     const { data, error } = await c.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(authErrorCz(error.message));
     return await this._profile(c, data.user);
   },
   async current() {
     const c = SupabaseProvider._init();
     const { data } = await c.auth.getSession();
     if (!data.session) return null;
-    return await this._profile(c, data.session.user);
+    // Když administrátor přístup odebral, session v prohlížeči ještě chvíli
+    // žije. _profile ji zneplatní a vyhodí chybu – tady z ní ale nesmí být
+    // pád při startu, jen návrat na přihlášení.
+    try { return await this._profile(c, data.session.user); }
+    catch (e) { console.warn(e.message || e); return null; }
   },
   async _profile(c, user) {
-    const { data } = await c.from("profiles").select("role, name").eq("id", user.id).maybeSingle();
+    // Hvězdička schválně: výčet sloupců by na databázi bez spuštěné migrace
+    // spadl na neznámém `active` a administrátor by se tiše propadl na lektora.
+    const { data } = await c.from("profiles").select("*").eq("id", user.id).maybeSingle();
+    // Administrátor umí účet zamknout (profiles.active = false) místo mazání,
+    // ať se nepřijde o odpracované hodiny. Zamčený se nesmí dostat dovnitř –
+    // heslo mu pořád funguje, takže ho musíme odmítnout tady.
+    // Sloupec `active` přidává migrace_ucty_lektoru.sql; na databázi bez ní
+    // přijde undefined a přihlášení funguje jako dřív.
+    if (data && data.active === false) {
+      try { await c.auth.signOut(); } catch (e) { console.error(e); }
+      clearLocalAuth();
+      throw new Error("Tento účet už nemá přístup. Ozvěte se administrátorovi.");
+    }
     return { email: user.email, name: (data && data.name) || user.email, role: (data && data.role) || "lektor" };
   },
   // Zneplatnění session na serveru. Volá se „pošli a nečekej" – viz onLogout.
@@ -289,7 +223,7 @@ const SupabaseAuth = {
   },
 };
 
-const auth = CFG.USE_SUPABASE ? SupabaseAuth : MockAuth;
+const auth = SupabaseAuth;
 
 // ---------- Stav ----------
 const state = {
@@ -503,6 +437,7 @@ function renderToolbar() {
   document.getElementById("extendWeekBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("kartotekaBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("hoursBtn").classList.toggle("hidden", !isAdmin());
+  document.getElementById("usersBtn").classList.toggle("hidden", !isAdmin());
   document.querySelectorAll(".view-tabs button[data-view]").forEach((b) => {
     b.classList.toggle("active", b.dataset.view === state.view);
   });
@@ -548,7 +483,7 @@ function renderView() {
       });
     }
   } else if (state.view === "agenda") { c.innerHTML = ""; c.appendChild(buildAgenda()); }
-  else c.innerHTML = '<div class="placeholder">Pohled „' + state.view + '" je v prototypu zatím jen jako náhled. Hlavní je denní rozvrh.</div>';
+  else c.innerHTML = '<div class="placeholder">Pohled „' + state.view + '" je zatím jen náhled. Hlavní je denní rozvrh.</div>';
 }
 
 function visibleRooms() {
@@ -600,7 +535,7 @@ function computeHourHeight(withShiftRow) {
   if (!vc) return Math.max(CFG.HOUR_HEIGHT, minHH);
   // Volná výška pod lištami = od horní hrany plochy po spodek okna.
   // Bereme pozici v okně (getBoundingClientRect), ne clientHeight – ta bývá
-  // při stavbě ještě nedopočítaná (banner/hint se teprve srovnávají).
+  // při stavbě ještě nedopočítaná (lišta a nápověda se teprve srovnávají).
   const top = vc.getBoundingClientRect().top;
   const avail = window.innerHeight - top - 8;
   // záhlaví sloupců + okraje mřížky (+ řádek se směnami, když se zobrazuje)
@@ -1050,7 +985,7 @@ function renderAdminForm(l, title) {
         '<div id="lessonOnly2"' + (shift ? ' class="hidden"' : "") + ' style="flex:1;">' +
           field("Předmět", '<input type="text" id="fSubject" value="' + escapeHtml(l.subject || "") + '">') +
         "</div>" +
-        field("Lektor", '<input type="text" id="fLector" value="' + escapeHtml(l.lector_name || "") + '">') +
+        field("Lektor", '<input type="text" id="fLector" list="lectorsList" value="' + escapeHtml(l.lector_name || "") + '">') +
       "</div>" +
       // Hvězdička = hlavní lektor dne. V celém dni může být jen jeden, ostatním
       // se při uložení odebere. Je to provozní role (kdo dnes „drží" pobočku),
@@ -1742,16 +1677,180 @@ async function renderHoursReport() {
   }
 }
 
+// ---------- Účty lektorů (admin) ----------
+// Administrátor tu založí lektorovi přihlášení: vyplní jméno, e-mail a heslo,
+// účet vznikne v Supabase Auth a v tabulce `profiles` se objeví řádek s rolí.
+// Lektor se pak přihlásí úplně stejně jako kdokoli jiný.
+//
+// Proč to jde bez serveru: účet zakládá supabase-js metodou signUp, jenže ta
+// by přihlášeného administrátora rovnou PŘEPSALA novým uživatelem. Proto se
+// na to použije DRUHÝ klient s persistSession:false – ten si session nikam
+// neuloží, takže administrátorovi jeho přihlášení zůstane.
+//
+// Roli, jméno a zámek účtu pak dopisuje UŽ přihlášený administrátor svým
+// klientem; do profiles ho pustí politika prof_admin_update
+// (viz migrace_ucty_lektoru.sql).
+const Accounts = {
+  _signup: null,
+  // Klient jen na zakládání účtů – nesmí sáhnout na uloženou session.
+  _signupClient() {
+    if (!this._signup) {
+      this._signup = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+    }
+    return this._signup;
+  },
+  async list() {
+    const { data, error } = await SupabaseProvider._init()
+      .from("profiles")
+      .select("id, name, email, role, active")
+      .order("name");
+    if (error) throw error;
+    return data || [];
+  },
+  async create({ name, email, password, role }) {
+    const { data, error } = await this._signupClient().auth.signUp({
+      email, password, options: { data: { name } },
+    });
+    if (error) throw new Error(authErrorCz(error.message));
+    const id = data && data.user && data.user.id;
+    if (!id) throw new Error("Účet se nepodařilo založit – Supabase nevrátil uživatele.");
+
+    // Supabase s zapnutým potvrzováním e-mailu vrátí uživatele bez session
+    // a bez identit. Takový účet se do potvrzení odkazem NEPŘIHLÁSÍ, takže
+    // je lepší to říct rovnou, než aby lektor marně zkoušel heslo.
+    const needsConfirm = !data.session &&
+      Array.isArray(data.user.identities) && data.user.identities.length === 0;
+
+    // Řádek v profiles založil trigger on_auth_user_created (role 'lektor').
+    // Jméno a případnou roli administrátora dopíšeme my.
+    const c = SupabaseProvider._init();
+    const { error: e2 } = await c.from("profiles")
+      .update({ name, email, role: role || "lektor", active: true }).eq("id", id);
+    if (e2) throw new Error("Účet vznikl, ale nešlo dopsat roli: " + e2.message);
+
+    // Karta lektora v tabulce `lectors` – z ní čte rozvrh i výkaz hodin.
+    // Bez ní by se odpracované hodiny neměly kam počítat.
+    if (role !== "admin") {
+      const { error: e3 } = await c.from("lectors")
+        .upsert({ name, email, active: true }, { onConflict: "name" });
+      if (e3) console.error("Kartu lektora se nepodařilo založit:", e3);
+    }
+    return { needsConfirm };
+  },
+  async setActive(id, active) {
+    const { error } = await SupabaseProvider._init().from("profiles").update({ active }).eq("id", id);
+    if (error) throw error;
+  },
+};
+
+async function openUsers() {
+  if (!isAdmin()) return;
+  document.getElementById("usersModal").classList.remove("hidden");
+  document.getElementById("nuError").textContent = "";
+  document.getElementById("nuOk").textContent = "";
+  await renderUsers();
+}
+
+function closeUsers() {
+  document.getElementById("usersModal").classList.add("hidden");
+}
+
+async function renderUsers() {
+  const body = document.getElementById("usersBody");
+  body.innerHTML = '<div class="placeholder">Načítám…</div>';
+  try {
+    const rows = await Accounts.list();
+    if (!rows.length) {
+      body.innerHTML = '<div class="placeholder">Zatím tu není žádný účet.</div>';
+      return;
+    }
+    let html = '<table class="users-table"><tr><th>Jméno</th><th>E-mail</th><th>Role</th><th></th></tr>';
+    rows.forEach((r) => {
+      const admin = r.role === "admin";
+      const me = state.user && state.user.email === r.email;
+      html += '<tr class="' + (r.active === false ? "off" : "") + '">' +
+        "<td>" + escapeHtml(r.name || "—") + (me ? " <b>(vy)</b>" : "") + "</td>" +
+        "<td>" + escapeHtml(r.email || "—") + "</td>" +
+        '<td><span class="role-tag ' + (admin ? "admin" : "") + '">' + (admin ? "administrátor" : "lektor") + "</span>" +
+          (r.active === false ? ' <span class="role-tag">bez přístupu</span>' : "") + "</td>" +
+        '<td class="acts">' +
+          // Sám sobě přístup vzít nemůžu – to by appku zamklo naslepo.
+          (me ? "—" : '<button data-act="' + (r.active === false ? "on" : "off") + '" data-id="' + escapeHtml(r.id) + '">' +
+            (r.active === false ? "Vrátit přístup" : "Zrušit přístup") + "</button>") +
+        "</td></tr>";
+    });
+    body.innerHTML = html + "</table>";
+    body.querySelectorAll("button[data-act]").forEach((b) => {
+      b.onclick = async () => {
+        b.disabled = true;
+        try {
+          await Accounts.setActive(b.dataset.id, b.dataset.act === "on");
+          await renderUsers();
+        } catch (e) {
+          b.disabled = false;
+          toast("Nepovedlo se: " + (e.message || e));
+        }
+      };
+    });
+  } catch (e) {
+    body.innerHTML = '<div class="placeholder">Chyba: ' + escapeHtml(e.message || e) + "</div>";
+    console.error(e);
+  }
+}
+
+async function onCreateUser(e) {
+  e.preventDefault();
+  const err = document.getElementById("nuError");
+  const ok = document.getElementById("nuOk");
+  const btn = document.getElementById("nuSubmit");
+  err.textContent = ""; ok.textContent = "";
+
+  const name = document.getElementById("nuName").value.trim();
+  const email = document.getElementById("nuEmail").value.trim().toLowerCase();
+  const password = document.getElementById("nuPass").value;
+  const role = document.getElementById("nuRole").value;
+  if (!name || !email || password.length < 8) {
+    err.textContent = "Vyplňte jméno, e-mail a heslo aspoň o osmi znacích.";
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    const res = await Accounts.create({ name, email, password, role });
+    document.getElementById("nuName").value = "";
+    document.getElementById("nuEmail").value = "";
+    document.getElementById("nuPass").value = "";
+    ok.textContent = res.needsConfirm
+      ? "Účet založen, ale čeká na potvrzení e-mailu (viz Supabase → Authentication → Email)."
+      : "Účet " + email + " je založený – předejte lektorovi e-mail a heslo.";
+    await renderUsers();
+    await loadLectors();
+  } catch (e2) {
+    err.textContent = e2.message || String(e2);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Jména lektorů do našeptávače u pole „Lektor" v detailu lekce. Výkaz hodin
+// se sčítá podle jména, takže překlep = lektor, který v přehledu chybí.
+async function loadLectors() {
+  const dl = document.getElementById("lectorsList");
+  if (!dl) return;
+  try {
+    const { data } = await SupabaseProvider._init()
+      .from("lectors").select("name").eq("active", true).order("name");
+    dl.innerHTML = (data || []).map((l) => '<option value="' + escapeHtml(l.name) + '">').join("");
+  } catch (e) { console.error(e); }
+}
+
 // ---------- Přihlašovací obrazovka ----------
 function showLogin() {
   document.getElementById("loginScreen").classList.remove("hidden");
   document.getElementById("loginPassword").value = "";
   document.getElementById("loginError").textContent = "";
-  if (!CFG.USE_SUPABASE) {
-    const h = document.getElementById("loginHint");
-    h.classList.remove("hidden");
-    h.innerHTML = "Demo účty:<br>admin@poradys.cz / admin123 (administrátor)<br>kunkelova@poradys.cz / lektor123 (lektor)";
-  }
 }
 function hideLogin() { document.getElementById("loginScreen").classList.add("hidden"); }
 
@@ -1793,6 +1892,7 @@ async function onLogout() {
   // Za přihlašovací vrstvou nesmí zůstat viset otevřený panel s daty klienta.
   closeDetail();
   document.getElementById("hoursModal").classList.add("hidden");
+  document.getElementById("usersModal").classList.add("hidden");
   document.getElementById("viewContainer").innerHTML = "";
   renderUserBadge();
 
@@ -1812,8 +1912,23 @@ function renderUserBadge() {
   document.getElementById("adminHint").classList.toggle("hidden", !isAdmin());
 }
 
+// Zbytky po zrušeném ukázkovém režimu. Demo data se držela v prohlížeči,
+// takže by komukoli, kdo appku zkoušel dřív, ležela v localStorage dál.
+// Smaže se to jednou při startu; až budou všechny prohlížeče čisté,
+// může tahle funkce zmizet.
+function clearDemoLeftovers() {
+  try {
+    ["poradys_demo_v1", "poradys_demo_store", "poradys_diagnostics_v2"]
+      .forEach((k) => localStorage.removeItem(k));
+    Object.keys(localStorage)
+      .filter((k) => /^poradys_(demo|mock)/.test(k))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch (e) { /* privátní režim */ }
+}
+
 // ---------- Inicializace ----------
 async function init() {
+  clearDemoLeftovers();
   document.getElementById("loginForm").onsubmit = onLogin;
   document.getElementById("logoutBtn").onclick = onLogout;
 
@@ -1827,12 +1942,12 @@ async function startApp(user) {
   state.user = user;
   renderUserBadge();
 
-  if (!CFG.USE_SUPABASE) document.getElementById("banner").classList.remove("hidden");
   // Když se nepodaří načíst číselníky (uspaný projekt, výpadek sítě),
   // nesmí zůstat prázdná bílá stránka bez vysvětlení.
   try {
     state.rooms = await provider.getRooms();
     await loadStudents();
+    await loadLectors();
   } catch (e) {
     console.error(e);
     document.getElementById("viewContainer").innerHTML =
@@ -1880,6 +1995,10 @@ async function startApp(user) {
     document.getElementById("hoursPrev").onclick = () => shiftHoursMonth(-1);
     document.getElementById("hoursNext").onclick = () => shiftHoursMonth(1);
     document.getElementById("hoursModal").onclick = (e) => { if (e.target.id === "hoursModal") closeHoursReport(); };
+    document.getElementById("usersBtn").onclick = openUsers;
+    document.getElementById("usersClose").onclick = closeUsers;
+    document.getElementById("newUserForm").onsubmit = onCreateUser;
+    document.getElementById("usersModal").onclick = (e) => { if (e.target.id === "usersModal") closeUsers(); };
 
     // Při změně velikosti okna přepočítej výšku hodiny, ať se den pořád vejde.
     let _resizeT = null;

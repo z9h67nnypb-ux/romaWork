@@ -1,6 +1,6 @@
 # Nasazení PoraDys rozvrhu do ostrého provozu
 
-Kompletní postup od prototypu k fungující appce, kterou lektoři otevřou
+Kompletní postup k fungující appce, kterou lektoři otevřou
 z domu i z kanceláře. Vše na free tarifech – **žádnou doménu kupovat nemusíš**,
 web pojede na adrese typu `https://uzivatel.github.io/romaWork/`
 (vlastní doménu jde kdykoli později „přišroubovat", nic se nepředělává).
@@ -25,29 +25,50 @@ Celkový čas: ~1 hodina. Postupuj po krocích, nic nepřeskakuj.
 
 1. V levém menu **SQL Editor → New query**.
 2. Zkopíruj **celý** obsah souboru [`schema.sql`](schema.sql), vlož, **Run**.
-3. Mělo by proběhnout bez chyby („Success"). Vytvoří se tabulky, trigger na
-   počítání hodin, pohledy i pár ukázkových řádků.
-4. **Ověření:** spusť po blocích [`test_databaze.sql`](test_databaze.sql) –
-   projde celý cyklus počítání hodin a po sobě uklidí. Když všech 9 kroků
-   sedí s `OČEKÁVÁNÍ`, databáze funguje.
+3. Mělo by proběhnout bez chyby („Success"). Vytvoří se tabulky, triggery na
+   počítání hodin a kreditu, pohledy, přístupová pravidla (RLS) a číselník
+   učeben. **Žádná ukázková data se nevkládají** – databáze začne prázdná.
+4. **Ověření:** v SQL Editoru zkontroluj, že jsou pravidla na místě:
 
-## KROK 3: Založ účty lektorům a šéfové – 10 min
+   ```sql
+   select tablename, policyname, cmd from pg_policies
+   where schemaname = 'public' order by tablename, policyname;
+   ```
 
-1. **Authentication → Users → Add user → Create new user**.
-2. Pro každého zadej e-mail + heslo a zaškrtni **Auto Confirm User**
-   (jinak by čekali na potvrzovací e-mail).
-3. Založ i účet pro šéfovou/admina (např. `admin@poradys.cz`).
-4. Každému novému uživateli se automaticky vytvoří profil s rolí `lektor`.
-   Adminovi roli povýšíš v **SQL Editoru** (uprav e-mail):
+   U žádné tabulky nesmí zůstat politika `proto_all`.
+5. **Když už databáze běžela dřív**, `schema.sql` znovu nespouštěj. Místo
+   toho pusť migrace v tomhle pořadí:
+   [`migrace_ucty_lektoru.sql`](migrace_ucty_lektoru.sql) →
+   [`migrace_prava_ostry_provoz.sql`](migrace_prava_ostry_provoz.sql).
+   Zkušební data pak smaže
+   [`reset_ostry_provoz.sql`](reset_ostry_provoz.sql). Je nevratný, čti
+   komentáře v souboru – nejdřív jen vypíše, kolik řádků by smazal.
+
+## KROK 3: Účet šéfové a účty lektorů – 10 min
+
+Ručně se zakládá **jen ten úplně první administrátor**. Všechny ostatní účty
+si pak šéfová vytvoří sama v appce.
+
+1. **Authentication → Sign In / Providers → Email** → vypni **„Confirm email"**
+   a ulož. Bez toho by se lektor založený z appky nepřihlásil, dokud
+   neklikne na potvrzovací odkaz v mailu.
+2. **Authentication → Users → Add user → Create new user** – e-mail a heslo
+   šéfové, zaškrtni **Auto Confirm User**.
+3. Povyš ji na administrátora v **SQL Editoru** (uprav e-mail):
 
    ```sql
    update profiles set role = 'admin'
-   where id = (select id from auth.users where email = 'admin@poradys.cz');
+   where id = (select id from auth.users where email = 'sem@dopln.cz');
    ```
 
+4. **Od teď dál už jen v appce:** Rozvrh → tlačítko **Lektoři** → jméno,
+   e-mail, heslo, role → *Založit účet*. Účet vznikne v `auth.users`, profil
+   se doplní triggerem a appka rovnou založí i kartu lektora v `lectors`.
+   Heslo se nikde neukládá – předej ho lektorovi.
+   Odchod lektora se řeší tlačítkem **Zrušit přístup** (účet se jen zamkne,
+   hodiny a historie zůstanou).
 5. Vyplň lektorům hodinové sazby (kvůli sloupci „K výplatě" ve výkazu):
    **Table Editor → lectors** → u každého vyplň `hourly_rate` (např. 250).
-   Lektoři, které založí až appka, se doplní stejně – kdykoli později.
 
 > **Chyba „Database error creating new user"?** Máš v databázi starší verzi
 > funkce `handle_new_user` (bez `set search_path`). Spusť v SQL Editoru znovu
@@ -55,85 +76,39 @@ Celkový čas: ~1 hodina. Postupuj po krocích, nic nepřeskakuj.
 > od `create table if not exists profiles` po funkci `is_admin` – a založ
 > uživatele znovu.
 
-## KROK 4: Zabezpeč databázi (RLS) – 5 min
+## KROK 4: Zkontroluj zabezpečení (RLS) – 3 min
 
-`schema.sql` nechává kvůli prototypování **otevřené** politiky – kdokoli se
-znalostí klíče by mohl číst i zapisovat. Před ostrým provozem spusť v SQL
-Editoru tohle (zamkne data jen pro přihlášené):
+Pravidla nastavuje rovnou [`schema.sql`](schema.sql) (blok „BEZPEČNOST (RLS) –
+OSTRÝ PROVOZ"), takže se tu už nic ručně spouštět nemusí. Jen si ověř, že sedí:
 
 ```sql
--- Čtení: jen přihlášení. Zápis: admin vše; lektor smí upravovat lekce
--- (appka ho pouští jen k popisu a potvrzení).
--- Blok je znovu-spustitelný: každou politiku nejdřív odstraní, pak založí.
-drop policy if exists proto_all on rooms;
-drop policy if exists read_rooms on rooms;
-drop policy if exists admin_rooms on rooms;
-create policy read_rooms  on rooms for select to authenticated using (true);
-create policy admin_rooms on rooms for all    to authenticated using (is_admin()) with check (is_admin());
-
-drop policy if exists proto_all on lectors;
-drop policy if exists read_lectors on lectors;
-drop policy if exists admin_lectors on lectors;
-create policy read_lectors  on lectors for select to authenticated using (true);
-create policy admin_lectors on lectors for all    to authenticated using (is_admin()) with check (is_admin());
-
-drop policy if exists proto_all on students;
-drop policy if exists read_students on students;
-drop policy if exists admin_students on students;
-create policy read_students  on students for select to authenticated using (true);
-create policy admin_students on students for all    to authenticated using (is_admin()) with check (is_admin());
-
-drop policy if exists proto_all on lessons;
-drop policy if exists read_lessons on lessons;
-drop policy if exists admin_lessons on lessons;
-drop policy if exists lector_update on lessons;
-create policy read_lessons   on lessons for select to authenticated using (true);
-create policy admin_lessons  on lessons for all    to authenticated using (is_admin()) with check (is_admin());
-create policy lector_update  on lessons for update to authenticated using (true) with check (true);
-
-drop policy if exists proto_all on attendance;
-drop policy if exists read_attendance on attendance;
-drop policy if exists admin_attendance on attendance;
-create policy read_attendance  on attendance for select to authenticated using (true);
-create policy admin_attendance on attendance for all    to authenticated using (is_admin()) with check (is_admin());
-
-drop policy if exists proto_all on work_log;
-drop policy if exists admin_work_log on work_log;
-create policy admin_work_log on work_log for select to authenticated using (is_admin());
--- (zápis do work_log dělá jen trigger, uživatelské politiky nepotřebuje)
-
-drop policy if exists proto_all on diagnostics;
-drop policy if exists read_diagnostics on diagnostics;
-drop policy if exists write_diagnostics on diagnostics;
-drop policy if exists delete_diagnostics on diagnostics;
-create policy read_diagnostics   on diagnostics for select to authenticated using (true);
-create policy write_diagnostics  on diagnostics for insert to authenticated with check (true);
-create policy delete_diagnostics on diagnostics for delete to authenticated using (true);
-
--- Kartotéka: platby (peníze) vidí a mění jen admin; čerpání kreditu
--- zapisují výhradně triggery, číst ho smí přihlášení.
-drop policy if exists proto_all on payments;
-drop policy if exists admin_payments on payments;
-create policy admin_payments on payments for all to authenticated using (is_admin()) with check (is_admin());
-
-drop policy if exists proto_all on credit_log;
-drop policy if exists read_credit_log on credit_log;
-create policy read_credit_log on credit_log for select to authenticated using (true);
-
--- Pohledy musí RLS respektovat (jinak běží s právy vlastníka a obcházejí ji):
-alter view lesson_details set (security_invoker = on);
-alter view lector_monthly_hours set (security_invoker = on);
-alter view student_credit set (security_invoker = on);
+select tablename, policyname, cmd, qual
+from pg_policies where schemaname = 'public'
+order by tablename, policyname;
 ```
 
-> ⚠️ **Celý `schema.sql` spouštěj jen JEDNOU při prvním zřízení databáze.**
-> Opakované spuštění zduplikuje ukázková data (seed). Pozdější úpravy dělej
-> vždy jen malými bloky.
+Co má platit:
 
-> Poznámka: lektor teoreticky může přes API změnit u lekce i čas (appka mu to
-> nedovolí, databáze ano). Pro rodinnou firmu rozumný kompromis. Kdyby to
-> někdy vadilo, je na konci `schema.sql` připravený přísnější vzor s funkcí
-> `lector_report` (vyžaduje malou úpravu appky).
+| Tabulka | Čte | Zapisuje |
+|---|---|---|
+| `rooms`, `lectors`, `students`, `attendance`, `diagnostics` | každý přihlášený | administrátor |
+| `lessons` | každý přihlášený | zakládá a maže administrátor; lektor smí u lekce změnit jen `done`, `status` a `description` (hlídá trigger `guard_lesson_update`) |
+| `payments`, `credit_log`, `work_log`, `notifications` | administrátor | administrátor (kredit a hodiny plní triggery mimo RLS) |
+| `profiles` | svůj profil každý, všechny administrátor | administrátor |
+
+Nepřihlášený uživatel **nevidí nic** – anon klíč sám o sobě nic neotevře.
+
+Pohledy musí RLS respektovat (jinak by běžely s právy vlastníka a obcházely ji);
+`schema.sql` je tak vytváří, ale po ruční úpravě to jde vynutit znovu:
+
+```sql
+alter view lesson_details       set (security_invoker = on);
+alter view lector_monthly_hours set (security_invoker = on);
+alter view student_credit       set (security_invoker = on);
+```
+
+> ⚠️ **Celý `schema.sql` spouštěj jen JEDNOU při prvním zřízení
+> databáze.** Pozdější úpravy dělej migracemi `migrace_*.sql` nebo malými bloky.
 
 ## KROK 5: Zapni automatický roční úklid lekcí – 2 min
 
@@ -157,9 +132,6 @@ alter view student_credit set (security_invoker = on);
    SUPABASE_URL: "https://tvuj-projekt.supabase.co",
    SUPABASE_ANON_KEY: "eyJ...",
    ```
-
-   Databáze je výchozí režim – `USE_SUPABASE` se nepřepíná. Appku jde
-   proklikat na smyšlených datech přidáním `?demo=1` do adresy.
 
 > **Co smí a nesmí do kódu:** `anon` klíč je veřejný záměrně – bezpečnost
 > zajišťují politiky z kroku 4 (bez přihlášení klíč nic nepřečte). Naopak
@@ -188,18 +160,23 @@ jen připojíš, nic jiného se nemění.)*
 
 ## KROK 8: Otestuj ostrou verzi – 10 min
 
-1. Otevři veřejnou adresu → žlutý pruh „Ukázkový režim" **nesmí** být vidět.
-2. Přihlas se admin účtem → založ zkušební lekci na dnešek.
-3. Přihlas se (třeba v anonymním okně) lektorem → otevři lekci → zaškrtni
+1. Otevři veřejnou adresu → musí přijít **přihlášení**, nic jiného.
+2. Přihlas se účtem šéfové → **Lektoři** → založ zkušební účet lektora.
+3. Založ zkušební lekci na dnešek a přiřaď ji tomu lektorovi.
+4. Přihlas se (v anonymním okně) tím lektorem → v liště **nesmí** být
+   „+ Lekce", „Kartotéka", „Výkaz" ani „Lektoři" → otevři lekci → zaškrtni
    **„Lekce proběhla"** → ulož.
-4. Jako admin klikni **Výkaz hodin** → u lektora přibyla délka lekce.
-5. Křížová kontrola v SQL Editoru – čísla musí sedět s appkou:
+5. Jako admin klikni **Výkaz hodin** → u lektora přibyla délka lekce.
+6. Křížová kontrola v SQL Editoru – čísla musí sedět s appkou:
 
    ```sql
    select * from lector_monthly_hours;
    ```
 
-6. Zkušební lekci smaž.
+7. Jako admin dej u zkušebního lektora **Zrušit přístup** → v anonymním okně
+   se už nesmí přihlásit („Tento účet už nemá přístup.").
+8. Zkušební lekci smaž a testovacího uživatele odstraň v Supabase
+   (**Authentication → Users → Delete user**).
 
 ## KROK 9: Provozní rutina
 
@@ -209,8 +186,8 @@ jen připojíš, nic jiného se nemění.)*
 | konec měsíce | výplaty | admin → **Výkaz hodin** → vybrat měsíc |
 | 1× měsíčně | záloha | `pg_dump` na starý počítač (příkaz v [DATABASE.md](DATABASE.md), kap. 6) |
 | prázdniny | probudit projekt | free tarif se po 7 dnech nečinnosti uspí – stačí otevřít appku nebo dashboard |
-| nový lektor | účet + sazba | krok 3 (Add user + `hourly_rate`) |
-| lektor končí | neodmazávat! | Table Editor → lectors → vyplnit `left_at`, `active = false` |
+| nový lektor | účet + sazba | appka → **Lektoři** → Založit účet; sazbu doplnit v Table Editor → lectors → `hourly_rate` |
+| lektor končí | neodmazávat! | appka → **Lektoři** → *Zrušit přístup*; v Table Editor → lectors doplnit `left_at`, `active = false` |
 
 ---
 
@@ -218,13 +195,16 @@ jen připojíš, nic jiného se nemění.)*
 
 - [ ] Supabase projekt založen (Frankfurt, free), DB heslo uloženo v bezpečí
 - [ ] `schema.sql` spuštěn bez chyb
-- [ ] `test_databaze.sql` prošel (9/9 kroků dle očekávání)
-- [ ] Účty lektorů + admin založeny, admin role nastavena
+- [ ] „Confirm email" v Supabase vypnuté (jinak nejdou zakládat účty z appky)
+- [ ] účet šéfové založen a povýšen na `admin`
+- [ ] účty lektorů založené v appce (Rozvrh → **Lektoři**)
 - [ ] `hourly_rate` vyplněny
-- [ ] RLS politiky z kroku 4 nasazeny (proto_all pryč)
+- [ ] RLS zkontrolována (`pg_policies` – nikde žádná `proto_all`)
+- [ ] zkušební data smazána (`reset_ostry_provoz.sql`), databáze prázdná
 - [ ] pg_cron úklid naplánován
-- [ ] `config.js`: URL + anon klíč (databáze je výchozí, `?demo=1` = ukázkový režim)
-- [ ] spuštěné migrace `migrace_*.sql` (naposledy `migrace_typ_lekce.sql`)
+- [ ] `config.js`: URL + anon klíč
+- [ ] spuštěné migrace `migrace_*.sql` (naposledy `migrace_ucty_lektoru.sql`,
+      pak `migrace_prava_ostry_provoz.sql`)
 - [ ] Web běží na GitHub Pages / Netlify
 - [ ] Test z kroku 8 prošel (appka i SQL ukazují stejné hodiny)
 - [ ] První záloha stažena

@@ -94,50 +94,47 @@ Krok za krokem:
 
 ## 3) Jak si ověřím, že to funguje
 
-### a) Hned teď v prototypu (mock režim, nic nepotřebuješ)
+### a) Zkouška přímo v appce
 
-1. Přihlas se jako lektor (`kunkelova@poradys.cz` / `lektor123`), klikni na
-   nějakou lekci, zaškrtni **„Lekce proběhla (potvrzuji)"** a ulož.
-2. Odhlas se, přihlas jako admin (`admin@poradys.cz` / `admin123`) a klikni na
-   **„Výkaz hodin"** – v aktuálním měsíci uvidíš, že danému lektorovi přibyly
-   hodiny odpovídající délce lekce. Když potvrzení zase odškrtneš, hodiny zmizí.
+1. Jako administrátor založ lekci a přiřaď ji lektorovi.
+2. Přihlas se tím lektorem (klidně v anonymním okně), otevři lekci, zaškrtni
+   **„Lekce proběhla (potvrzuji)"** a ulož.
+3. Zpátky jako administrátor klikni na **„Výkaz hodin"** – v aktuálním měsíci
+   lektorovi přibyly hodiny odpovídající délce lekce. Když potvrzení zase
+   odškrtneš, hodiny zmizí.
 
-   (V mocku se počítá přímo z lekcí v paměti; v ostré verzi to samé dělá
-   `work_log` + pohled – viz b.)
+### b) Křížová kontrola v SQL editoru
 
-### b) V Supabase (ostrá verze) – připravený skript
+Čísla z tlačítka **Výkaz hodin** musí sedět s dotazem:
 
-V repu je [`test_databaze.sql`](test_databaze.sql). Pozor: SQL Editor
-v Supabase zobrazuje jen výsledek **posledního** příkazu, proto má skript
-dvě varianty:
+```sql
+select * from lector_monthly_hours;
+```
 
-- **Varianta A (doporučená):** označ celý blok „VARIANTA A" → Run. Vyjde
-  tabulka s 8 kontrolami (hodiny lektorů i kredit klientů) a sloupcem
-  `vysledek` – všude musí být **OK**. Test po sobě uklidí.
-- **Varianta B:** ruční krokování po blocích (označ blok → Run) s komentáři
-  `OČEKÁVÁNÍ` – vhodné, když chceš vidět, co se děje uvnitř.
+A samotné zápisy práce jsou vidět tady:
 
-Testuje se celý životní cyklus:
+```sql
+select w.work_date, l.name, w.minutes, w.subject
+from work_log w join lectors l on l.id = w.lector_id
+order by w.work_date desc limit 20;
+```
 
-| Krok | Co dělá | Co má vyjít |
-|---|---|---|
-| 1–2 | založí testovací lektorku (250 Kč/h) a lekci 14:00–15:30 | – |
-| 3 | kontrola před potvrzením | `work_log` prázdný |
-| 4–5 | „odmáčknutí" lekce (`done = true`) | ve `work_log` řádek s **90 minutami** |
-| 6 | pohled `lector_monthly_hours` | **1.50 h, 375 Kč** |
-| 7 | zrušení potvrzení | řádek z `work_log` zmizel |
-| 8 | potvrdit a **smazat lekci** | hodiny se smazaly také (omyl v rozvrhu) |
-| 9 | úklid testovacích dat | databáze jako předtím |
+Když obojí sedí, celý řetězec appka → trigger → výkaz funguje.
 
-Roční úklid (`purge_old_lessons`) hodiny naopak **zachovává** – před mazáním
-starých lekcí je odpojí. Ověřuje to kontrola č. 6 ve Variantě A.
+Roční úklid (`purge_old_lessons`) hodiny **zachovává** – před mazáním starých
+lekcí je od nich odpojí (`work_log.lesson_id = null`), takže trigger
+`lessons_work_unlog` už nemá co smazat. Ruční smazání lekce hodiny naopak
+odebere (byl to omyl v rozvrhu).
 
-### c) Ověření z appky proti Supabase
+### c) Kredit klienta
 
-V ostrém režimu (appka bez `?demo=1` v adrese): admin založí lekci, lektor ji
-potvrdí a tlačítko **„Výkaz hodin"** musí ukázat stejná čísla jako dotaz
-`select * from lector_monthly_hours;` v SQL editoru. Když sedí, celý řetězec
-appka → trigger → výkaz funguje.
+Stejný řetězec platí pro kartotéku: potvrzená lekce zapíše řádek do
+`credit_log` a v přehledu TOTAL se klientovi sníží zůstatek. Kontrola:
+
+```sql
+select name, paid_hours, used_hours, balance_hours
+from student_credit order by balance_hours;
+```
 
 ## 4) Vejdeme se do 500 MB zdarma? Ano, s obrovskou rezervou
 
@@ -308,18 +305,35 @@ zprávu pro rodiče. Tlačítko „Vygenerovat zprávu (AI)" se pak jen přidá 
 stránku diagnostiky. Základní vyhodnocení ale zůstane algoritmické – je
 spolehlivé a zadarmo.
 
-## 9) Co udělat, až se bude přecházet z prototypu na ostrý provoz
+## 9) Přechod do ostrého provozu
 
-1. Založit projekt na [supabase.com](https://supabase.com) (free).
-2. Spustit celý [`schema.sql`](schema.sql) v SQL editoru.
-3. Založit účty lektorů (Authentication → Users), adminovi zvednout roli.
-4. Vyplnit `lectors.hourly_rate` u každého lektora.
-5. V [`config.js`](config.js) vyplnit URL + anon klíč (databáze je výchozí;
-   ukázkový režim se zapíná `?demo=1` v adrese) a spustit migrace
+Podrobný postup krok za krokem je v [`NASAZENI.md`](NASAZENI.md). Ve zkratce:
+
+1. Založit projekt na [supabase.com](https://supabase.com) (free, Frankfurt).
+2. Spustit celý [`schema.sql`](schema.sql) v SQL editoru. Vytvoří tabulky,
+   triggery, pohledy, **přístupová pravidla (RLS)** i číselník učeben –
+   a žádná ukázková data.
+3. V Supabase vypnout *Authentication → Sign In / Providers → Email →
+   Confirm email*, jinak nejdou zakládat účty z appky.
+4. Založit účet šéfové (Authentication → Users) a povýšit ho na `admin`.
+   Ostatní účty už zakládá ona sama v appce (Rozvrh → **Lektoři**).
+5. Vyplnit `lectors.hourly_rate` u každého lektora.
+6. V [`config.js`](config.js) vyplnit URL + anon klíč a spustit migrace
    `migrace_*.sql`.
-6. **Zpřísnit RLS** – spustit blok „PRÁVA K DIAGNOSTICKÝM TESTŮM A KARTÁM
-   ŽÁKŮ" na konci `schema.sql` (zápis testů a žáků jen admin) a nahradit
-   zbylé prototypové `proto_all` politiky vzorem úplně na konci souboru
-   (lektor smí měnit jen popis/odučeno, rozvrh jen admin).
-7. Web samotný (HTML/JS soubory) hostovat zdarma na GitHub Pages / Netlify /
+7. Když v databázi zůstala zkušební data, smazat je skriptem
+   [`reset_ostry_provoz.sql`](reset_ostry_provoz.sql) (nevratné).
+8. Web samotný (HTML/JS soubory) hostovat zdarma na GitHub Pages / Netlify /
    Cloudflare Pages – je to statická stránka, server nepotřebuje.
+
+### Kdo co smí (RLS)
+
+| Tabulka | Čte | Zapisuje |
+|---|---|---|
+| `rooms`, `lectors`, `students`, `attendance`, `diagnostics` | každý přihlášený | administrátor |
+| `lessons` | každý přihlášený | zakládá a maže administrátor; lektor smí změnit jen `done`, `status` a `description` – ostatní sloupce mu vrátí zpátky trigger `guard_lesson_update` |
+| `payments`, `credit_log`, `work_log`, `notifications` | administrátor | administrátor (kredit a hodiny plní triggery, ty běží mimo RLS) |
+| `profiles` | svůj profil každý, všechny administrátor | administrátor |
+
+Nepřihlášený uživatel nevidí nic – veřejný `anon` klíč sám o sobě nic
+neotevře. Kontrola: `select tablename, policyname, cmd from pg_policies
+where schemaname = 'public';`

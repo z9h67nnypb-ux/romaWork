@@ -10,7 +10,7 @@
        prsty je čitelné. Počítač tuhle značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Kartotéka – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=41" />
+  <link rel="stylesheet" href="styles.css?v=42" />
   <style>
     /* Styly jen pro kartotéku */
     .kt-wrap { max-width: 1500px; margin: 0 auto; padding: 14px 20px 60px; }
@@ -339,7 +339,7 @@
         Zůstatek hodin se uloží jako počáteční platba („počáteční zůstatek z Excelu").
         Prázdná pole nechte prázdná, jméno je povinné.
       </p>
-      <textarea id="impText" placeholder="Aftanas Lukáš;777050743;ZŠ;5. třída;AJ;Štruncová;420;hotově;0&#10;Balík Petr;723111222;ZŠ;7. třída;MAT;Kunkelová;440;účet PoraDys;1"></textarea>
+      <textarea id="impText" placeholder="Novák Jan;777123456;ZŠ;5. třída;AJ;Nováková;420;hotově;0&#10;Svobodová Eva;777654321;ZŠ;7. třída;MAT;Svoboda;440;účet PoraDys;1"></textarea>
       <div class="imp-actions" style="margin-top:10px;">
         <button id="impRun" class="primary" style="background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:5px;padding:8px 14px;font-weight:600;cursor:pointer;">Importovat</button>
         <button id="impClose" style="border:1px solid var(--line-strong);background:#fff;border-radius:5px;padding:8px 14px;cursor:pointer;">Zavřít</button>
@@ -350,12 +350,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N musí být stejné ve všech třech stránkách – viz index.html -->
-  <script src="config.js?v=41"></script>
-  <!-- mockData.js nese ukázková data i sdílené demo úložiště (DemoStore) –
-       díky němu kartotéka vidí lekce zapsané v rozvrhu a umí z nich odečíst
-       vyčerpané hodiny. opakovani.js počítá termíny pravidelných lekcí. -->
-  <script src="mockData.js?v=41"></script>
-  <script src="opakovani.js?v=41"></script>
-  <script src="kartoteka.js?v=41"></script>
+  <script src="config.js?v=42"></script>
+  <!-- opakovani.js počítá termíny pravidelných lekcí (série na X týdnů). -->
+  <script src="opakovani.js?v=42"></script>
+  <script src="kartoteka.js?v=42"></script>
 </body>
 </html>
