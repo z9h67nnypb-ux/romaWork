@@ -328,6 +328,39 @@ create table if not exists diagnostics (
 alter table diagnostics add column if not exists subject text not null default 'matematika';
 create index if not exists diagnostics_student_idx on diagnostics (student_name, taken_at);
 
+-- ---------------------------------------------------------------------------
+-- MATERIÁLY NA PROCVIČOVÁNÍ
+-- ---------------------------------------------------------------------------
+-- Materiál se váže na OBLAST TESTU, ne na konkrétní test ani žáka. Admin
+-- nahraje jednou pracovní list ke „Zlomkům" a od té chvíle ho u sebe vidí
+-- každý žák, kterému zlomky podle testu nejdou. Kdyby se to věšelo na test,
+-- muselo by se to nahrávat pořád dokola.
+--
+-- `area_key` je ten samý klíč, který se ukládá do diagnostics.scores a je
+-- vypsaný v konstantě SUBJECTS v diagnostika.js (např. 'zlomky', 'pravopis').
+-- Proto se klíče po nasazení nesmí měnit.
+--
+-- Materiál je buď SOUBOR v bucketu `materialy`, nebo ODKAZ ven – jedno
+-- z toho, ne obojí.
+create table if not exists materials (
+  id           uuid primary key default gen_random_uuid(),
+  subject      text not null,               -- 'matematika' | 'cestina'
+  area_key     text not null,               -- klíč oblasti ze SUBJECTS
+  title        text not null,
+  note         text,                        -- k čemu to je, jak s tím pracovat
+  storage_path text,                        -- cesta v bucketu `materialy`
+  url          text,                        -- nebo odkaz ven (online cvičení)
+  file_name    text,                        -- původní název souboru pro stažení
+  file_size    bigint,
+  created_by   uuid references auth.users(id) on delete set null,
+  created_at   timestamptz not null default now(),
+  constraint materials_zdroj_chk check (
+    (storage_path is not null and url is null) or
+    (storage_path is null and url is not null)
+  )
+);
+create index if not exists materials_area_idx on materials (subject, area_key, created_at);
+
 -- Log odeslaných notifikací (audit, ochrana proti dvojímu odeslání)
 create table if not exists notifications (
   id          uuid primary key default gen_random_uuid(),
@@ -623,6 +656,7 @@ alter table lessons       enable row level security;
 alter table attendance    enable row level security;
 alter table work_log      enable row level security;
 alter table diagnostics   enable row level security;
+alter table materials     enable row level security;
 alter table payments      enable row level security;
 alter table credit_log    enable row level security;
 alter table notifications enable row level security;
@@ -633,7 +667,8 @@ do $$
 declare t text;
 begin
   foreach t in array array['rooms','lectors','students','lessons','attendance',
-                           'work_log','diagnostics','payments','credit_log','notifications']
+                           'work_log','diagnostics','materials','payments',
+                           'credit_log','notifications']
   loop
     execute format('drop policy if exists proto_all on %I', t);
   end loop;
@@ -644,7 +679,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['rooms','lectors','students','attendance','diagnostics']
+  foreach t in array array['rooms','lectors','students','attendance','diagnostics','materials']
   loop
     execute format('drop policy if exists %I on %I', t || '_read', t);
     execute format('drop policy if exists %I on %I', t || '_write', t);
@@ -737,3 +772,26 @@ create trigger lessons_guard_update
 --   select p.name, p.email, p.role, p.active from profiles p order by p.name;
 --   select tablename, policyname, cmd from pg_policies
 --     where schemaname = 'public' order by tablename, policyname;
+
+
+-- ===========================================================================
+-- ÚLOŽIŠTĚ SOUBORŮ (materiály na procvičování)
+-- ---------------------------------------------------------------------------
+-- Neveřejný bucket – soubory se otevírají přes dočasně podepsanou adresu,
+-- kterou si appka vyžádá až ve chvíli, kdy na materiál někdo klikne. Kdyby
+-- byl bucket veřejný, stačila by komukoli znalost cesty.
+-- ===========================================================================
+insert into storage.buckets (id, name, public)
+values ('materialy', 'materialy', false)
+on conflict (id) do nothing;
+
+drop policy if exists materialy_read   on storage.objects;
+drop policy if exists materialy_insert on storage.objects;
+drop policy if exists materialy_delete on storage.objects;
+
+create policy materialy_read on storage.objects
+  for select to authenticated using (bucket_id = 'materialy');
+create policy materialy_insert on storage.objects
+  for insert to authenticated with check (bucket_id = 'materialy' and is_staff());
+create policy materialy_delete on storage.objects
+  for delete to authenticated using (bucket_id = 'materialy' and is_staff());

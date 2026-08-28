@@ -244,7 +244,87 @@ const DbStore = {
     const { error } = await this._c().from("diagnostics").delete().eq("id", id);
     if (error) throw error;
   },
+
+  // ---- Materiály na procvičování ----
+  // Visí na OBLASTI testu, ne na žákovi ani na testu: admin nahraje pracovní
+  // list ke „Zlomkům" jednou a od té chvíle ho u sebe vidí každý žák, kterému
+  // zlomky podle testu nejdou.
+  async listMaterials() {
+    const { data, error } = await this._c().from("materials")
+      .select("id, subject, area_key, title, note, storage_path, url, file_name, file_size, created_at")
+      .order("created_at");
+    if (error) throw error;
+    return data || [];
+  },
+  async addMaterial(row, file) {
+    const c = this._c();
+    let storage_path = null;
+    if (file) {
+      // Cesta drží předmět a oblast, ať se v úložišti dá vyznat i ručně.
+      // Náhodná předpona brání srážce dvou stejně pojmenovaných souborů.
+      const bezpecny = file.name.replace(/[^\w.\-]+/g, "_").slice(-80);
+      storage_path = row.subject + "/" + row.area_key + "/" +
+        Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7) + "-" + bezpecny;
+      const { error } = await c.storage.from(MAT_BUCKET).upload(storage_path, file, {
+        cacheControl: "3600", upsert: false,
+      });
+      if (error) throw new Error(storageErrorCz(error.message));
+    }
+    const { data, error } = await c.from("materials").insert({
+      subject: row.subject, area_key: row.area_key, title: row.title,
+      note: row.note || null,
+      storage_path, url: storage_path ? null : row.url,
+      file_name: file ? file.name : null,
+      file_size: file ? file.size : null,
+    }).select("*").single();
+    if (error) {
+      // Řádek nevznikl – ať v úložišti nezůstane osiřelý soubor.
+      if (storage_path) await c.storage.from(MAT_BUCKET).remove([storage_path]).catch(() => {});
+      throw new Error(dbErrorCz(error));
+    }
+    return data;
+  },
+  async removeMaterial(m) {
+    const c = this._c();
+    const { error } = await c.from("materials").delete().eq("id", m.id);
+    if (error) throw new Error(dbErrorCz(error));
+    // Soubor až po řádku: kdyby se smazání řádku nepovedlo, ať nezmizí obsah.
+    if (m.storage_path) {
+      const { error: e2 } = await c.storage.from(MAT_BUCKET).remove([m.storage_path]);
+      if (e2) console.error("Řádek smazán, soubor v úložišti zůstal:", e2);
+    }
+  },
+  // Neveřejný bucket – adresa se podepisuje až ve chvíli, kdy na materiál
+  // někdo klikne, a po chvíli propadne.
+  async materialUrl(m) {
+    if (m.url) return m.url;
+    const { data, error } = await this._c().storage.from(MAT_BUCKET)
+      .createSignedUrl(m.storage_path, 300);
+    if (error) throw new Error(storageErrorCz(error.message));
+    return data.signedUrl;
+  },
 };
+
+const MAT_BUCKET = "materialy";
+const MAT_MAX_MB = 20;
+
+// Hlášky z databáze a úložiště chodí anglicky; appka je celá česky.
+function dbErrorCz(error) {
+  const m = String((error && error.message) || error || "");
+  if (/relation .*materials.* does not exist|schema cache/i.test(m)) {
+    return "Materiály zatím nejsou v databázi zapnuté – spusťte migrace_materialy.sql.";
+  }
+  if (/row-level security/i.test(m)) return "Na tohle nemáte právo – materiály přidává administrátor.";
+  return m;
+}
+function storageErrorCz(msg) {
+  const m = String(msg || "");
+  if (/Bucket not found/i.test(m)) return "Úložiště souborů není založené – spusťte migrace_materialy.sql.";
+  if (/exceeded the maximum allowed size|Payload too large/i.test(m)) return "Soubor je moc velký.";
+  if (/already exists/i.test(m)) return "Soubor s tímhle názvem už tam je.";
+  if (/new row violates row-level security/i.test(m)) return "Nahrávat materiály smí jen administrátor nebo auditor.";
+  return m;
+}
 
 // Škola se do testu neukládá – bere se vždy z aktuální karty žáka
 // (tabulka `students`), aby se údaje nerozcházely.
@@ -404,6 +484,165 @@ function trendChartSVG(tests) {
 }
 
 // ---------------------------------------------------------------------------
+// Materiály na procvičování
+// ---------------------------------------------------------------------------
+// Tlačítko sedí u každé oblasti, kterou žák nezvládá – tedy přesně tam, kde
+// lektor řeší „co s tím teď". Do tisku pro rodiče nepatří (no-print).
+function matButtonHtml(subjKey, areaKey) {
+  const n = materialsOf(subjKey, areaKey).length;
+  return '<button class="mat-btn no-print" data-mat-subject="' + escapeHtml(subjKey) +
+    '" data-mat-area="' + escapeHtml(areaKey) + '">📚 Materiály' +
+    (n ? ' <span class="cnt">(' + n + ")</span>" : ' <span class="cnt">(zatím žádné)</span>') +
+    "</button>";
+}
+
+// Tlačítka se vykreslují do několika různých bloků, tak se obsluha navěšuje
+// jedním průchodem po každém překreslení výsledků.
+function bindMatButtons(root) {
+  (root || document).querySelectorAll("button[data-mat-area]").forEach((b) => {
+    b.onclick = () => openMaterials(b.dataset.matSubject, b.dataset.matArea);
+  });
+}
+
+function openMaterials(subjKey, areaKey) {
+  state.matOpen = { subject: subjKey || state.subject, areaKey: areaKey || null };
+
+  // Předmět
+  const sel = $("matSubject");
+  sel.innerHTML = Object.keys(SUBJECTS).map((k) =>
+    '<option value="' + k + '"' + (k === state.matOpen.subject ? " selected" : "") + ">" +
+    escapeHtml(SUBJECTS[k].label) + "</option>").join("");
+  sel.onchange = () => { state.matOpen.subject = sel.value; state.matOpen.areaKey = null; renderMatAreas(); };
+
+  renderMatAreas();
+  $("matModal").classList.remove("hidden");
+}
+
+// Oblasti se plní podle vybraného předmětu – klíče musí sedět se `scores`.
+function renderMatAreas() {
+  const areas = SUBJECTS[state.matOpen.subject].areas;
+  if (!state.matOpen.areaKey) state.matOpen.areaKey = areas[0].key;
+  const sel = $("matArea");
+  sel.innerHTML = areas.map((a) =>
+    '<option value="' + a.key + '"' + (a.key === state.matOpen.areaKey ? " selected" : "") + ">" +
+    escapeHtml(a.name) + "</option>").join("");
+  sel.onchange = () => { state.matOpen.areaKey = sel.value; renderMatList(); };
+  renderMatList();
+}
+
+function fmtSize(b) {
+  if (!b) return "";
+  return b < 1024 * 1024 ? Math.max(1, Math.round(b / 1024)) + " kB"
+                         : (b / 1024 / 1024).toFixed(1).replace(".", ",") + " MB";
+}
+
+function renderMatList() {
+  const { subject, areaKey } = state.matOpen;
+  const items = materialsOf(subject, areaKey);
+  const box = $("matList");
+
+  box.innerHTML = items.length
+    ? items.map((m) =>
+        '<div class="mat-row">' +
+          '<span class="ico">' + (m.url ? "🔗" : "📄") + "</span>" +
+          '<span class="txt"><span class="nm">' + escapeHtml(m.title) + "</span>" +
+            (m.note ? '<br><span class="sub">' + escapeHtml(m.note) + "</span>" : "") +
+            '<br><span class="sub">' +
+              (m.url ? escapeHtml(m.url) : escapeHtml(m.file_name || "") + " · " + fmtSize(m.file_size)) +
+            "</span></span>" +
+          '<button data-open="' + escapeHtml(m.id) + '">Otevřít</button>' +
+          (isStaff() ? '<button class="del" data-del="' + escapeHtml(m.id) + '">Smazat</button>' : "") +
+        "</div>").join("")
+    : '<div class="diag-note" style="padding:10px 2px;">K téhle oblasti zatím žádný materiál není.' +
+      (isStaff() ? " Přidejte ho níž." : " Přidá ho administrátor.") + "</div>";
+
+  box.querySelectorAll("button[data-open]").forEach((b) => {
+    b.onclick = async () => {
+      const m = items.find((x) => x.id === b.dataset.open);
+      b.disabled = true;
+      try {
+        // Okno se otevírá až s hotovou adresou, takže si ho blokovač může
+        // splést s vyskakovacím. Proto se otevře hned a adresa se do něj
+        // doplní, jakmile ji podepsané úložiště vrátí.
+        const w = window.open("", "_blank");
+        const url = await Store.materialUrl(m);
+        if (w) w.location = url; else window.location = url;
+      } catch (e) {
+        alert("Materiál se nepodařilo otevřít: " + (e.message || e));
+      } finally { b.disabled = false; }
+    };
+  });
+
+  box.querySelectorAll("button[data-del]").forEach((b) => {
+    b.onclick = async () => {
+      const m = items.find((x) => x.id === b.dataset.del);
+      if (!confirm("Opravdu smazat materiál „" + m.title + "\"?\n\nZmizí všem lektorům.")) return;
+      b.disabled = true;
+      try {
+        await Store.removeMaterial(m);
+        state.materials = state.materials.filter((x) => x.id !== m.id);
+        renderMatList();
+        refreshMatCounts();
+      } catch (e) {
+        b.disabled = false;
+        alert("Nepovedlo se smazat: " + (e.message || e));
+      }
+    };
+  });
+
+  $("matUpload").classList.toggle("hidden", !isStaff());
+}
+
+// Po přidání nebo smazání se počty na tlačítkách u oblastí musí srovnat,
+// jinak by u „Zlomků" svítilo (0), i když tam materiál je.
+function refreshMatCounts() {
+  document.querySelectorAll("button[data-mat-area]").forEach((b) => {
+    const n = materialsOf(b.dataset.matSubject, b.dataset.matArea).length;
+    const c = b.querySelector(".cnt");
+    if (c) c.textContent = n ? "(" + n + ")" : "(zatím žádné)";
+  });
+}
+
+async function saveMaterial() {
+  const err = $("matError"), ok = $("matOk");
+  err.textContent = ""; ok.textContent = "";
+  const title = $("matTitle").value.trim();
+  const note = $("matNote").value.trim();
+  const url = $("matUrl").value.trim();
+  const file = $("matFile").files[0] || null;
+
+  if (!title) { err.textContent = "Vyplňte název."; return; }
+  if (!file && !url) { err.textContent = "Vyberte soubor, nebo vyplňte odkaz."; return; }
+  if (file && url) { err.textContent = "Vyplňte jen jedno – soubor, nebo odkaz."; return; }
+  if (file && file.size > MAT_MAX_MB * 1024 * 1024) {
+    err.textContent = "Soubor je větší než " + MAT_MAX_MB + " MB.";
+    return;
+  }
+  if (url && !/^https?:\/\//i.test(url)) {
+    err.textContent = "Odkaz musí začínat http:// nebo https://";
+    return;
+  }
+
+  const btn = $("matSave");
+  btn.disabled = true;
+  try {
+    const m = await Store.addMaterial({
+      subject: state.matOpen.subject, area_key: state.matOpen.areaKey, title, note, url,
+    }, file);
+    state.materials.push(m);
+    $("matTitle").value = ""; $("matNote").value = ""; $("matUrl").value = ""; $("matFile").value = "";
+    ok.textContent = "Přidáno ✓";
+    renderMatList();
+    refreshMatCounts();
+  } catch (e) {
+    err.textContent = e.message || String(e);
+    console.error(e);
+  } finally { btn.disabled = false; }
+}
+
+function closeMaterials() { $("matModal").classList.add("hidden"); }
+
+// ---------------------------------------------------------------------------
 // Stav appky
 // ---------------------------------------------------------------------------
 const state = {
@@ -415,7 +654,15 @@ const state = {
   subject: "cestina",
   shownTestId: null,
   draft: null, // { test, ev, plan } – vyhodnocený, zatím neuložený test
+  materials: [], // materiály ke VŠEM oblastem; filtruje se až při zobrazení
+  matOpen: null, // { subject, areaKey } – co je otevřené v dialogu
 };
+
+// Materiály k jedné oblasti. Klíč oblasti je ten samý, co se ukládá do
+// `scores`, takže se dvě různé oblasti nikdy nepotkají.
+function materialsOf(subjKey, areaKey) {
+  return state.materials.filter((m) => m.subject === subjKey && m.area_key === areaKey);
+}
 
 // Testy zadává administrátor i auditor; lektor je jen čte a tiskne.
 // Diagnostika není kartotéka, takže tady mezi těmi dvěma rozdíl není.
@@ -629,7 +876,9 @@ function resultHtml(test, ev, plan, opts) {
           // Věta z hodnotícího archu: „Žák <je schopen s chybami> <co>."
           (r.can ? '<p class="focus-can">Žák ' + escapeHtml(bandLabel(test.subject, r.band)) + " " + escapeHtml(r.can) + ".</p>" : "") +
           "<ul>" +
-          (r.focus || []).map((f) => "<li>" + escapeHtml(f) + "</li>").join("") + "</ul></div>").join("") + "</div>"
+          (r.focus || []).map((f) => "<li>" + escapeHtml(f) + "</li>").join("") + "</ul>" +
+          (opts && opts.tisk ? "" : matButtonHtml(test.subject, r.key)) +
+          "</div>").join("") + "</div>"
       : '<span class="diag-note">Všechny oblasti žák zvládá – žádné cílené doplnění není potřeba. 🎉</span>') +
     "</div>";
 
@@ -659,6 +908,7 @@ function renderTestDetail() {
     "<h2>" + S.icon + " " + S.label + " – test z " + fmtDateCz(test.date) + "</h2>" +
     resultHtml(test, ev, plan, { trend: subjectTests(state.openStudent.id, test.subject) }) +
     "</div>";
+  bindMatButtons(el);
 }
 
 // ---------------------------------------------------------------------------
@@ -761,6 +1011,7 @@ function evalDraft() {
     '<div class="diag-actions"><button id="saveTestBtn" class="btn primary">💾 Uložit k žákovi</button>' +
     '<span class="diag-note">Body můžete nahoře opravit a znovu vyhodnotit.</span></div></div>';
 
+  bindMatButtons($("draftResult"));
   $("saveTestBtn").onclick = saveDraft;
   $("saveTestBtn").scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -1114,7 +1365,7 @@ function printReport() {
       "<div><span class=\"k\">Hodnocení:</span> " + escapeHtml(overallAssessment(t.pct)) + "</div>" +
       (s.lector_name ? "<div><span class=\"k\">Lektor/ka:</span> " + escapeHtml(s.lector_name) + "</div>" : "") +
     "</div>" +
-    resultHtml(test, ev, plan, { trend }) +
+    resultHtml(test, ev, plan, { trend, tisk: true }) +
     '<div class="p-foot">' +
       "Vyhodnocení vychází z bodového zisku v jednotlivých oblastech testu (pásma: pod 45 % nezvládá, " +
       "45–75 % zvládá částečně, nad 75 % zvládá). Zprávu vystavil " + escapeHtml(ORG_NAME) +
@@ -1193,10 +1444,28 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   $("newStudentBtn").classList.toggle("hidden", !isStaff());
   $("batchBtn").classList.toggle("hidden", !isStaff());
+  $("materialsBtn").classList.toggle("hidden", !isStaff());
   $("dSearch").addEventListener("input", renderList);
   $("dShowFormer").addEventListener("change", renderList);
   $("dOnlyTested").addEventListener("change", renderList);
   $("newStudentBtn").onclick = () => openNewStudent();
+
+  // ---- materiály na procvičování ----
+  // Načtou se jednou dopředu (je jich řádově pár desítek) a pak se u každé
+  // oblasti jen filtrují – jinak by se při každém otevření testu čekalo
+  // na další dotaz do databáze.
+  try {
+    state.materials = await Store.listMaterials();
+  } catch (e) {
+    // Bez materiálů má diagnostika fungovat dál – nespuštěná migrace nesmí
+    // shodit celou stránku.
+    console.error("Materiály se nepodařilo načíst:", e);
+    state.materials = [];
+  }
+  $("materialsBtn").onclick = () => openMaterials(state.subject, null);
+  $("matClose").onclick = closeMaterials;
+  $("matSave").onclick = saveMaterial;
+  $("matModal").onclick = (e) => { if (e.target.id === "matModal") closeMaterials(); };
   $("nsSave").onclick = saveNewStudent;
   const closeNs = () => { afterStudentCreated = null; $("newStudentModal").classList.add("hidden"); };
   $("nsCancel").onclick = closeNs;

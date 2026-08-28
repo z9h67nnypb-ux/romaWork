@@ -329,7 +329,8 @@ Podrobný postup krok za krokem je v [`NASAZENI.md`](NASAZENI.md). Ve zkratce:
 
 | Tabulka | Čte | Zapisuje |
 |---|---|---|
-| `rooms`, `lectors`, `students`, `attendance`, `diagnostics` | každý přihlášený | administrátor i auditor (`is_staff()`) |
+| `rooms`, `lectors`, `students`, `attendance`, `diagnostics`, `materials` | každý přihlášený | administrátor i auditor (`is_staff()`) |
+| úložiště `materialy` (Storage) | každý přihlášený, přes dočasně podepsanou adresu | administrátor i auditor |
 | `lessons` | každý přihlášený | zakládá a maže administrátor i auditor; lektor smí změnit jen `done`, `status` a `description` – ostatní sloupce mu vrátí zpátky trigger `guard_lesson_update` |
 | `work_log`, `notifications` | administrátor i auditor | administrátor i auditor (hodiny plní triggery, ty běží mimo RLS) |
 | **`payments`, `credit_log`** (kartotéka) | **jen administrátor** | **jen administrátor** |

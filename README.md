@@ -90,6 +90,12 @@ v appce (Rozvrh → **Lektoři**), viz kapitola 3c.
   U matematiky je navíc u každého políčka napsané, **ze kterých úloh** se body
   sčítají (1.1–2 / 3–6 / 7 / 8–10 / 11–14 / 15), aby se opisovaly ze správného
   rámečku archu.
+- **📚 Materiály na procvičování** – u každé oblasti, kterou žák nezvládá, je
+  ve výsledku tlačítko s pracovními listy a odkazy k té oblasti. Materiál visí
+  na **oblasti testu, ne na žákovi ani na testu**: administrátor (nebo auditor)
+  nahraje list ke „Zlomkům" jednou a od té chvíle ho u sebe vidí každý žák,
+  kterému zlomky podle testu nejdou. Lektor si ho na hodině otevře, nahrávat
+  a mazat nemůže. Do zprávy pro rodiče se tlačítka netisknou.
 - (Týden/Měsíc jsou zatím jen náhledové záložky – hlavní je denní rozvrh.)
 
 ---
@@ -111,7 +117,8 @@ v appce (Rozvrh → **Lektoři**), viz kapitola 3c.
    z appky), [`migrace_prava_ostry_provoz.sql`](migrace_prava_ostry_provoz.sql)
    (ostrá přístupová práva místo prototypových `proto_all`) a
    [`migrace_role_auditor.sql`](migrace_role_auditor.sql) (role auditor
-   a mazání účtů z appky).
+   a mazání účtů z appky) a [`migrace_materialy.sql`](migrace_materialy.sql)
+   (materiály na procvičování + úložiště souborů).
 4. Kdyby v databázi zůstala testovací data z prototypu, smaže je
    [`reset_ostry_provoz.sql`](reset_ostry_provoz.sql) (nevratné, čti
    komentáře v souboru).
@@ -176,6 +183,8 @@ Po přihlášení appka zná roli uživatele. Role se nastavuje při zakládán�
 | U lekce zapsat popis a „proběhla" | ✅ | ✅ | ✅ |
 | Zakládat, měnit a mazat lekce | – | ✅ | ✅ |
 | Diagnostické testy – zadávání | – | ✅ | ✅ |
+| Materiály na procvičování – otevřít | ✅ | ✅ | ✅ |
+| Materiály na procvičování – nahrát a smazat | – | ✅ | ✅ |
 | Výkaz hodin | – | ✅ | ✅ |
 | Účty (zakládat, zamykat, mazat) | – | ✅¹ | ✅ |
 | **Kartotéka – klienti, platby, kredit** | – | **–** | ✅ |
@@ -241,6 +250,7 @@ Plán automatizace (zatím nenaprogramováno):
 | `migrace_*.sql` | Postupné úpravy schématu pro už běžící databázi |
 | `migrace_prava_ostry_provoz.sql` | Ostrá přístupová práva (RLS) pro starší databázi |
 | `migrace_role_auditor.sql` | Role auditor + mazání účtů z appky |
+| `migrace_materialy.sql` | Materiály na procvičování (tabulka + úložiště souborů) |
 | `reset_ostry_provoz.sql` | Jednorázové smazání všech provozních dat |
 | `diagnostika.html` + `diagnostika.js` | Diagnostický test a plán přípravy |
 | `kartoteka.html` + `kartoteka.js` | Kartotéka: klienti, platby a kredit hodin |

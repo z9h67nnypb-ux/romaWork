@@ -40,7 +40,8 @@ Celkový čas: ~1 hodina. Postupuj po krocích, nic nepřeskakuj.
    toho pusť migrace v tomhle pořadí:
    [`migrace_ucty_lektoru.sql`](migrace_ucty_lektoru.sql) →
    [`migrace_prava_ostry_provoz.sql`](migrace_prava_ostry_provoz.sql) →
-   [`migrace_role_auditor.sql`](migrace_role_auditor.sql).
+   [`migrace_role_auditor.sql`](migrace_role_auditor.sql) →
+   [`migrace_materialy.sql`](migrace_materialy.sql).
    Zkušební data pak smaže
    [`reset_ostry_provoz.sql`](reset_ostry_provoz.sql). Je nevratný, čti
    komentáře v souboru – nejdřív jen vypíše, kolik řádků by smazal.
@@ -98,7 +99,8 @@ Co má platit:
 
 | Tabulka | Čte | Zapisuje |
 |---|---|---|
-| `rooms`, `lectors`, `students`, `attendance`, `diagnostics` | každý přihlášený | administrátor i auditor (`is_staff()`) |
+| `rooms`, `lectors`, `students`, `attendance`, `diagnostics`, `materials` | každý přihlášený | administrátor i auditor (`is_staff()`) |
+| úložiště `materialy` (Storage) | každý přihlášený, přes dočasně podepsanou adresu | administrátor i auditor |
 | `lessons` | každý přihlášený | zakládá a maže administrátor i auditor; lektor smí u lekce změnit jen `done`, `status` a `description` (hlídá trigger `guard_lesson_update`) |
 | `work_log`, `notifications` | administrátor i auditor | administrátor i auditor (hodiny plní triggery mimo RLS) |
 | **`payments`, `credit_log`** (kartotéka) | **jen administrátor** | **jen administrátor** |
@@ -213,6 +215,8 @@ jen připojíš, nic jiného se nemění.)*
 - [ ] `config.js`: URL + anon klíč
 - [ ] spuštěné migrace `migrace_*.sql` v pořadí: `migrace_ucty_lektoru.sql`
       → `migrace_prava_ostry_provoz.sql` → `migrace_role_auditor.sql`
+      → `migrace_materialy.sql`
+- [ ] v Supabase existuje bucket `materialy` (Storage) a je **neveřejný**
 - [ ] Web běží na GitHub Pages / Netlify
 - [ ] Test z kroku 8 prošel (appka i SQL ukazují stejné hodiny)
 - [ ] První záloha stažena

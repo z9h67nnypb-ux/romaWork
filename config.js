@@ -5,8 +5,9 @@
 // role (admin / lektor) se čte z tabulky `profiles`.
 //
 // Databáze musí mít spuštěné schema.sql a všechny migrace z migrace_*.sql
-// (naposledy migrace_ucty_lektoru.sql, migrace_prava_ostry_provoz.sql
-// a migrace_role_auditor.sql – účty z appky, ostrá práva a role auditor).
+// (naposledy migrace_ucty_lektoru.sql, migrace_prava_ostry_provoz.sql,
+// migrace_role_auditor.sql a migrace_materialy.sql – účty z appky, ostrá
+// práva, role auditor a materiály na procvičování).
 //
 // Účty lektorů zakládá administrátor přímo v appce: Rozvrh -> „Lektoři".
 // ---------------------------------------------------------------------------
