@@ -39,7 +39,8 @@ Celkový čas: ~1 hodina. Postupuj po krocích, nic nepřeskakuj.
 5. **Když už databáze běžela dřív**, `schema.sql` znovu nespouštěj. Místo
    toho pusť migrace v tomhle pořadí:
    [`migrace_ucty_lektoru.sql`](migrace_ucty_lektoru.sql) →
-   [`migrace_prava_ostry_provoz.sql`](migrace_prava_ostry_provoz.sql).
+   [`migrace_prava_ostry_provoz.sql`](migrace_prava_ostry_provoz.sql) →
+   [`migrace_role_auditor.sql`](migrace_role_auditor.sql).
    Zkušební data pak smaže
    [`reset_ostry_provoz.sql`](reset_ostry_provoz.sql). Je nevratný, čti
    komentáře v souboru – nejdřív jen vypíše, kolik řádků by smazal.
@@ -63,10 +64,16 @@ si pak šéfová vytvoří sama v appce.
 
 4. **Od teď dál už jen v appce:** Rozvrh → tlačítko **Lektoři** → jméno,
    e-mail, heslo, role → *Založit účet*. Účet vznikne v `auth.users`, profil
-   se doplní triggerem a appka rovnou založí i kartu lektora v `lectors`.
-   Heslo se nikde neukládá – předej ho lektorovi.
-   Odchod lektora se řeší tlačítkem **Zrušit přístup** (účet se jen zamkne,
-   hodiny a historie zůstanou).
+   se doplní triggerem a u role „lektor" appka rovnou založí i kartu
+   v tabulce `lectors`. Heslo se nikde neukládá – předej ho člověku.
+
+   Role jsou tři: **lektor** (čte rozvrh, hlásí odučené lekce), **auditor**
+   (všechno kromě kartotéky) a **administrátor** (všechno). Auditor
+   administrátora vyrobit nesmí.
+
+   Odchod se řeší tlačítkem **Zrušit přístup** – účet se jen zamkne a hodiny
+   i historie zůstanou. **Smazat** ho odstraní nadobro; karta lektora
+   i tak zůstane, jen se odloží z nabídky.
 5. Vyplň lektorům hodinové sazby (kvůli sloupci „K výplatě" ve výkazu):
    **Table Editor → lectors** → u každého vyplň `hourly_rate` (např. 250).
 
@@ -91,10 +98,11 @@ Co má platit:
 
 | Tabulka | Čte | Zapisuje |
 |---|---|---|
-| `rooms`, `lectors`, `students`, `attendance`, `diagnostics` | každý přihlášený | administrátor |
-| `lessons` | každý přihlášený | zakládá a maže administrátor; lektor smí u lekce změnit jen `done`, `status` a `description` (hlídá trigger `guard_lesson_update`) |
-| `payments`, `credit_log`, `work_log`, `notifications` | administrátor | administrátor (kredit a hodiny plní triggery mimo RLS) |
-| `profiles` | svůj profil každý, všechny administrátor | administrátor |
+| `rooms`, `lectors`, `students`, `attendance`, `diagnostics` | každý přihlášený | administrátor i auditor (`is_staff()`) |
+| `lessons` | každý přihlášený | zakládá a maže administrátor i auditor; lektor smí u lekce změnit jen `done`, `status` a `description` (hlídá trigger `guard_lesson_update`) |
+| `work_log`, `notifications` | administrátor i auditor | administrátor i auditor (hodiny plní triggery mimo RLS) |
+| **`payments`, `credit_log`** (kartotéka) | **jen administrátor** | **jen administrátor** |
+| `profiles` | svůj profil každý, všechny administrátor i auditor | administrátor kohokoli; auditor jen ne-administrátory a administrátora vyrobit nesmí |
 
 Nepřihlášený uživatel **nevidí nic** – anon klíč sám o sobě nic neotevře.
 
@@ -203,8 +211,8 @@ jen připojíš, nic jiného se nemění.)*
 - [ ] zkušební data smazána (`reset_ostry_provoz.sql`), databáze prázdná
 - [ ] pg_cron úklid naplánován
 - [ ] `config.js`: URL + anon klíč
-- [ ] spuštěné migrace `migrace_*.sql` (naposledy `migrace_ucty_lektoru.sql`,
-      pak `migrace_prava_ostry_provoz.sql`)
+- [ ] spuštěné migrace `migrace_*.sql` v pořadí: `migrace_ucty_lektoru.sql`
+      → `migrace_prava_ostry_provoz.sql` → `migrace_role_auditor.sql`
 - [ ] Web běží na GitHub Pages / Netlify
 - [ ] Test z kroku 8 prošel (appka i SQL ukazují stejné hodiny)
 - [ ] První záloha stažena

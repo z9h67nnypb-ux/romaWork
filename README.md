@@ -68,10 +68,11 @@ v appce (Rozvrh → **Lektoři**), viz kapitola 3c.
   **Barevné označení klientů** (online / osobně / končí / kontaktováno /
   problémový) a **souhrny peněz podle způsobu platby** (kolik klientů a Kč
   platí hotově / účet PoraDys / účet jazykovka / účet DR).
-- **👤 Lektoři** (admin) – zakládání přihlašovacích účtů. Administrátor vyplní
-  jméno, e-mail a heslo, účet vznikne v Supabase Auth a lektor se rovnou
-  přihlásí. Odebrání přístupu účet nemaže, jen ho zamkne (odpracované hodiny
-  a historie zůstanou). Podrobnosti v kapitole 3c.
+- **👤 Lektoři** (admin i auditor) – zakládání přihlašovacích účtů. Vyplní se
+  jméno, e-mail, heslo a role, účet vznikne v Supabase Auth a člověk se rovnou
+  přihlásí. **Zrušit přístup** účet jen zamkne, **Smazat** ho odstraní nadobro;
+  odpracované hodiny a historie lekcí zůstanou v obou případech – karta lektora
+  se jen odloží z nabídky. Podrobnosti v kapitole 3c.
 - **🧪 Diagnostika** – stránka [`diagnostika.html`](diagnostika.html) se
   záložkami **Čeština / Matematika**: body z testu → hodnotící arch (úroveň
   po oblastech, celkové hodnocení, „na co se zaměřit") a plán přípravy
@@ -105,10 +106,12 @@ v appce (Rozvrh → **Lektoři**), viz kapitola 3c.
      `lector_monthly_hours`), přístupová pravidla (RLS) a číselník učeben.
    - **Žádná ukázková data se nevkládají** – databáze začne prázdná.
 3. Na databázi, která už běží, se `schema.sql` **nespouští znovu** – místo toho
-   se pustí migrace `migrace_*.sql`. Poslední dvě, a v tomhle pořadí:
+   se pustí migrace `migrace_*.sql`. Poslední tři, a v tomhle pořadí:
    [`migrace_ucty_lektoru.sql`](migrace_ucty_lektoru.sql) (zakládání účtů
-   lektorů z appky) a [`migrace_prava_ostry_provoz.sql`](migrace_prava_ostry_provoz.sql)
-   (ostrá přístupová práva místo prototypových `proto_all`).
+   z appky), [`migrace_prava_ostry_provoz.sql`](migrace_prava_ostry_provoz.sql)
+   (ostrá přístupová práva místo prototypových `proto_all`) a
+   [`migrace_role_auditor.sql`](migrace_role_auditor.sql) (role auditor
+   a mazání účtů z appky).
 4. Kdyby v databázi zůstala testovací data z prototypu, smaže je
    [`reset_ostry_provoz.sql`](reset_ostry_provoz.sql) (nevratné, čti
    komentáře v souboru).
@@ -151,17 +154,44 @@ tlačítko **Lektoři** → jméno, e-mail, heslo, role → *Založit účet*.
 - **Zrušit přístup** účet nemaže, jen nastaví `profiles.active = false`.
   Zamčený uživatel se nepřihlásí (a vyhodí ho to i ze staré relace), ale
   jeho odpracované hodiny a historie lekcí zůstanou.
-- Sám sobě přístup vzít nejde – jinak by appka zůstala bez administrátora.
+- **Smazat** účet odstraní nadobro, i řádek v `auth.users`. Dělá to funkce
+  `delete_user_account()` v databázi – z prohlížeče to jinak nejde, veřejný
+  klíč na `auth.users` právo nemá a `service_role` klíč do webu nepatří.
+  Karta lektora v `lectors` přitom **zůstane** a jen se deaktivuje, protože
+  na ní visí odpracované hodiny.
+- Sám sobě přístup vzít ani se smazat nejde a **poslední administrátor musí
+  zůstat** – jinak by appka zůstala bez správce a role by se dala nastavit
+  už jen ze SQL editoru. Hlídá to databáze, ne jen tlačítka.
 
 ---
 
-## 4) Role: administrátor vs. lektor
+## 4) Role: administrátor, auditor, lektor
 
-Po přihlášení appka zná roli uživatele:
+Po přihlášení appka zná roli uživatele. Role se nastavuje při zakládání účtu
+(Rozvrh → **Lektoři**) a dá se kdykoli změnit.
 
-- **Administrátor** – „+ Nová lekce", úprava a mazání lekcí, výběr tažením myši
-  a kopírování Ctrl/⌘+C → Ctrl/⌘+V mezi dny.
-- **Lektor** – jen **zápis popisu** a potvrzení **„Lekce proběhla"**. Rozvrh nemění.
+| Co | lektor | auditor | administrátor |
+|---|:---:|:---:|:---:|
+| Denní rozvrh – čtení | ✅ | ✅ | ✅ |
+| U lekce zapsat popis a „proběhla" | ✅ | ✅ | ✅ |
+| Zakládat, měnit a mazat lekce | – | ✅ | ✅ |
+| Diagnostické testy – zadávání | – | ✅ | ✅ |
+| Výkaz hodin | – | ✅ | ✅ |
+| Účty (zakládat, zamykat, mazat) | – | ✅¹ | ✅ |
+| **Kartotéka – klienti, platby, kredit** | – | **–** | ✅ |
+
+¹ Auditor nesmí vyrobit ani povýšit administrátora a na administrátorský účet
+vůbec nesmí sáhnout – jinak by si obešel to jediné, co mu je zapovězeno.
+
+Prakticky: **auditor je administrátor bez přístupu k penězům klientů.** Dělá
+rozvrh, zadává testy, kontroluje odpracované hodiny a spravuje účty, ale
+kartotéka (kdo kolik zaplatil a kolik mu zbývá hodin) je pro něj zavřená –
+tlačítko v liště nevidí a přímé otevření `kartoteka.html` ho odmítne.
+
+Jedna výjimka, která vypadá jako díra, ale není: tabulku `students` (jména,
+třída, telefon) auditor číst i zapisovat **musí** – rozvrh z ní bere jména
+žáků k lekcím a při založení lekce s novým jménem zakládá kartu. Zavřené jsou
+platby a kredit (`payments`, `credit_log`), ne jména.
 
 Role neplatí jen v prohlížeči – vynucuje je i databáze přes **RLS politiky**
 na konci [`schema.sql`](schema.sql):
@@ -210,6 +240,7 @@ Plán automatizace (zatím nenaprogramováno):
 | `schema.sql` | Databázové schéma pro Supabase včetně RLS pravidel |
 | `migrace_*.sql` | Postupné úpravy schématu pro už běžící databázi |
 | `migrace_prava_ostry_provoz.sql` | Ostrá přístupová práva (RLS) pro starší databázi |
+| `migrace_role_auditor.sql` | Role auditor + mazání účtů z appky |
 | `reset_ostry_provoz.sql` | Jednorázové smazání všech provozních dat |
 | `diagnostika.html` + `diagnostika.js` | Diagnostický test a plán přípravy |
 | `kartoteka.html` + `kartoteka.js` | Kartotéka: klienti, platby a kredit hodin |

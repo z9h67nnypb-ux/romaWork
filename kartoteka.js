@@ -865,11 +865,13 @@ window.addEventListener("DOMContentLoaded", async () => {
     badge.textContent = "nepřihlášeno";
     return;
   }
+  // Kartotéka je JEDINÁ věc, kterou auditor nesmí – tím se liší od admina.
   if (session.role !== "admin") {
     $("lockedBox").innerHTML =
       '<h2 style="margin:0 0 8px;">Jen pro administrátora</h2>' +
-      '<p style="color:#777;font-size:13.5px;">Kartotéka pracuje s platbami klientů, ' +
-      'takže do ní vidí jen administrátor. Zpět na <a href="index.html">rozvrh</a>.</p>';
+      '<p style="color:#777;font-size:13.5px;">Kartotéka pracuje s platbami a kreditem ' +
+      'klientů, takže do ní vidí jen administrátor – ani auditor sem nemá přístup. ' +
+      'Zpět na <a href="index.html">rozvrh</a>.</p>';
     $("lockedBox").classList.remove("hidden");
     $("mainBox").classList.add("hidden");
     badge.textContent = "bez oprávnění";

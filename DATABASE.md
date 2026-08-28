@@ -329,10 +329,15 @@ Podrobný postup krok za krokem je v [`NASAZENI.md`](NASAZENI.md). Ve zkratce:
 
 | Tabulka | Čte | Zapisuje |
 |---|---|---|
-| `rooms`, `lectors`, `students`, `attendance`, `diagnostics` | každý přihlášený | administrátor |
-| `lessons` | každý přihlášený | zakládá a maže administrátor; lektor smí změnit jen `done`, `status` a `description` – ostatní sloupce mu vrátí zpátky trigger `guard_lesson_update` |
-| `payments`, `credit_log`, `work_log`, `notifications` | administrátor | administrátor (kredit a hodiny plní triggery, ty běží mimo RLS) |
-| `profiles` | svůj profil každý, všechny administrátor | administrátor |
+| `rooms`, `lectors`, `students`, `attendance`, `diagnostics` | každý přihlášený | administrátor i auditor (`is_staff()`) |
+| `lessons` | každý přihlášený | zakládá a maže administrátor i auditor; lektor smí změnit jen `done`, `status` a `description` – ostatní sloupce mu vrátí zpátky trigger `guard_lesson_update` |
+| `work_log`, `notifications` | administrátor i auditor | administrátor i auditor (hodiny plní triggery, ty běží mimo RLS) |
+| **`payments`, `credit_log`** (kartotéka) | **jen administrátor** | **jen administrátor** |
+| `profiles` | svůj profil každý, všechny administrátor i auditor | administrátor kohokoli; auditor jen ne-administrátory |
+
+Role `auditor` = administrátor bez přístupu k penězům klientů. Tabulku
+`students` (jména, třída, telefon) ale číst i zapisovat musí – rozvrh z ní
+bere jména žáků k lekcím. Zavřené jsou platby a kredit, ne jména.
 
 Nepřihlášený uživatel nevidí nic – veřejný `anon` klíč sám o sobě nic
 neotevře. Kontrola: `select tablename, policyname, cmd from pg_policies

@@ -416,11 +416,16 @@ on conflict (id) do nothing;
 --    Jinak účet sice vznikne, ale lektor se do potvrzení odkazem nepřihlásí.
 -- ===========================================================================
 
+-- Role:
+--   admin   – všechno včetně kartotéky (platby, kredit klientů)
+--   auditor – všechno KROMĚ kartotéky; účty spravovat smí, ale nesmí
+--             vyrobit ani povýšit administrátora
+--   lektor  – čte rozvrh a u své lekce zapíše popis a „proběhla"
 create table if not exists profiles (
   id     uuid primary key references auth.users(id) on delete cascade,
   name   text,
   email  text,
-  role   text not null default 'lektor',  -- 'admin' | 'lektor'
+  role   text not null default 'lektor',  -- 'admin' | 'auditor' | 'lektor'
   active boolean not null default true,   -- false = účet zůstává, ale nepustí dovnitř
   created_at timestamptz not null default now()
 );
@@ -428,6 +433,11 @@ create table if not exists profiles (
 alter table profiles add column if not exists email      text;
 alter table profiles add column if not exists active     boolean not null default true;
 alter table profiles add column if not exists created_at timestamptz not null default now();
+
+-- Překlep v roli by tiše znamenal „nemá práva k ničemu", radši ať to spadne.
+alter table profiles drop constraint if exists profiles_role_chk;
+alter table profiles add  constraint profiles_role_chk
+  check (role in ('admin', 'auditor', 'lektor'));
 
 -- Profil se založí automaticky po vytvoření uživatele (default role 'lektor';
 -- administrátor si roli hned poté případně přepíše z appky).
@@ -451,29 +461,134 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- Pomocná funkce: je přihlášený uživatel administrátor?
--- security definer, protože ji volají politiky nad tabulkou profiles –
--- bez toho by se politika ptala sama sebe a Postgres skončí na rekurzi.
+-- Pomocné funkce k rolím. Všechny jsou security definer, protože je volají
+-- politiky nad tabulkou profiles – bez toho by se politika ptala sama sebe
+-- a Postgres skončí na nekonečné rekurzi.
 create or replace function public.is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin');
 $$;
 
+create or replace function public.is_auditor() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and role = 'auditor');
+$$;
+
+-- „Staff" = administrátor NEBO auditor. Tímhle se řídí skoro všechno;
+-- jen platby a kredit klientů zůstávají na samotném is_admin().
+create or replace function public.is_staff() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role in ('admin', 'auditor')
+  );
+$$;
+
 -- Každý smí číst svůj profil (appka z něj zjistí roli a jméno), administrátor
--- vidí a mění všechny – zakládá z appky účty lektorů a odebírá přístup.
--- Vlastní profil nikdo měnit nesmí, jinak by se lektor povýšil na admina.
+-- a auditor vidí a mění všechny – zakládají z appky účty a odebírají přístup.
+--
+-- Auditor ale nesmí sáhnout na administrátora ani z nikoho administrátora
+-- udělat: `using` se dívá na PŮVODNÍ řádek, `with check` na NOVÝ, takže obojí
+-- musí být ne-admin. Bez toho by si auditor jedním requestem udělal přístup
+-- do kartotéky a celé omezení role by bylo k ničemu.
+--
+-- Vlastní profil nikdo měnit nesmí – proto tu žádná politika „update sebe
+-- sama" není, jinak by se lektor povýšil na admina.
 alter table profiles enable row level security;
 drop policy if exists read_own_profile  on profiles;
 drop policy if exists prof_read         on profiles;
 drop policy if exists prof_admin_update on profiles;
 drop policy if exists prof_admin_delete on profiles;
+drop policy if exists prof_staff_update on profiles;
+drop policy if exists prof_staff_delete on profiles;
 
 create policy prof_read on profiles
-  for select to authenticated using (auth.uid() = id or is_admin());
-create policy prof_admin_update on profiles
-  for update to authenticated using (is_admin()) with check (is_admin());
-create policy prof_admin_delete on profiles
-  for delete to authenticated using (is_admin());
+  for select to authenticated using (auth.uid() = id or is_staff());
+create policy prof_staff_update on profiles
+  for update to authenticated
+  using      (is_admin() or (is_auditor() and role <> 'admin'))
+  with check (is_admin() or (is_auditor() and role <> 'admin'));
+create policy prof_staff_delete on profiles
+  for delete to authenticated
+  using (is_admin() or (is_auditor() and role <> 'admin'));
+
+-- Smazat účet úplně (i řádek v auth.users) z prohlížeče nejde – veřejný klíč
+-- na to nemá právo a service_role klíč do webu nepatří. Dělá to tahle funkce,
+-- kterou appka volá přes rpc(). Běží jako security definer, tedy s právy
+-- vlastníka, o to důležitější je kontrola volajícího hned na začátku.
+--
+-- Karta lektora v `lectors` ZŮSTÁVÁ a jen se deaktivuje – visí na ní
+-- odpracované hodiny ve work_log a ty se musí dochovat i po odchodu člověka.
+create or replace function public.delete_user_account(p_user uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  t_role   text;
+  t_email  text;
+  t_active boolean;
+begin
+  if not public.is_staff() then
+    raise exception 'Účty smí mazat jen administrátor nebo auditor.';
+  end if;
+
+  if p_user = auth.uid() then
+    raise exception 'Vlastní účet smazat nejde.';
+  end if;
+
+  select role, email, active into t_role, t_email, t_active
+    from public.profiles where id = p_user;
+  if t_role is null then
+    raise exception 'Takový účet už neexistuje.';
+  end if;
+
+  if t_role = 'admin' then
+    if not public.is_admin() then
+      raise exception 'Účet administrátora smí smazat jen jiný administrátor.';
+    end if;
+    -- Poslední administrátor, který se může přihlásit, musí zůstat – jinak
+    -- se do appky nikdo nedostane a role už nepůjde nastavit odjinud než ze
+    -- SQL editoru. Zamčený administrátor se do počtu nepočítá, takže ten jde
+    -- smazat vždycky.
+    if t_active and (
+      select count(*) from public.profiles where role = 'admin' and active
+    ) <= 1 then
+      raise exception 'Tohle je poslední administrátor – nechte aspoň jednoho.';
+    end if;
+  end if;
+
+  if t_email is not null then
+    update public.lectors set active = false where email = t_email;
+  end if;
+
+  delete from auth.users where id = p_user;
+end $$;
+
+revoke all     on function public.delete_user_account(uuid) from public, anon;
+grant  execute on function public.delete_user_account(uuid) to authenticated;
+
+-- Poslední přihlásitelný administrátor se nesmí ani zamknout, ani degradovat
+-- na jinou roli – to je druhá cesta, jak se připravit o přístup do appky,
+-- a kontrola v delete_user_account() ji nepokrývá.
+create or replace function public.guard_last_admin() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  if old.role = 'admin' and old.active
+     and (new.role <> 'admin' or not new.active)
+     and (select count(*) from public.profiles where role = 'admin' and active) <= 1
+  then
+    raise exception 'Tohle je poslední administrátor – nechte aspoň jednoho.';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists profiles_guard_last_admin on profiles;
+create trigger profiles_guard_last_admin
+  before update on profiles
+  for each row execute function public.guard_last_admin();
+
 
 -- ➜ ÚPLNĚ PRVNÍ administrátor: účet založ v Supabase (Authentication -> Users
 --    -> Add user) a pak mu tímhle nastav roli. Další účty už zakládá on sám
@@ -486,14 +601,20 @@ create policy prof_admin_delete on profiles
 -- ---------------------------------------------------------------------------
 -- Pravidlo: anonymní uživatel nevidí NIC. Přihlášený lektor čte rozvrh
 -- a karty žáků (potřebuje to pohled lesson_details i diagnostika) a u své
--- lekce smí zapsat, že proběhla. Všechno ostatní – zakládání a mazání lekcí,
--- kartotéka, platby, výkaz hodin – patří administrátorovi.
+-- lekce smí zapsat, že proběhla. Zakládání a mazání lekcí, diagnostika,
+-- výkaz hodin a správa účtů patří administrátorovi i auditorovi.
+-- KARTOTÉKA (platby a kredit klientů) patří JEN administrátorovi – přesně
+-- tím se auditor od administrátora liší.
+--
+-- Tabulku `students` ale auditor číst i zapisovat MUSÍ: rozvrh z ní bere
+-- jména žáků k lekcím a při založení lekce s novým jménem zakládá kartu.
+-- Zavřené jsou peníze (payments, credit_log), ne jména.
 --
 -- ⚠️ NEJDŘÍV si nastav aspoň jeden účet jako 'admin' příkazem výš, jinak
 --    po spuštění tohohle bloku nebude moct zapisovat nikdo.
 --
 -- Politiky se sčítají (OR): „read pro všechny přihlášené" platí i pro
--- administrátora, zápis navíc pouští is_admin().
+-- administrátora, zápis navíc pouští is_staff() (resp. is_admin() u peněz).
 -- ===========================================================================
 alter table rooms         enable row level security;
 alter table lectors       enable row level security;
@@ -518,7 +639,7 @@ begin
   end loop;
 end $$;
 
--- ---------- Čtou všichni přihlášení, zapisuje administrátor ----------
+-- ---------- Čtou všichni přihlášení, zapisuje admin nebo auditor ----------
 -- (rozvrh, číselníky a karty žáků potřebuje k práci i lektor)
 do $$
 declare t text;
@@ -528,7 +649,7 @@ begin
     execute format('drop policy if exists %I on %I', t || '_read', t);
     execute format('drop policy if exists %I on %I', t || '_write', t);
     execute format('create policy %I on %I for select to authenticated using (true)', t || '_read', t);
-    execute format('create policy %I on %I for all to authenticated using (is_admin()) with check (is_admin())', t || '_write', t);
+    execute format('create policy %I on %I for all to authenticated using (is_staff()) with check (is_staff())', t || '_write', t);
   end loop;
 end $$;
 -- Starší názvy politik ze schématu pro diagnostiku a žáky (nahrazeny výše).
@@ -541,11 +662,25 @@ drop policy if exists stud_insert on students;
 drop policy if exists stud_update on students;
 drop policy if exists stud_delete on students;
 
--- ---------- Jen administrátor (peníze a mzdy) ----------
+-- ---------- Výkaz hodin a notifikace: admin i auditor ----------
+-- Výkaz je mzdový podklad, ne kartotéka, a kontrola odpracovaných hodin je
+-- přesně to, co auditor dělá.
 do $$
 declare t text;
 begin
-  foreach t in array array['work_log','payments','credit_log','notifications']
+  foreach t in array array['work_log','notifications']
+  loop
+    execute format('drop policy if exists %I on %I', t || '_admin', t);
+    execute format('create policy %I on %I for all to authenticated using (is_staff()) with check (is_staff())', t || '_admin', t);
+  end loop;
+end $$;
+
+-- ---------- Kartotéka: JEN administrátor ----------
+-- Tohle je celý smysl role auditor – tady se is_admin() nechává.
+do $$
+declare t text;
+begin
+  foreach t in array array['payments','credit_log']
   loop
     execute format('drop policy if exists %I on %I', t || '_admin', t);
     execute format('create policy %I on %I for all to authenticated using (is_admin()) with check (is_admin())', t || '_admin', t);
@@ -564,9 +699,9 @@ drop policy if exists less_update on lessons;
 drop policy if exists less_delete on lessons;
 
 create policy less_read   on lessons for select to authenticated using (true);
-create policy less_insert on lessons for insert to authenticated with check (is_admin());
+create policy less_insert on lessons for insert to authenticated with check (is_staff());
 create policy less_update on lessons for update to authenticated using (true) with check (true);
-create policy less_delete on lessons for delete to authenticated using (is_admin());
+create policy less_delete on lessons for delete to authenticated using (is_staff());
 
 -- Lektor u lekce hlásí jen „proběhla" a co se dělalo. Čas, učebnu, žáka ani
 -- lektora měnit nesmí – tady se mu případná změna tiše vrátí na původní
@@ -578,7 +713,7 @@ create policy less_delete on lessons for delete to authenticated using (is_admin
 create or replace function public.guard_lesson_update() returns trigger
 language plpgsql set search_path = public as $$
 begin
-  if auth.uid() is null or public.is_admin() then return new; end if;
+  if auth.uid() is null or public.is_staff() then return new; end if;
   new.starts_at   := old.starts_at;
   new.ends_at     := old.ends_at;
   new.subject     := old.subject;

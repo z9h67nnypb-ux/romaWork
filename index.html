@@ -12,7 +12,7 @@
        Počítače se to netýká, prohlížeč na desktopu tuhle značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Rozvrh – PoraDys osobní výuka</title>
-  <link rel="stylesheet" href="styles.css?v=42" />
+  <link rel="stylesheet" href="styles.css?v=43" />
 </head>
 <body class="app-schedule">
   <!-- Přihlášení -->
@@ -125,8 +125,9 @@
           <label>Jméno<input type="text" id="nuName" placeholder="Příjmení" required autocomplete="off" /></label>
           <label>E-mail<input type="email" id="nuEmail" placeholder="prijmeni@poradys.cz" required autocomplete="off" /></label>
           <label>Heslo<input type="text" id="nuPass" placeholder="min. 8 znaků" required autocomplete="new-password" minlength="8" /></label>
-          <label>Role<select id="nuRole">
+          <label>Role<select id="nuRole" title="Lektor: čte rozvrh a hlásí odučené lekce. Auditor: všechno kromě kartotéky. Administrátor: všechno.">
             <option value="lektor">lektor</option>
+            <option value="auditor">auditor</option>
             <option value="admin">administrátor</option>
           </select></label>
           <button type="submit" class="primary-btn" id="nuSubmit">Založit účet</button>
@@ -142,8 +143,12 @@
         Heslo se nikam neukládá – po založení ho <b>předejte lektorovi</b>, jinak se k němu
         už nikdo nedostane. Změnit si ho může lektor sám přes „Zapomenuté heslo",
         administrátor přes Supabase&nbsp;→&nbsp;Authentication&nbsp;→&nbsp;Users.
-        <br>Tlačítko <b>Zrušit přístup</b> účet nemaže, jen ho zamkne – odpracované
-        hodiny i historie lekcí zůstanou.
+        <br><b>Zrušit přístup</b> účet nemaže, jen ho zamkne; <b>Smazat</b> ho odstraní
+        nadobro. Odpracované hodiny a historie lekcí zůstanou v obou případech –
+        karta lektora se jen odloží z nabídky.
+        <br><b>Role:</b> <i>lektor</i> čte rozvrh a hlásí odučené lekce ·
+        <i>auditor</i> zvládne všechno kromě kartotéky ·
+        <i>administrátor</i> všechno.
       </p>
     </div>
   </div>
@@ -175,8 +180,8 @@
        rozdělané práce a návratu zpátky. Prohlížeč si cache klíčuje podle URL,
        takže na „app.js?v=30" podruhé podá tu starou verzi a stránka běží
        s kódem, který na disku vůbec není. Vždycky číslo jen zvyšuj. -->
-  <script src="config.js?v=42"></script>
-  <script src="opakovani.js?v=42"></script>
-  <script src="app.js?v=42"></script>
+  <script src="config.js?v=43"></script>
+  <script src="opakovani.js?v=43"></script>
+  <script src="app.js?v=43"></script>
 </body>
 </html>

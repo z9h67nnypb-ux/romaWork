@@ -244,7 +244,18 @@ const state = {
   hourH: null, // výška hodiny; dopočítá se z okna a drží se do změny dne/okna
 };
 
+// Role: admin vidí všechno; auditor to samé kromě kartotéky (platby
+// a kredit klientů); lektor jen čte rozvrh a hlásí odučenou lekci.
+//
+// Skoro celá appka se ptá isStaff() – „smí měnit rozvrh". Na isAdmin() se
+// ptá jenom kartotéka a zacházení s administrátorskými účty, protože tam
+// je ten jediný rozdíl mezi adminem a auditorem.
 function isAdmin() { return state.user && state.user.role === "admin"; }
+function isAuditor() { return state.user && state.user.role === "auditor"; }
+function isStaff() { return isAdmin() || isAuditor(); }
+
+const ROLE_LABELS = { admin: "administrátor", auditor: "auditor", lektor: "lektor" };
+function roleLabel(r) { return ROLE_LABELS[r] || "lektor"; }
 
 // Klienti z kartotéky – rozvrh z nich bere telefon a ročník k lekci
 // a našeptává jména, ať nevznikají překlepy a duplicitní karty.
@@ -425,19 +436,20 @@ function renderMiniCalendar() {
 
 function renderToolbar() {
   document.getElementById("navDate").textContent = fmtDateLong(state.date);
-  document.getElementById("newLessonBtn").classList.toggle("hidden", !isAdmin());
-  document.getElementById("newShiftBtn").classList.toggle("hidden", !isAdmin());
-  document.getElementById("selectAllBtn").classList.toggle("hidden", !isAdmin());
+  document.getElementById("newLessonBtn").classList.toggle("hidden", !isStaff());
+  document.getElementById("newShiftBtn").classList.toggle("hidden", !isStaff());
+  document.getElementById("selectAllBtn").classList.toggle("hidden", !isStaff());
   // „Vše odučeno" má smysl jen na denním pohledu, kde je vidět, co se potvrzuje
   const doneAll = document.getElementById("doneAllBtn");
-  doneAll.classList.toggle("hidden", !isAdmin() || state.view !== "den");
-  const pending = isAdmin() ? pendingLessonsOfDay().length : 0;
+  doneAll.classList.toggle("hidden", !isStaff() || state.view !== "den");
+  const pending = isStaff() ? pendingLessonsOfDay().length : 0;
   doneAll.textContent = pending ? "✓ Odučeno (" + pending + ")" : "✓ Odučeno";
   doneAll.disabled = !pending;
-  document.getElementById("extendWeekBtn").classList.toggle("hidden", !isAdmin());
+  document.getElementById("extendWeekBtn").classList.toggle("hidden", !isStaff());
+  // Kartotéka je jediné, co auditor nesmí – proto tady is_admin(), ne isStaff().
   document.getElementById("kartotekaBtn").classList.toggle("hidden", !isAdmin());
-  document.getElementById("hoursBtn").classList.toggle("hidden", !isAdmin());
-  document.getElementById("usersBtn").classList.toggle("hidden", !isAdmin());
+  document.getElementById("hoursBtn").classList.toggle("hidden", !isStaff());
+  document.getElementById("usersBtn").classList.toggle("hidden", !isStaff());
   document.querySelectorAll(".view-tabs button[data-view]").forEach((b) => {
     b.classList.toggle("active", b.dataset.view === state.view);
   });
@@ -595,7 +607,7 @@ function buildShiftRow(room) {
     // v úzkém sloupci se text ořízne, celý je proto vždy v tooltipu
     chip.title = (s.is_lead ? "Hlavní lektor dne – " : "") +
       name + " " + time + (s.description ? " – " + s.description : "");
-    if (isAdmin()) {
+    if (isStaff()) {
       chip.classList.add("editable");
       chip.onclick = (e) => { e.stopPropagation(); openDetail(s.id); };
     }
@@ -651,7 +663,7 @@ function buildDayView() {
     if (showShiftRow) col.appendChild(buildShiftRow(room));
 
     const body = document.createElement("div");
-    body.className = "col-body" + (isAdmin() ? " admin" : "");
+    body.className = "col-body" + (isStaff() ? " admin" : "");
     body.style.height = bodyH + "px";
     body.style.background = lineCss;
 
@@ -668,7 +680,7 @@ function buildDayView() {
   });
 
   wrap.appendChild(grid);
-  if (isAdmin()) setupBoxSelect(wrap);
+  if (isStaff()) setupBoxSelect(wrap);
   return wrap;
 }
 
@@ -712,7 +724,7 @@ function setupBoxSelect(wrap) {
           Math.abs(ue.clientX - _lastEmptyClick.x) < 6 &&
           Math.abs(ue.clientY - _lastEmptyClick.y) < 6;
         _lastEmptyClick = { t: now, x: ue.clientX, y: ue.clientY };
-        if (isDouble && isAdmin()) {
+        if (isDouble && isStaff()) {
           _lastEmptyClick = null;
           createAtPoint(ue);
           return;
@@ -762,7 +774,7 @@ function clearSelection() {
 // Vybere všechny lekce zobrazeného dne (jen admin).
 // Bere jen lekce aktuálního režimu (Prezenční/Online), ať se nekopíruje nic skrytého.
 function selectAllDay() {
-  if (!isAdmin()) return;
+  if (!isStaff()) return;
   state.selection = new Set(state.lessons.filter((l) => isLesson(l) && matchesMode(l)).map((l) => l.id));
   renderView();
   toast("Vybráno " + state.selection.size + " lekcí.");
@@ -838,7 +850,7 @@ function buildEvent(l, room) {
     note ? "Poznámka: " + note : "",
   ].filter(Boolean).join("\n");
 
-  if (isAdmin()) {
+  if (isStaff()) {
     // Admin: klik = výběr (Ctrl/⌘ přidává), dvojklik = úprava.
     ev.onclick = (e) => {
       e.stopPropagation();
@@ -909,7 +921,7 @@ function openDetail(id) {
   const l = state.lessons.find((x) => x.id === id);
   if (!l) return;
   state.openLessonId = id;
-  if (isAdmin()) renderAdminForm(l, isShift(l) ? "Lektor u stolu" : "Detail lekce");
+  if (isStaff()) renderAdminForm(l, isShift(l) ? "Lektor u stolu" : "Detail lekce");
   else renderLektorForm(l);
   showPanel();
 }
@@ -1238,7 +1250,7 @@ function renderLektorForm(l) {
   const room = roomById(l.room_id);
   document.getElementById("detailTitle").textContent = l.student_names || "Lekce";
   document.getElementById("detailBody").innerHTML =
-    '<div class="role-note">Jako lektor můžeš zapsat popis a potvrdit, že lekce proběhla. Změny rozvrhu dělá administrátor.</div>' +
+    '<div class="role-note">Jako lektor můžeš zapsat popis a potvrdit, že lekce proběhla. Rozvrh mění administrátor.</div>' +
     metaRow("Žák", escapeHtml(l.student_names || "—")) +
     metaRow("Ročník", escapeHtml([l.student_grade, l.student_category].filter(Boolean).join(" · ") || "—")) +
     metaRow("Telefon", l.student_phone
@@ -1276,7 +1288,7 @@ async function saveDetail() {
   const saved = document.getElementById("detailSaved");
   btn.disabled = true;
   try {
-    if (isAdmin()) {
+    if (isStaff()) {
       const kind = document.getElementById("fKind").value;
       const shift = kind === "shift";
       const [sh, sm] = document.getElementById("fStart").value.split(":").map(Number);
@@ -1514,7 +1526,7 @@ function lessonWord(n) { return n === 1 ? "lekci" : n >= 2 && n <= 4 ? "lekce" :
 
 // ---------- Kopírování / vkládání (admin) ----------
 function copySelection() {
-  if (!isAdmin() || !state.selection.size) return;
+  if (!isStaff() || !state.selection.size) return;
   state.clipboard = state.lessons
     .filter((l) => state.selection.has(l.id))
     .map((l) => ({
@@ -1529,7 +1541,7 @@ function copySelection() {
 }
 
 async function pasteClipboard() {
-  if (!isAdmin() || !state.clipboard.length) return;
+  if (!isStaff() || !state.clipboard.length) return;
   const dayLessons = await provider.getLessons(state.date);
   const placed = [...dayLessons]; // ať kolize hlídáme i mezi vkládanými
   let added = 0, skipped = 0;
@@ -1554,7 +1566,7 @@ async function pasteClipboard() {
 }
 
 async function deleteSelection() {
-  if (!isAdmin() || !state.selection.size) return;
+  if (!isStaff() || !state.selection.size) return;
   const n = state.selection.size;
   if (!confirm("Smazat vybrané lekce (" + n + ")?")) return;
   for (const id of state.selection) await provider.deleteLesson(id);
@@ -1564,7 +1576,7 @@ async function deleteSelection() {
 }
 
 function onKeyDown(e) {
-  if (!isAdmin()) return;
+  if (!isStaff()) return;
   const tag = (document.activeElement && document.activeElement.tagName) || "";
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return; // neruš psaní
   const ctrl = e.ctrlKey || e.metaKey;
@@ -1580,7 +1592,7 @@ function onKeyDown(e) {
 // následujícího. Zrušené lekce se nekopírují; kolize v cílovém týdnu se
 // přeskočí. Kopie vzniknou jako naplánované (nepotvrzené).
 async function extendWeekToNext() {
-  if (!isAdmin()) return;
+  if (!isStaff()) return;
   const monday = new Date(state.date);
   monday.setHours(0, 0, 0, 0);
   monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // pondělí týdne
@@ -1635,7 +1647,7 @@ async function extendWeekToNext() {
 const hoursState = { month: new Date() };
 
 async function openHoursReport() {
-  if (!isAdmin()) return;
+  if (!isStaff()) return;
   hoursState.month = new Date(state.date.getFullYear(), state.date.getMonth(), 1);
   document.getElementById("hoursModal").classList.remove("hidden");
   await renderHoursReport();
@@ -1688,8 +1700,8 @@ async function renderHoursReport() {
 // neuloží, takže administrátorovi jeho přihlášení zůstane.
 //
 // Roli, jméno a zámek účtu pak dopisuje UŽ přihlášený administrátor svým
-// klientem; do profiles ho pustí politika prof_admin_update
-// (viz migrace_ucty_lektoru.sql).
+// klientem; do profiles ho pustí politika prof_staff_update
+// (viz migrace_ucty_lektoru.sql a migrace_role_auditor.sql).
 const Accounts = {
   _signup: null,
   // Klient jen na zakládání účtů – nesmí sáhnout na uloženou session.
@@ -1732,7 +1744,7 @@ const Accounts = {
 
     // Karta lektora v tabulce `lectors` – z ní čte rozvrh i výkaz hodin.
     // Bez ní by se odpracované hodiny neměly kam počítat.
-    if (role !== "admin") {
+    if (role === "lektor") {
       const { error: e3 } = await c.from("lectors")
         .upsert({ name, email, active: true }, { onConflict: "name" });
       if (e3) console.error("Kartu lektora se nepodařilo založit:", e3);
@@ -1743,13 +1755,42 @@ const Accounts = {
     const { error } = await SupabaseProvider._init().from("profiles").update({ active }).eq("id", id);
     if (error) throw error;
   },
+  // Smazat řádek v auth.users z prohlížeče nejde – veřejný klíč na to nemá
+  // právo. Dělá to funkce delete_user_account v databázi (security definer),
+  // která si sama ověří, kdo ji volá, a nepustí smazání posledního admina
+  // ani vlastního účtu. Viz migrace_role_auditor.sql.
+  async remove(id) {
+    const { error } = await SupabaseProvider._init().rpc("delete_user_account", { p_user: id });
+    if (error) throw new Error(dbErrorCz(error));
+  },
 };
 
+// Hlášky z `raise exception` chodí přes PostgREST jako message; funkce si je
+// píše česky sama. Tohle jen odchytí případ, kdy funkce v databázi ještě není
+// (nespuštěná migrace), aby uživatel nekoukal na "404" nebo anglickou hlášku.
+function dbErrorCz(error) {
+  const m = String((error && error.message) || error || "");
+  if (/Could not find the function|does not exist|schema cache/i.test(m)) {
+    return "Mazání účtů zatím není v databázi zapnuté – spusťte migrace_role_auditor.sql.";
+  }
+  return m;
+}
+
 async function openUsers() {
-  if (!isAdmin()) return;
+  if (!isStaff()) return;
   document.getElementById("usersModal").classList.remove("hidden");
   document.getElementById("nuError").textContent = "";
   document.getElementById("nuOk").textContent = "";
+
+  // Auditor nesmí vyrobit administrátora – jinak by si obešel jediné omezení,
+  // které má (kartotéku). Databáze to odmítne taky, ale ať tu volbu vůbec
+  // nevidí a nediví se pak chybě.
+  const adminOpt = document.querySelector('#nuRole option[value="admin"]');
+  if (adminOpt) adminOpt.hidden = !isAdmin();
+  if (!isAdmin() && document.getElementById("nuRole").value === "admin") {
+    document.getElementById("nuRole").value = "lektor";
+  }
+
   await renderUsers();
 }
 
@@ -1766,22 +1807,38 @@ async function renderUsers() {
       body.innerHTML = '<div class="placeholder">Zatím tu není žádný účet.</div>';
       return;
     }
+    // Poznámka k poslednímu administrátorovi: hlídá ho databáze (funkce
+    // delete_user_account a trigger profiles_guard_last_admin), ne tenhle
+    // kód. Tady to ani nejde – abych se na cizí administrátorský řádek
+    // dostal, musím být sám administrátor, takže jsme na světě vždycky dva.
+    // Kdyby na to přece jen došlo, hláška z databáze vyskočí v toastu.
     let html = '<table class="users-table"><tr><th>Jméno</th><th>E-mail</th><th>Role</th><th></th></tr>';
     rows.forEach((r) => {
-      const admin = r.role === "admin";
+      const jeAdmin = r.role === "admin";
       const me = state.user && state.user.email === r.email;
+      // Auditor na administrátorský účet sáhnout nesmí (databáze ho odmítne),
+      // tak mu u něj tlačítka vůbec neukazujeme.
+      const smim = !me && (isAdmin() || !jeAdmin);
+      let akce;
+      if (me) akce = '<span class="acts-note">to jste vy</span>';
+      else if (!smim) akce = '<span class="acts-note">jen administrátor</span>';
+      else {
+        akce =
+          '<button data-act="' + (r.active === false ? "on" : "off") + '" data-id="' + escapeHtml(r.id) + '">' +
+            (r.active === false ? "Vrátit přístup" : "Zrušit přístup") + "</button>" +
+          '<button class="danger" data-del="' + escapeHtml(r.id) +
+            '" data-name="' + escapeHtml(r.name || r.email || "") + '">Smazat</button>';
+      }
+
       html += '<tr class="' + (r.active === false ? "off" : "") + '">' +
         "<td>" + escapeHtml(r.name || "—") + (me ? " <b>(vy)</b>" : "") + "</td>" +
         "<td>" + escapeHtml(r.email || "—") + "</td>" +
-        '<td><span class="role-tag ' + (admin ? "admin" : "") + '">' + (admin ? "administrátor" : "lektor") + "</span>" +
+        '<td><span class="role-tag ' + escapeHtml(r.role || "lektor") + '">' + escapeHtml(roleLabel(r.role)) + "</span>" +
           (r.active === false ? ' <span class="role-tag">bez přístupu</span>' : "") + "</td>" +
-        '<td class="acts">' +
-          // Sám sobě přístup vzít nemůžu – to by appku zamklo naslepo.
-          (me ? "—" : '<button data-act="' + (r.active === false ? "on" : "off") + '" data-id="' + escapeHtml(r.id) + '">' +
-            (r.active === false ? "Vrátit přístup" : "Zrušit přístup") + "</button>") +
-        "</td></tr>";
+        '<td class="acts">' + akce + "</td></tr>";
     });
     body.innerHTML = html + "</table>";
+
     body.querySelectorAll("button[data-act]").forEach((b) => {
       b.onclick = async () => {
         b.disabled = true;
@@ -1791,6 +1848,29 @@ async function renderUsers() {
         } catch (e) {
           b.disabled = false;
           toast("Nepovedlo se: " + (e.message || e));
+        }
+      };
+    });
+
+    body.querySelectorAll("button[data-del]").forEach((b) => {
+      b.onclick = async () => {
+        // Mazání účtu je nevratné, tak se na to zeptáme jménem.
+        if (!confirm(
+          "Opravdu smazat účet " + b.dataset.name + "?\n\n" +
+          "Přihlášení zmizí nadobro a nejde vrátit. Odpracované hodiny a historie " +
+          "lekcí zůstanou – karta lektora se jen odloží z nabídky.\n\n" +
+          "Když chcete jen odebrat přístup, použijte „Zrušit přístup\"."
+        )) return;
+        b.disabled = true;
+        try {
+          await Accounts.remove(b.dataset.del);
+          toast("Účet " + b.dataset.name + " byl smazán.");
+          await renderUsers();
+          await loadLectors();
+        } catch (e) {
+          b.disabled = false;
+          toast("Nepovedlo se smazat: " + (e.message || e));
+          console.error(e);
         }
       };
     });
@@ -1813,6 +1893,12 @@ async function onCreateUser(e) {
   const role = document.getElementById("nuRole").value;
   if (!name || !email || password.length < 8) {
     err.textContent = "Vyplňte jméno, e-mail a heslo aspoň o osmi znacích.";
+    return;
+  }
+  // Databáze to odmítne taky (politika prof_staff_update), ale ať se uživatel
+  // nedozví o zákazu až po tom, co se účet založí a nepůjde mu dopsat role.
+  if (role === "admin" && !isAdmin()) {
+    err.textContent = "Administrátorský účet smí založit jen jiný administrátor.";
     return;
   }
 
@@ -1908,8 +1994,8 @@ function renderUserBadge() {
   }
   // V liště jen jméno; role je v tooltipu, ať „(administrátor)" nebere šířku.
   b.textContent = state.user.name;
-  b.title = isAdmin() ? "Přihlášen jako administrátor" : "Přihlášen jako lektor";
-  document.getElementById("adminHint").classList.toggle("hidden", !isAdmin());
+  b.title = "Přihlášen jako " + roleLabel(state.user.role);
+  document.getElementById("adminHint").classList.toggle("hidden", !isStaff());
 }
 
 // Zbytky po zrušeném ukázkovém režimu. Demo data se držela v prohlížeči,

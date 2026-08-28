@@ -9,8 +9,9 @@
 //   4) tlačítko „Zpráva pro rodiče" vytiskne A4 souhrn (v dialogu tisku
 //      stačí zvolit „Uložit jako PDF").
 //
-// Práva: role se čte z tabulky `profiles` (admin / lektor). Lektor smí jen
-// číst a tisknout; zápis navíc hlídá RLS v databázi (viz schema.sql).
+// Práva: role se čte z tabulky `profiles` (admin / auditor / lektor).
+// Testy zadává administrátor i auditor, lektor smí jen číst a tisknout;
+// zápis navíc hlídá RLS v databázi (viz schema.sql).
 //
 // Vyhodnocení je ALGORITMICKÉ (pevná pravidla), ne AI – funguje hned, zdarma
 // a pro stejné body dá vždy stejný výsledek.
@@ -416,7 +417,9 @@ const state = {
   draft: null, // { test, ev, plan } – vyhodnocený, zatím neuložený test
 };
 
-function isAdmin() { return state.role === "admin"; }
+// Testy zadává administrátor i auditor; lektor je jen čte a tiskne.
+// Diagnostika není kartotéka, takže tady mezi těmi dvěma rozdíl není.
+function isStaff() { return state.role === "admin" || state.role === "auditor"; }
 function testsOf(studentId) { return state.tests.filter((t) => t.student_id === studentId); }
 function subjectTests(studentId, subj) {
   return testsOf(studentId).filter((t) => t.subject === subj).sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -521,7 +524,7 @@ function renderCard() {
         '<p class="diag-note" style="margin:8px 0 0;">Škola a třída se berou z kartotéky – tam je také upravíte.</p>' +
       "</div>" +
       '<div class="stud-actions">' +
-        (isAdmin() ? '<button id="newTestBtn" class="btn primary">+ Nový test</button>' : "") +
+        (isStaff() ? '<button id="newTestBtn" class="btn primary">+ Nový test</button>' : "") +
         '<button id="printBtn" class="btn"' + (mine.length ? "" : " disabled") + ">🖨 Zpráva pro rodiče (PDF)</button>" +
       "</div>" +
     "</div>";
@@ -562,7 +565,7 @@ function renderTestStrip() {
 
   if (!list.length) {
     el.innerHTML = '<div class="diag-note">Z předmětu <b>' + S.label + "</b> zatím žádný test. " +
-      (isAdmin() ? "Zadejte první tlačítkem <b>+ Nový test</b>." : "Výsledky zadává administrátor.") + "</div>";
+      (isStaff() ? "Zadejte první tlačítkem <b>+ Nový test</b>." : "Výsledky zadává administrátor.") + "</div>";
     return;
   }
 
@@ -572,7 +575,7 @@ function renderTestStrip() {
     html += '<button class="test-chip' + (t.id === state.shownTestId ? " active" : "") + '" data-test="' + escapeHtml(t.id) + '">' +
       fmtDateCz(t.date) + ' <span class="pct">' + pct + " %</span></button>";
   });
-  if (isAdmin() && state.shownTestId) {
+  if (isStaff() && state.shownTestId) {
     html += '<button id="delTestBtn" class="btn" style="margin-left:auto;">Smazat zobrazený test</button>';
   }
   html += "</div>";
@@ -1173,7 +1176,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     $("lockedBox").classList.remove("hidden");
     return;
   }
-  state.role = me.role === "admin" ? "admin" : "lektor";
+  state.role = ["admin", "auditor"].includes(me.role) ? me.role : "lektor";
   state.userName = me.name || "";
   $("mainBox").classList.remove("hidden");
   $("diagLogout").onclick = () => pageLogout($("diagLogout"), DbStore._c());
@@ -1183,11 +1186,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   badge.classList.add("db");
 
   const rb = $("roleBadge");
-  rb.textContent = state.userName + (isAdmin() ? " · administrátor (zadává testy)" : " · lektor (jen čtení)");
+  const ROLE_CZ = { admin: "administrátor", auditor: "auditor", lektor: "lektor" };
+  rb.textContent = state.userName + " · " + ROLE_CZ[state.role] +
+    (isStaff() ? " (zadává testy)" : " (jen čtení)");
   rb.classList.add("admin");
 
-  $("newStudentBtn").classList.toggle("hidden", !isAdmin());
-  $("batchBtn").classList.toggle("hidden", !isAdmin());
+  $("newStudentBtn").classList.toggle("hidden", !isStaff());
+  $("batchBtn").classList.toggle("hidden", !isStaff());
   $("dSearch").addEventListener("input", renderList);
   $("dShowFormer").addEventListener("change", renderList);
   $("dOnlyTested").addEventListener("change", renderList);
