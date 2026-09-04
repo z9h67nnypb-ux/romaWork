@@ -24,7 +24,7 @@ Pak otevři v prohlížeči: <http://localhost:5050/index.html>
 (Alternativně přes Node: `npx serve` nebo `npx http-server`.)
 
 Objeví se **přihlášení** – účtem ze Supabase Auth. Účty zakládá administrátor
-v appce (Rozvrh → **Lektoři**), viz kapitola 3c.
+v appce (Rozvrh → **Účty**), viz kapitola 3c.
 
 ---
 
@@ -54,21 +54,42 @@ v appce (Rozvrh → **Lektoři**), viz kapitola 3c.
   přeskočí. U už založené lekce to udělá tlačítko **„Naplánovat další
   termíny"** v jejím detailu. Mimořádná lekce má v rozvrhu zlatý proužek
   vlevo a do dalšího týdne se nekopíruje.
+- **„+ Lektor" – kdo je u kterého stolu** – pod názvem stolu se ukáže proužek
+  se jménem a časem („Kunkelová 8–13"). Zapisuje se **stejně jako lekce**:
+  rovnou i na několik týdnů dopředu (stejný den v týdnu i čas), takže se to
+  nemusí klikat pořád dokola. U už zapsaného proužku to udělá tlačítko
+  **„Zapsat na další týdny"** v jeho detailu; termíny, které už zapsané jsou,
+  se přeskočí. Proužky se do odpracovaných hodin nepočítají ani nečerpají
+  kredit žáka – jsou jen informace, kdo tam ten den sedí.
+- **★ Hlavní lektor dne** – zaškrtávátko v detailu proužku. Označený proužek
+  je v rozvrhu žlutý a má hvězdičku. **Hlavních lektorů může být v jednom dni
+  víc** (typicky jeden dopoledne a druhý odpoledne) – hvězdička se ostatním
+  neodebírá, vypíná se ručně u toho konkrétního proužku. Když se lektor
+  zapisuje na několik týdnů dopředu, hvězdička se nese s ním.
 - **Pravidelná lekce z karty klienta** – při zakládání klienta v kartotéce jde
   rovnou zadat den, čas, stůl a počet lekcí; série se založí do rozvrhu.
 - **Protáhnout týden →** (admin) – zkopíruje pravidelné lekce aktuálního týdne
   do týdne následujícího (mimořádné a zrušené se vynechají, kolize přeskočí).
-- **Výkaz hodin** (admin) – měsíční součet potvrzených hodin po lektorech,
-  podklad pro výplaty. Smazání lekce hodiny odebere; roční úklid je zachová.
-  Detail návrhu v [`DATABASE.md`](DATABASE.md).
-- **📇 Kartotéka** (admin) – stránka [`kartoteka.html`](kartoteka.html):
+- **🧑‍🏫 Kartotéka lektorů** (admin i auditor) – stránka
+  [`kartoteka-lektori.html`](kartoteka-lektori.html), tlačítko **Lektoři**:
+  jméno, adresa, telefon, co učí, do kdy má smlouvu, jaké má klíče (1. čip /
+  2. čip + podkroví / celý svazek), jestli podepsal daně, poznámka a
+  **kolik odučil hodin za vybraný měsíc** (od prvního do posledního dne;
+  měsíce jde listovat zpět). Lektoři se sem doplňují sami – stačí, aby se
+  jejich jméno objevilo v rozvrhu. Prošlá nebo brzy končící smlouva tónuje
+  řádek, ať se na to nepřijde pozdě. Nahradilo to dřívější tlačítko *Výkaz*;
+  hodiny se počítají pořád stejně (smazání lekce je odebere, roční úklid je
+  zachová), jen stojí vedle zbytku údajů o lektorovi. Detail v
+  [`DATABASE.md`](DATABASE.md).
+- **📇 Kartotéka klientů** (admin), tlačítko **Klienti** – stránka
+  [`kartoteka.html`](kartoteka.html):
   klienti, platby a kredit hodin (nahrazuje Excel „KARTOTÉKA"). Lekce čerpají
   kredit automaticky z rozvrhu; přehled TOTAL hlídá nízký kredit; karta
   klienta ve stylu Excelu; export CSV; hromadný import počátečních zůstatků.
   **Barevné označení klientů** (online / osobně / končí / kontaktováno /
   problémový) a **souhrny peněz podle způsobu platby** (kolik klientů a Kč
   platí hotově / účet PoraDys / účet jazykovka / účet DR).
-- **👤 Lektoři** (admin i auditor) – zakládání přihlašovacích účtů. Vyplní se
+- **👤 Účty** (admin i auditor) – zakládání přihlašovacích účtů. Vyplní se
   jméno, e-mail, heslo a role, účet vznikne v Supabase Auth a člověk se rovnou
   přihlásí. **Zrušit přístup** účet jen zamkne, **Smazat** ho odstraní nadobro;
   odpracované hodiny a historie lekcí zůstanou v obou případech – karta lektora
@@ -112,13 +133,15 @@ v appce (Rozvrh → **Lektoři**), viz kapitola 3c.
      `lector_monthly_hours`), přístupová pravidla (RLS) a číselník učeben.
    - **Žádná ukázková data se nevkládají** – databáze začne prázdná.
 3. Na databázi, která už běží, se `schema.sql` **nespouští znovu** – místo toho
-   se pustí migrace `migrace_*.sql`. Poslední tři, a v tomhle pořadí:
+   se pustí migrace `migrace_*.sql`, a to v tomhle pořadí:
    [`migrace_ucty_lektoru.sql`](migrace_ucty_lektoru.sql) (zakládání účtů
    z appky), [`migrace_prava_ostry_provoz.sql`](migrace_prava_ostry_provoz.sql)
-   (ostrá přístupová práva místo prototypových `proto_all`) a
+   (ostrá přístupová práva místo prototypových `proto_all`),
    [`migrace_role_auditor.sql`](migrace_role_auditor.sql) (role auditor
-   a mazání účtů z appky) a [`migrace_materialy.sql`](migrace_materialy.sql)
-   (materiály na procvičování + úložiště souborů).
+   a mazání účtů z appky), [`migrace_materialy.sql`](migrace_materialy.sql)
+   (materiály na procvičování + úložiště souborů) a
+   [`migrace_kartoteka_lektoru.sql`](migrace_kartoteka_lektoru.sql)
+   (kartotéka lektorů – adresa, smlouva, klíče, daně, poznámka).
 4. Kdyby v databázi zůstala testovací data z prototypu, smaže je
    [`reset_ostry_provoz.sql`](reset_ostry_provoz.sql) (nevratné, čti
    komentáře v souboru).
@@ -151,7 +174,7 @@ nepřihlásil, dokud neklikne na potvrzovací odkaz v mailu.
    ```
 
 **Všechny další účty už zakládá administrátor v appce:** Rozvrh →
-tlačítko **Lektoři** → jméno, e-mail, heslo, role → *Založit účet*.
+tlačítko **Účty** → jméno, e-mail, heslo, role → *Založit účet*.
 
 - Účet vznikne v `auth.users`, trigger k němu doplní řádek v `profiles`
   a appka rovnou založí i kartu lektora v tabulce `lectors` (bez ní by
@@ -175,7 +198,7 @@ tlačítko **Lektoři** → jméno, e-mail, heslo, role → *Založit účet*.
 ## 4) Role: administrátor, auditor, lektor
 
 Po přihlášení appka zná roli uživatele. Role se nastavuje při zakládání účtu
-(Rozvrh → **Lektoři**) a dá se kdykoli změnit.
+(Rozvrh → **Účty**) a dá se kdykoli změnit.
 
 | Co | lektor | auditor | administrátor |
 |---|:---:|:---:|:---:|
@@ -185,7 +208,7 @@ Po přihlášení appka zná roli uživatele. Role se nastavuje při zakládán�
 | Diagnostické testy – zadávání | – | ✅ | ✅ |
 | Materiály na procvičování – otevřít | ✅ | ✅ | ✅ |
 | Materiály na procvičování – nahrát a smazat | – | ✅ | ✅ |
-| Výkaz hodin | – | ✅ | ✅ |
+| Kartotéka lektorů (kontakt, smlouva, klíče, hodiny) | – | ✅ | ✅ |
 | Účty (zakládat, zamykat, mazat) | – | ✅¹ | ✅ |
 | **Kartotéka – klienti, platby, kredit** | – | **–** | ✅ |
 
@@ -209,8 +232,9 @@ na konci [`schema.sql`](schema.sql):
 - lektor čte rozvrh, karty žáků a diagnostiku, ale zakládat a mazat lekce
   nemůže – a u své lekce mu trigger `guard_lesson_update` propustí jen
   `done`, `status` a `description`, ostatní sloupce vrátí na původní hodnotu;
-- kartotéka, platby, kredit, výkaz hodin a účty jsou jen pro administrátora
-  (funkce `is_admin()` čte roli z `profiles`).
+- kartotéka klientů, platby a kredit jsou jen pro administrátora (funkce
+  `is_admin()` čte roli z `profiles`); kartotéka lektorů a účty jsou pro
+  administrátora i auditora (`is_staff()`).
 
 ## 5) Důležité poznámky
 
@@ -222,7 +246,8 @@ na konci [`schema.sql`](schema.sql):
 - **Uspávání:** projekt na free tieru se po 7 dnech nečinnosti pauzne; pak ho
   probudíš v dashboardu. Pro ostrý provoz se počítá s placeným tarifem.
 - **Časové pásmo:** lekce se ukládají jako `timestamptz`, počítá se
-  `Europe/Prague` (výkaz hodin i čerpání kreditu podle něj určují datum).
+  `Europe/Prague` (odučené hodiny lektorů i čerpání kreditu podle něj
+  určují datum).
 
 ---
 
@@ -244,15 +269,17 @@ Plán automatizace (zatím nenaprogramováno):
 | `index.html` | Struktura stránky |
 | `styles.css` | Vzhled |
 | `config.js` | Adresa a veřejný klíč Supabase + rozsah dne |
-| `app.js` | Logika rozvrhu (vykreslování, detail, ukládání, výkaz hodin, účty lektorů) |
+| `app.js` | Logika rozvrhu (vykreslování, detail, ukládání, účty lektorů) |
 | `opakovani.js` | Výpočet termínů pravidelných (opakovaných) lekcí |
 | `schema.sql` | Databázové schéma pro Supabase včetně RLS pravidel |
 | `migrace_*.sql` | Postupné úpravy schématu pro už běžící databázi |
 | `migrace_prava_ostry_provoz.sql` | Ostrá přístupová práva (RLS) pro starší databázi |
 | `migrace_role_auditor.sql` | Role auditor + mazání účtů z appky |
 | `migrace_materialy.sql` | Materiály na procvičování (tabulka + úložiště souborů) |
+| `migrace_kartoteka_lektoru.sql` | Kartotéka lektorů (adresa, smlouva, klíče, daně) |
 | `reset_ostry_provoz.sql` | Jednorázové smazání všech provozních dat |
 | `diagnostika.html` + `diagnostika.js` | Diagnostický test a plán přípravy |
-| `kartoteka.html` + `kartoteka.js` | Kartotéka: klienti, platby a kredit hodin |
+| `kartoteka.html` + `kartoteka.js` | Kartotéka klientů: platby a kredit hodin |
+| `kartoteka-lektori.html` + `kartoteka-lektori.js` | Kartotéka lektorů: kontakt, smlouva, klíče, odučené hodiny |
 | `DATABASE.md` | Návrh databáze: retence, hodiny lektorů, hosting a zálohy |
 | `NASAZENI.md` | Krok-za-krokem postup nasazení do ostrého provozu |

@@ -148,18 +148,8 @@ const SupabaseProvider = {
     const { error } = await this._init().from("lessons").delete().eq("id", id);
     if (error) throw error;
   },
-  // Čte pohled lector_monthly_hours (plněný triggerem z work_log).
-  // month je 0-based (JS Date), pohled používá 1-based.
-  async getMonthlyHours(year, month) {
-    const { data, error } = await this._init()
-      .from("lector_monthly_hours")
-      .select("*")
-      .eq("year", year)
-      .eq("month", month + 1)
-      .order("hours", { ascending: false });
-    if (error) throw error;
-    return data;
-  },
+  // Odpracované hodiny (pohled lector_monthly_hours) se čtou v kartotéce
+  // lektorů – stránka kartoteka-lektori.html má vlastního klienta.
 };
 
 const provider = SupabaseProvider;
@@ -297,6 +287,18 @@ function overlaps(aS, aE, bS, bE) { return aS < bE && bS < aE; }
 // Řádek rozvrhu je buď lekce, nebo směna lektora u stolu (kdo tu dnes je).
 function isShift(l) { return l.kind === "shift"; }
 function isLesson(l) { return !isShift(l); }
+
+// Je v daném dni už zapsaný stejný proužek „lektor u stolu"? Směny spolu
+// nekolidují (lekce mají naopak vznikat uvnitř nich), takže tohle je jediná
+// obrana proti tomu, aby se opakovaným zápisem dopředu nebo tlačítkem
+// „+ Týden" nenadělaly zdvojené proužky přes celý rozvrh.
+function sameShiftExists(list, roomId, starts, lectorName) {
+  const kdo = String(lectorName || "").trim();
+  return list.some((l) => isShift(l) &&
+    l.room_id === roomId &&
+    +l.starts_at === +starts &&
+    String(l.lector_name || "").trim() === kdo);
+}
 
 // Najde v daném seznamu lekci, která koliduje (stejná místnost + překryv času).
 // Online lekce (bez místnosti) se nekontrolují. Směny se nekontrolují vůbec –
@@ -448,7 +450,7 @@ function renderToolbar() {
   document.getElementById("extendWeekBtn").classList.toggle("hidden", !isStaff());
   // Kartotéka je jediné, co auditor nesmí – proto tady is_admin(), ne isStaff().
   document.getElementById("kartotekaBtn").classList.toggle("hidden", !isAdmin());
-  document.getElementById("hoursBtn").classList.toggle("hidden", !isStaff());
+  document.getElementById("lektoriBtn").classList.toggle("hidden", !isStaff());
   document.getElementById("usersBtn").classList.toggle("hidden", !isStaff());
   document.querySelectorAll(".view-tabs button[data-view]").forEach((b) => {
     b.classList.toggle("active", b.dataset.view === state.view);
@@ -988,9 +990,13 @@ function renderAdminForm(l, title) {
             '<option value="regular"' + (lessonType === "regular" ? " selected" : "") + ">Klasická – opakovaná (chodí pravidelně)</option>" +
             '<option value="extra"' + (lessonType === "extra" ? " selected" : "") + ">Mimořádná – jednorázová</option>" +
           "</select>") +
-        '<div id="repeatBox" class="repeat-box' + (lessonType === "regular" ? "" : " hidden") + '">' +
-          repeatBoxHtml(isNew) +
-        "</div>" +
+      "</div>" +
+      // Blok „naplánovat i další termíny" je společný pro lekci i pro směnu.
+      // Lektor u stolu sedí obvykle každý týden stejně, takže se stejně jako
+      // lekce zapíše na několik týdnů dopředu a nemusí se to klikat pořád
+      // dokola. U lekce se blok schová, když je mimořádná; u směny je vždycky.
+      '<div id="repeatBox" class="repeat-box' + (shift || lessonType === "regular" ? "" : " hidden") + '">' +
+        repeatBoxHtml(isNew, shift) +
       "</div>" +
       field(shift ? "Stůl / učebna" : "Místnost / stůl", '<select id="fRoom">' + roomOptions(l.room_id) + "</select>") +
       '<div class="field-row">' +
@@ -999,14 +1005,15 @@ function renderAdminForm(l, title) {
         "</div>" +
         field("Lektor", '<input type="text" id="fLector" list="lectorsList" value="' + escapeHtml(l.lector_name || "") + '">') +
       "</div>" +
-      // Hvězdička = hlavní lektor dne. V celém dni může být jen jeden, ostatním
-      // se při uložení odebere. Je to provozní role (kdo dnes „drží" pobočku),
-      // proto patří nahoru k lektorovi, ne do sbalených nastavení.
+      // Hvězdička = hlavní lektor dne. Je to provozní role (kdo dnes „drží"
+      // pobočku), proto patří nahoru k lektorovi, ne do sbalených nastavení.
+      // Označit jde víc lidí najednou – na pobočce běžně drží službu dva
+      // (dopoledne a odpoledne, nebo každý jiné patro).
       '<div id="shiftOnly"' + (shift ? "" : ' class="hidden"') + ">" +
         '<label class="check"><input type="checkbox" id="fLead"' + (l.is_lead ? " checked" : "") +
         "> ★ Hlavní lektor dne</label>" +
         '<div class="role-note">Proužek se v rozvrhu zvýrazní žlutě a dostane hvězdičku. ' +
-        "Označit jde jen jednoho – ostatním se hvězdička sundá sama.</div>" +
+        "Hlavních lektorů může být v jednom dni víc – hvězdička se ostatním nesundává.</div>" +
       "</div>" +
       field(shift ? "Poznámka" : "Popis – co se na lekci dělalo", '<textarea id="fDesc">' + escapeHtml(l.description || "") + "</textarea>") +
     "</div>" +
@@ -1026,7 +1033,7 @@ function renderAdminForm(l, title) {
     // formulář otevřel.
     '<input type="hidden" id="fKind" value="' + (shift ? "shift" : "lesson") + '">';
 
-  if (!shift) bindRepeatBox();
+  bindRepeatBox();
 
   // Konec se drží délky lekce – při posunu začátku se posune s ním.
   // Nová lekce startuje s hodinou, takže z 9:00 je automaticky 9:00–10:00.
@@ -1048,34 +1055,55 @@ function renderAdminForm(l, title) {
   document.getElementById("detailSaved").textContent = "";
 }
 
-// ---------- Opakovaná lekce: naplánování na několik týdnů dopředu ----------
+// ---------- Opakování: naplánování na několik týdnů dopředu ----------
 // Klasická lekce chodí každý týden ve stejný den a čas, takže se rovnou
 // založí i další termíny. Mimořádná lekce je jednorázová – blok se schová.
+//
+// Úplně stejně se zapisuje LEKTOR U STOLU: kdo sedí v pondělí u matiky, sedí
+// tam obvykle každé pondělí. Blok je proto společný pro obojí a liší se jen
+// popisky – u směny se zakládají další stejné zápisy, ne lekce.
 
-function repeatBoxHtml(isNew) {
+// Je v panelu rozdělaná směna, nebo lekce? Nese to skryté pole fKind, které
+// vyplnilo tlačítko, kterým se formulář otevřel („+ Lekce" / „+ Lektor").
+function formIsShift() {
+  const k = document.getElementById("fKind");
+  return !!k && k.value === "shift";
+}
+
+// „1 termín / 2 termíny / 5 termínů"
+function termWord(n) { return n === 1 ? "termín" : n >= 2 && n <= 4 ? "termíny" : "termínů"; }
+
+function repeatBoxHtml(isNew, shift) {
   const interval =
     field("Interval", '<select id="fEvery"><option value="1">každý týden</option><option value="2">ob týden</option></select>');
-  const count = field("Počet dalších lekcí", '<input type="number" id="fWeeks" min="1" max="52" value="8">');
+  const count = field(shift ? "Počet dalších týdnů" : "Počet dalších lekcí",
+    '<input type="number" id="fWeeks" min="1" max="52" value="8">');
   if (isNew) {
-    return '<label class="check"><input type="checkbox" id="fSeries" checked> Naplánovat rovnou i další termíny</label>' +
+    return '<label class="check"><input type="checkbox" id="fSeries" checked> ' +
+      (shift ? "Zapsat lektora rovnou i na další týdny" : "Naplánovat rovnou i další termíny") + "</label>" +
       '<div class="field-row" id="fSeriesOpts">' + count + interval + "</div>" +
       '<div class="role-note" id="fSeriesInfo"></div>';
   }
-  // U už založené lekce se termíny přidávají zvlášť tlačítkem, ať se při
-  // každém uložení úpravy nezaloží série znovu.
+  // U už založeného zápisu se termíny přidávají zvlášť tlačítkem, ať se při
+  // každém uložení úpravy nezaložila série znovu.
   return '<div class="field-row">' + count + interval + "</div>" +
-    '<button type="button" id="fSeriesBtn" class="series-btn">Naplánovat další termíny</button>' +
+    '<button type="button" id="fSeriesBtn" class="series-btn">' +
+      (shift ? "Zapsat na další týdny" : "Naplánovat další termíny") + "</button>" +
     '<div class="role-note" id="fSeriesInfo"></div>';
 }
 
 function bindRepeatBox() {
-  const type = document.getElementById("fLessonType");
   const box = document.getElementById("repeatBox");
-  if (!type || !box) return;
-  type.onchange = () => {
-    box.classList.toggle("hidden", type.value !== "regular");
-    updateSeriesInfo();
-  };
+  if (!box) return;
+  const type = document.getElementById("fLessonType");
+  // Směna žádný druh nemá, blok termínů je u ní vidět pořád. U lekce ho
+  // schová přepnutí na „mimořádná – jednorázová".
+  if (type && !formIsShift()) {
+    type.onchange = () => {
+      box.classList.toggle("hidden", type.value !== "regular");
+      updateSeriesInfo();
+    };
+  }
   ["fWeeks", "fEvery", "fSeries", "fDate", "fStart", "fEnd"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("change", updateSeriesInfo);
@@ -1103,33 +1131,56 @@ function seriesFromForm() {
 function updateSeriesInfo() {
   const box = document.getElementById("fSeriesInfo");
   if (!box) return;
+  const shift = formIsShift();
   const chk = document.getElementById("fSeries");
   const opts = document.getElementById("fSeriesOpts");
   if (opts && chk) opts.classList.toggle("hidden", !chk.checked);
-  if (chk && !chk.checked) { box.textContent = "Založí se jen tahle jedna lekce."; return; }
+  if (chk && !chk.checked) {
+    box.textContent = shift ? "Zapíše se jen tenhle jeden den." : "Založí se jen tahle jedna lekce.";
+    return;
+  }
 
   const list = seriesFromForm();
-  if (!list.length) { box.textContent = "Vyplňte datum, čas a počet dalších lekcí."; return; }
+  if (!list.length) {
+    box.textContent = shift
+      ? "Vyplňte datum, čas a počet dalších týdnů."
+      : "Vyplňte datum, čas a počet dalších lekcí.";
+    return;
+  }
   const step = Number(document.getElementById("fEvery").value) === 2 ? 2 : 1;
-  box.innerHTML =
-    (chk ? "Kromě téhle lekce se založí ještě " : "Založí se ") +
-    "<b>" + list.length + " " + lessonWord(list.length) + "</b> – " +
-    escapeHtml(window.Opakovani.describe(list, step)) + ". Obsazené termíny se přeskočí.";
+  const kolik = "<b>" + list.length + " " + (shift ? termWord(list.length) : lessonWord(list.length)) + "</b>";
+  const rytmus = escapeHtml(window.Opakovani.describe(list, step));
+  box.innerHTML = shift
+    ? (chk ? "Kromě tohohle dne se lektor u stolu zapíše ještě na " : "Lektor se zapíše na ") +
+      kolik + " – " + rytmus + ". Už zapsané termíny se přeskočí."
+    : (chk ? "Kromě téhle lekce se založí ještě " : "Založí se ") +
+      kolik + " – " + rytmus + ". Obsazené termíny se přeskočí.";
 }
 
-// Založí zadané termíny jako kopie lekce. Kolize v místnosti přeskakuje.
+// Založí zadané termíny jako kopie lekce (nebo směny lektora u stolu).
+// U lekcí přeskakuje kolize v místnosti, u směn už zapsané termíny.
 async function createSeries(payload, list) {
+  const shift = payload.kind === "shift";
   let added = 0, skipped = 0;
   for (const t of list) {
     try {
       const dayLessons = await provider.getLessons(t.starts_at);
-      if (findConflict(dayLessons, payload.room_id, t.starts_at, t.ends_at, null)) { skipped++; continue; }
+      if (shift) {
+        if (sameShiftExists(dayLessons, payload.room_id, t.starts_at, payload.lector_name)) {
+          skipped++; continue;
+        }
+      } else if (findConflict(dayLessons, payload.room_id, t.starts_at, t.ends_at, null)) {
+        skipped++; continue;
+      }
       await provider.saveLesson(Object.assign({}, payload, {
         starts_at: t.starts_at,
         ends_at: t.ends_at,
         status: "planned",   // kopie jsou vždy nepotvrzené
         done: false,
-        is_lead: false,       // hvězdičku určuje admin každý den zvlášť
+        // U směny se hvězdička „hlavní lektor dne" nese dál – kdo drží
+        // pobočku v pondělí, drží ji obvykle každé pondělí. U lekce se
+        // nepoužívá vůbec.
+        is_lead: shift ? !!payload.is_lead : false,
         student_fields: null, // klienta zakládá jen první lekce
       }), null);
       added++;
@@ -1138,17 +1189,39 @@ async function createSeries(payload, list) {
   return { added, skipped };
 }
 
-// Tlačítko „Naplánovat další termíny" u už založené lekce.
+// Tlačítko „Naplánovat další termíny" / „Zapsat na další týdny" u už
+// založeného zápisu (lekce i směny lektora u stolu).
 async function extendSeries() {
+  const shift = formIsShift();
   const list = seriesFromForm();
-  if (!list.length) { toast("Vyplňte počet dalších lekcí."); return; }
+  if (!list.length) {
+    toast(shift ? "Vyplňte počet dalších týdnů." : "Vyplňte počet dalších lekcí.");
+    return;
+  }
   const btn = document.getElementById("fSeriesBtn");
   btn.disabled = true;
-  const payload = readAdminForm("lesson");
+  const payload = readAdminForm(shift ? "shift" : "lesson");
   payload.student_fields = null;
+  if (shift) {
+    // Směna nemá žáka, předmět ani druh lekce – pole ve formuláři sice jsou,
+    // ale schovaná, tak ať se do databáze nenesou prázdné zbytky.
+    payload.student_names = "";
+    payload.subject = "";
+    payload.lesson_type = null;
+    payload.mode = "offline";
+    payload.status = "planned";
+    payload.done = false;
+  }
   const r = await createSeries(payload, list);
   btn.disabled = false;
   await refresh();
+  if (shift) {
+    toast(r.added
+      ? "Lektor zapsán na dalších " + r.added + " " + termWord(r.added) +
+        (r.skipped ? " (" + r.skipped + " už bylo zapsáno dřív)" : "") + "."
+      : "Nic se nepřidalo – všechny termíny už jsou zapsané.");
+    return;
+  }
   toast(r.added
     ? "Naplánováno " + r.added + " " + lessonWord(r.added) +
       (r.skipped ? ", " + r.skipped + " přeskočeno kvůli kolizi" : "") + "."
@@ -1232,9 +1305,12 @@ function readAdminForm(kind) {
     starts_at: mk(g("fStart").value),
     ends_at: mk(g("fEnd").value),
     room_id: g("fRoom").value,
-    student_names: g("fStudent") ? g("fStudent").value : "",
-    lector_name: g("fLector").value,
-    subject: g("fSubject") ? g("fSubject").value : "",
+    // Ořez mezer je nutnost, ne kosmetika: podle jména se páruje karta
+    // lektora i klienta, takže „Novák " a „Novák" by v databázi byly dva
+    // různí lidé a hodiny by se rozdělily na dvě půlky.
+    student_names: g("fStudent") ? g("fStudent").value.trim() : "",
+    lector_name: g("fLector").value.trim(),
+    subject: g("fSubject") ? g("fSubject").value.trim() : "",
     mode: g("fMode") ? g("fMode").value : "offline",
     status: g("fStatus") ? g("fStatus").value : "planned",
     done: g("fDone") ? g("fDone").checked : false,
@@ -1330,21 +1406,21 @@ async function saveDetail() {
         lesson_type: shift ? null : document.getElementById("fLessonType").value,
       };
       const isNewLesson = !state.openLessonId;
-      const savedRow = await provider.saveLesson(payload, state.openLessonId);
-      // Hvězdičku má v každém dni jen jeden – ostatním se sundá.
-      if (payload.is_lead) {
-        await clearOtherLeads(starts, (savedRow && savedRow.id) || state.openLessonId);
-      }
+      await provider.saveLesson(payload, state.openLessonId);
 
-      // Klasická (opakovaná) lekce se rovnou naplánuje na několik týdnů
-      // dopředu – stejný den v týdnu i čas. Jen u nově zakládané lekce;
-      // u stávající se termíny přidávají tlačítkem v panelu.
-      if (isNewLesson && !shift && payload.lesson_type === "regular") {
+      // Klasická (opakovaná) lekce i zápis lektora u stolu se rovnou
+      // naplánují na několik týdnů dopředu – stejný den v týdnu i čas.
+      // Jen u nově zakládaného záznamu; u stávajícího se termíny přidávají
+      // tlačítkem v panelu.
+      if (isNewLesson && (shift || payload.lesson_type === "regular")) {
         const list = seriesFromForm();
         if (list.length) {
           const r = await createSeries(payload, list);
-          toast("Naplánováno " + r.added + " " + lessonWord(r.added) + " dopředu" +
-            (r.skipped ? ", " + r.skipped + " přeskočeno kvůli kolizi" : "") + ".");
+          toast(shift
+            ? "Lektor zapsán ještě na " + r.added + " " + termWord(r.added) + " dopředu" +
+              (r.skipped ? " (" + r.skipped + " už bylo zapsáno dřív)" : "") + "."
+            : "Naplánováno " + r.added + " " + lessonWord(r.added) + " dopředu" +
+              (r.skipped ? ", " + r.skipped + " přeskočeno kvůli kolizi" : "") + ".");
         }
       }
       await loadStudents(); // v kartotéce mohl přibýt nový klient
@@ -1369,14 +1445,10 @@ async function saveDetail() {
   }
 }
 
-// Hvězdičku „hlavní lektor dne" nese jen jeden proužek. Když ji admin dá
-// někomu jinému, ostatním v témž dni se odebere – jinak by v rozvrhu svítily
-// dvě žluté jmenovky a nikdo by nevěděl, která platí.
-async function clearOtherLeads(day, keepId) {
-  const list = await provider.getLessons(day);
-  const others = list.filter((l) => isShift(l) && l.is_lead && l.id !== keepId);
-  for (const l of others) await provider.updateLessonFields(l.id, { is_lead: false });
-}
+// Hvězdička „hlavní lektor dne" se dřív ostatním v tomtéž dni odebírala –
+// platit mohla jen jedna. V provozu ale službu běžně drží dva lidi (jeden
+// dopoledne, druhý odpoledne, nebo každý jiné patro), takže se dnes žádná
+// hvězdička nesundává. Vypnout ji jde jen ručně v detailu daného proužku.
 
 async function deleteDetail() {
   const id = state.openLessonId;
@@ -1617,8 +1689,13 @@ async function extendWeekToNext() {
         if (isLesson(l) && l.lesson_type === "extra") continue;
         const starts = new Date(tgtDay); starts.setHours(l.starts_at.getHours(), l.starts_at.getMinutes(), 0, 0);
         const ends = new Date(tgtDay); ends.setHours(l.ends_at.getHours(), l.ends_at.getMinutes(), 0, 0);
-        // Směny se kopírují taky (kdo u kterého stolu bývá), jen nekolidují.
-        if (isLesson(l) && findConflict(placed, l.room_id, starts, ends, null)) { skipped++; continue; }
+        // Směny se kopírují taky (kdo u kterého stolu bývá). Nekolidují, tak
+        // se u nich místo kolize hlídá jen to, jestli v cílovém dni už stejný
+        // proužek není – třeba proto, že se lektor zapsal na několik týdnů
+        // dopředu rovnou při zakládání.
+        if (isShift(l)) {
+          if (sameShiftExists(placed, l.room_id, starts, l.lector_name)) { skipped++; continue; }
+        } else if (findConflict(placed, l.room_id, starts, ends, null)) { skipped++; continue; }
         const res = await provider.saveLesson({
           kind: l.kind || "lesson",
           starts_at: starts, ends_at: ends, room_id: l.room_id,
@@ -1626,7 +1703,8 @@ async function extendWeekToNext() {
           subject: l.subject, mode: l.mode, lesson_type: l.lesson_type || "regular",
           status: "planned", done: false, description: "",
         }, null);
-        placed.push({ id: (res && res.id) || "tmp", room_id: l.room_id, starts_at: starts, ends_at: ends });
+        placed.push({ id: (res && res.id) || "tmp", room_id: l.room_id,
+          starts_at: starts, ends_at: ends, kind: l.kind || "lesson", lector_name: l.lector_name });
         added++;
       }
     }
@@ -1641,53 +1719,11 @@ async function extendWeekToNext() {
   }
 }
 
-// ---------- Výkaz hodin (admin) ----------
-// Šéfová na konci měsíce otevře výkaz a vidí u každého lektora součet
-// potvrzených hodin – podle toho vyplácí.
-const hoursState = { month: new Date() };
-
-async function openHoursReport() {
-  if (!isStaff()) return;
-  hoursState.month = new Date(state.date.getFullYear(), state.date.getMonth(), 1);
-  document.getElementById("hoursModal").classList.remove("hidden");
-  await renderHoursReport();
-}
-
-function closeHoursReport() {
-  document.getElementById("hoursModal").classList.add("hidden");
-}
-
-function shiftHoursMonth(delta) {
-  const m = hoursState.month;
-  hoursState.month = new Date(m.getFullYear(), m.getMonth() + delta, 1);
-  renderHoursReport();
-}
-
-async function renderHoursReport() {
-  const m = hoursState.month;
-  document.getElementById("hoursMonth").textContent = MONTHS[m.getMonth()] + " " + m.getFullYear();
-  const body = document.getElementById("hoursBody");
-  body.innerHTML = '<div class="placeholder">Načítám…</div>';
-  try {
-    const rows = await provider.getMonthlyHours(m.getFullYear(), m.getMonth());
-    if (!rows.length) {
-      body.innerHTML = '<div class="placeholder">Žádné potvrzené lekce v tomto měsíci.</div>';
-      return;
-    }
-    let totH = 0, totL = 0;
-    let html = '<table class="hours-table"><tr><th>Lektor</th><th>Lekcí</th><th>Hodin</th></tr>';
-    rows.forEach((r) => {
-      totH += Number(r.hours);
-      totL += Number(r.lessons);
-      html += "<tr><td>" + escapeHtml(r.lector_name) + "</td><td>" + r.lessons + "</td><td><b>" + r.hours + "</b></td></tr>";
-    });
-    html += '<tr class="total"><td>Celkem</td><td>' + totL + "</td><td><b>" + (Math.round(totH * 100) / 100) + "</b></td></tr></table>";
-    body.innerHTML = html;
-  } catch (e) {
-    body.innerHTML = '<div class="placeholder">Chyba: ' + escapeHtml(e.message || e) + "</div>";
-    console.error(e);
-  }
-}
+// Samostatné tlačítko „Výkaz hodin" tady bývalo modální okno se součtem
+// odučených hodin po lektorech. Zrušilo se – čísla teď stojí v kartotéce
+// lektorů (kartoteka-lektori.html) vedle kontaktu, smlouvy a klíčů, takže
+// se šéfová nemusí dívat na dvě místa. Sčítá se pořád totéž (work_log přes
+// pohled lector_monthly_hours), jen se to zobrazuje jinde.
 
 // ---------- Účty lektorů (admin) ----------
 // Administrátor tu založí lektorovi přihlášení: vyplní jméno, e-mail a heslo,
@@ -1742,8 +1778,8 @@ const Accounts = {
       .update({ name, email, role: role || "lektor", active: true }).eq("id", id);
     if (e2) throw new Error("Účet vznikl, ale nešlo dopsat roli: " + e2.message);
 
-    // Karta lektora v tabulce `lectors` – z ní čte rozvrh i výkaz hodin.
-    // Bez ní by se odpracované hodiny neměly kam počítat.
+    // Karta lektora v tabulce `lectors` – z ní čte rozvrh i kartotéka
+    // lektorů. Bez ní by se odpracované hodiny neměly kam počítat.
     if (role === "lektor") {
       const { error: e3 } = await c.from("lectors")
         .upsert({ name, email, active: true }, { onConflict: "name" });
@@ -1920,8 +1956,9 @@ async function onCreateUser(e) {
   }
 }
 
-// Jména lektorů do našeptávače u pole „Lektor" v detailu lekce. Výkaz hodin
-// se sčítá podle jména, takže překlep = lektor, který v přehledu chybí.
+// Jména lektorů do našeptávače u pole „Lektor" v detailu lekce. Odučené
+// hodiny se párují podle jména, takže překlep = lektor, který v kartotéce
+// lektorů má hodin míň, než odučil (a vedle něj přibyla druhá, prázdná karta).
 async function loadLectors() {
   const dl = document.getElementById("lectorsList");
   if (!dl) return;
@@ -1977,7 +2014,6 @@ async function onLogout() {
 
   // Za přihlašovací vrstvou nesmí zůstat viset otevřený panel s daty klienta.
   closeDetail();
-  document.getElementById("hoursModal").classList.add("hidden");
   document.getElementById("usersModal").classList.add("hidden");
   document.getElementById("viewContainer").innerHTML = "";
   renderUserBadge();
@@ -2076,11 +2112,7 @@ async function startApp(user) {
     };
     document.getElementById("diagBtn").onclick = () => { location.href = "diagnostika.html" + location.search; };
     document.getElementById("kartotekaBtn").onclick = () => { location.href = "kartoteka.html" + location.search; };
-    document.getElementById("hoursBtn").onclick = openHoursReport;
-    document.getElementById("hoursClose").onclick = closeHoursReport;
-    document.getElementById("hoursPrev").onclick = () => shiftHoursMonth(-1);
-    document.getElementById("hoursNext").onclick = () => shiftHoursMonth(1);
-    document.getElementById("hoursModal").onclick = (e) => { if (e.target.id === "hoursModal") closeHoursReport(); };
+    document.getElementById("lektoriBtn").onclick = () => { location.href = "kartoteka-lektori.html" + location.search; };
     document.getElementById("usersBtn").onclick = openUsers;
     document.getElementById("usersClose").onclick = closeUsers;
     document.getElementById("newUserForm").onsubmit = onCreateUser;

@@ -542,7 +542,10 @@ body.app-schedule .day-scroll { max-height: none; }
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
-/* ---------- Výkaz hodin ---------- */
+/* ---------- Modální okno v liště (dnes už jen „Účty") ----------
+   Třídy se pořád jmenují .hours-*, protože takhle vzniklo první takové okno –
+   zrušený „Výkaz hodin". Používá je teď okno s účty lektorů (usersModal),
+   tak se nepřejmenovávají, aby se nemusel přepisovat i celý index.html. */
 .hours-modal {
   position: fixed;
   inset: 0;
@@ -571,16 +574,7 @@ body.app-schedule .day-scroll { max-height: none; }
 }
 .hours-head h2 { margin: 0; font-size: 16px; }
 .hours-head .close { border: none; background: none; font-size: 20px; cursor: pointer; color: var(--muted); }
-.hours-controls { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 10px; }
-.hours-controls span { font-weight: 600; min-width: 140px; text-align: center; }
-.hours-controls button { border: 1px solid var(--line-strong); background: #fff; border-radius: 4px; padding: 3px 9px; cursor: pointer; }
 .hours-body { padding: 0 18px 8px; overflow-y: auto; }
-.hours-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.hours-table th, .hours-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
-.hours-table th { color: var(--muted); font-weight: 600; font-size: 12px; }
-.hours-table th:nth-child(2), .hours-table td:nth-child(2),
-.hours-table th:nth-child(3), .hours-table td:nth-child(3) { text-align: right; }
-.hours-table tr.total td { border-top: 2px solid var(--line-strong); font-weight: 600; }
 .hours-note { font-size: 11.5px; color: var(--muted); padding: 6px 18px 14px; margin: 0; }
 
 /* ---------- Účty lektorů (admin) ---------- */

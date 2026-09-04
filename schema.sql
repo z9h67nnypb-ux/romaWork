@@ -92,6 +92,25 @@ alter table lectors add column if not exists hourly_rate numeric(8,2);
 alter table lectors add column if not exists hired_at date;
 alter table lectors add column if not exists left_at date;
 
+-- Karta lektora v kartotéce lektorů (kartoteka-lektori.html): provozní údaje,
+-- které se dřív vedly mimo appku. Odučené hodiny se sem NEUKLÁDAJÍ – ty se
+-- pořád počítají z work_log přes pohled lector_monthly_hours níž.
+alter table lectors add column if not exists address        text;   -- bydliště
+alter table lectors add column if not exists subjects       text;   -- co učí (ČJ, MAT…)
+alter table lectors add column if not exists contract_until date;   -- do kdy má smlouvu
+alter table lectors add column if not exists note           text;   -- volná poznámka
+
+-- Klíče od pobočky – jedna hodnota ze tří (víc naráz nikdo nemá):
+--   'chip' = 1. čip · 'chip_attic' = 2. čip + podkroví · 'full' = 3. celý svazek
+-- NULL / prázdno = klíče nemá.
+alter table lectors add column if not exists key_set text;
+alter table lectors drop constraint if exists lectors_key_set_chk;
+alter table lectors add constraint lectors_key_set_chk
+  check (key_set is null or key_set in ('chip', 'chip_attic', 'full'));
+
+-- Podepsal daňové prohlášení? Prosté ano/ne.
+alter table lectors add column if not exists tax_signed boolean not null default false;
+
 create table if not exists work_log (
   id         uuid primary key default gen_random_uuid(),
   lesson_id  uuid unique references lessons(id) on delete set null, -- lekce se po roce smaže, záznam o práci zůstane
@@ -150,7 +169,9 @@ create trigger lessons_work_unlog
   before delete on lessons
   for each row execute function unlog_lesson_work();
 
--- Měsíční výkaz: tohle čte tlačítko "Výkaz hodin" v appce.
+-- Měsíční výkaz: tohle čte kartotéka lektorů (sloupec "Hodin za měsíc" a
+-- historie po měsících v kartě). Samostatné tlačítko "Výkaz hodin" v rozvrhu
+-- bývalo jediným čtenářem tohohle pohledu; zrušilo se, pohled zůstává.
 -- security_invoker: pohled respektuje RLS politiky toho, kdo se ptá
 -- (jinak by běžel s právy vlastníka a RLS obcházel).
 create or replace view lector_monthly_hours with (security_invoker = on) as

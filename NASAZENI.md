@@ -41,7 +41,8 @@ Celkový čas: ~1 hodina. Postupuj po krocích, nic nepřeskakuj.
    [`migrace_ucty_lektoru.sql`](migrace_ucty_lektoru.sql) →
    [`migrace_prava_ostry_provoz.sql`](migrace_prava_ostry_provoz.sql) →
    [`migrace_role_auditor.sql`](migrace_role_auditor.sql) →
-   [`migrace_materialy.sql`](migrace_materialy.sql).
+   [`migrace_materialy.sql`](migrace_materialy.sql) →
+   [`migrace_kartoteka_lektoru.sql`](migrace_kartoteka_lektoru.sql).
    Zkušební data pak smaže
    [`reset_ostry_provoz.sql`](reset_ostry_provoz.sql). Je nevratný, čti
    komentáře v souboru – nejdřív jen vypíše, kolik řádků by smazal.
@@ -63,7 +64,7 @@ si pak šéfová vytvoří sama v appce.
    where id = (select id from auth.users where email = 'sem@dopln.cz');
    ```
 
-4. **Od teď dál už jen v appce:** Rozvrh → tlačítko **Lektoři** → jméno,
+4. **Od teď dál už jen v appce:** Rozvrh → tlačítko **Účty** → jméno,
    e-mail, heslo, role → *Založit účet*. Účet vznikne v `auth.users`, profil
    se doplní triggerem a u role „lektor" appka rovnou založí i kartu
    v tabulce `lectors`. Heslo se nikde neukládá – předej ho člověku.
@@ -75,8 +76,11 @@ si pak šéfová vytvoří sama v appce.
    Odchod se řeší tlačítkem **Zrušit přístup** – účet se jen zamkne a hodiny
    i historie zůstanou. **Smazat** ho odstraní nadobro; karta lektora
    i tak zůstane, jen se odloží z nabídky.
-5. Vyplň lektorům hodinové sazby (kvůli sloupci „K výplatě" ve výkazu):
-   **Table Editor → lectors** → u každého vyplň `hourly_rate` (např. 250).
+5. Vyplň lektorům hodinové sazby (kvůli sloupci „Kč" v kartě lektora):
+   v appce Rozvrh → **Lektoři** → karta lektora → *Hodinová sazba Kč/h*.
+   Ve stejné kartě rovnou dovyplň adresu, co učí, do kdy má smlouvu, jaké má
+   klíče a jestli podepsal daně. (V Supabase je to sloupec `lectors.hourly_rate`
+   — dá se to nastavit i tam přes **Table Editor → lectors**.)
 
 > **Chyba „Database error creating new user"?** Máš v databázi starší verzi
 > funkce `handle_new_user` (bez `set search_path`). Spusť v SQL Editoru znovu
@@ -171,12 +175,13 @@ jen připojíš, nic jiného se nemění.)*
 ## KROK 8: Otestuj ostrou verzi – 10 min
 
 1. Otevři veřejnou adresu → musí přijít **přihlášení**, nic jiného.
-2. Přihlas se účtem šéfové → **Lektoři** → založ zkušební účet lektora.
+2. Přihlas se účtem šéfové → **Účty** → založ zkušební účet lektora.
 3. Založ zkušební lekci na dnešek a přiřaď ji tomu lektorovi.
 4. Přihlas se (v anonymním okně) tím lektorem → v liště **nesmí** být
-   „+ Lekce", „Kartotéka", „Výkaz" ani „Lektoři" → otevři lekci → zaškrtni
+   „+ Lekce", „Klienti", „Lektoři" ani „Účty" → otevři lekci → zaškrtni
    **„Lekce proběhla"** → ulož.
-5. Jako admin klikni **Výkaz hodin** → u lektora přibyla délka lekce.
+5. Jako admin otevři **Lektoři** (kartotéka lektorů) → u lektora přibyla
+   délka lekce ve sloupci „Hodin".
 6. Křížová kontrola v SQL Editoru – čísla musí sedět s appkou:
 
    ```sql
@@ -193,11 +198,12 @@ jen připojíš, nic jiného se nemění.)*
 | Kdy | Co | Jak |
 |---|---|---|
 | denně | nic 🙂 | lektoři odmačkávají lekce, hodiny se počítají samy |
-| konec měsíce | výplaty | admin → **Výkaz hodin** → vybrat měsíc |
+| konec měsíce | výplaty | admin → **Lektoři** → přepnout měsíc (◀ ▶) |
 | 1× měsíčně | záloha | `pg_dump` na starý počítač (příkaz v [DATABASE.md](DATABASE.md), kap. 6) |
 | prázdniny | probudit projekt | free tarif se po 7 dnech nečinnosti uspí – stačí otevřít appku nebo dashboard |
-| nový lektor | účet + sazba | appka → **Lektoři** → Založit účet; sazbu doplnit v Table Editor → lectors → `hourly_rate` |
-| lektor končí | neodmazávat! | appka → **Lektoři** → *Zrušit přístup*; v Table Editor → lectors doplnit `left_at`, `active = false` |
+| nový lektor | účet + karta | appka → **Účty** → Založit účet; pak **Lektoři** → doplnit adresu, smlouvu, klíče, daně a sazbu |
+| lektor končí | neodmazávat! | appka → **Účty** → *Zrušit přístup*; pak **Lektoři** → karta → Stav = *bývalý* |
+| hlídání smluv | průběžně | appka → **Lektoři** – prošlá smlouva tónuje řádek červeně, do 30 dnů oranžově |
 
 ---
 
@@ -207,7 +213,8 @@ jen připojíš, nic jiného se nemění.)*
 - [ ] `schema.sql` spuštěn bez chyb
 - [ ] „Confirm email" v Supabase vypnuté (jinak nejdou zakládat účty z appky)
 - [ ] účet šéfové založen a povýšen na `admin`
-- [ ] účty lektorů založené v appce (Rozvrh → **Lektoři**)
+- [ ] účty lektorů založené v appce (Rozvrh → **Účty**)
+- [ ] karty lektorů dovyplněné (Rozvrh → **Lektoři**: adresa, smlouva, klíče, daně, sazba)
 - [ ] `hourly_rate` vyplněny
 - [ ] RLS zkontrolována (`pg_policies` – nikde žádná `proto_all`)
 - [ ] zkušební data smazána (`reset_ostry_provoz.sql`), databáze prázdná
@@ -215,7 +222,7 @@ jen připojíš, nic jiného se nemění.)*
 - [ ] `config.js`: URL + anon klíč
 - [ ] spuštěné migrace `migrace_*.sql` v pořadí: `migrace_ucty_lektoru.sql`
       → `migrace_prava_ostry_provoz.sql` → `migrace_role_auditor.sql`
-      → `migrace_materialy.sql`
+      → `migrace_materialy.sql` → `migrace_kartoteka_lektoru.sql`
 - [ ] v Supabase existuje bucket `materialy` (Storage) a je **neveřejný**
 - [ ] Web běží na GitHub Pages / Netlify
 - [ ] Test z kroku 8 prošel (appka i SQL ukazují stejné hodiny)

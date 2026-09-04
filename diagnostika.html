@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Diagnostika – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=44" />
+  <link rel="stylesheet" href="styles.css?v=45" />
   <style>
     /* Styly jen pro stránku diagnostiky */
     .diag-wrap { max-width: 1180px; margin: 0 auto; padding: 14px 20px 60px; }
@@ -145,6 +145,10 @@
     .bar-track { background: #eceff3; border-radius: 4px; height: 13px; overflow: hidden; }
     .bar-fill {
       display: block; height: 100%; border-radius: 4px;
+      /* Při nule bodech je šířka 0 % a pruh by úplně zmizel – prázdná drážka
+         vypadá jako chyba („test se nenačetl“), ne jako výsledek. Kousek barvy
+         na kraji říká: tady je hodnota, a je nejhorší možná. */
+      min-width: 5px;
       -webkit-print-color-adjust: exact; print-color-adjust: exact; /* pruhy musí zůstat barevné i v PDF */
     }
     .bar-fill.weak { background: #c62828; }
@@ -499,7 +503,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N musí být stejné ve všech třech stránkách – viz index.html -->
-  <script src="config.js?v=44"></script>
-  <script src="diagnostika.js?v=44"></script>
+  <script src="config.js?v=45"></script>
+  <script src="diagnostika.js?v=45"></script>
 </body>
 </html>

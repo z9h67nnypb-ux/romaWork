@@ -80,8 +80,12 @@ Krok za krokem:
    | Kunkelová | 2026 | 7 | 14 | 15.00 | 3 750 |
 
    `hours` = součet minut / 60, `payout_czk` = hodiny × `lectors.hourly_rate`
-   (sazbu stačí jednou vyplnit u každého lektora). Tlačítko **„Výkaz hodin"**
-   v appce čte přesně tenhle pohled.
+   (sazbu stačí jednou vyplnit v kartě lektora). **Kartotéka lektorů**
+   (`kartoteka-lektori.html`, tlačítko *Lektoři*) čte přesně tenhle pohled –
+   ve sloupci „Hodin" za vybraný měsíc a v kartě lektora jako historii po
+   měsících. Dřív to bylo samostatné tlačítko *Výkaz hodin*; zrušilo se, aby
+   se čísla nemusela hledat na dvou místech. Pohled ani způsob počítání se
+   tím nezměnil.
 
 **Proč zvláštní tabulka `work_log` a ne jen součet lekcí?** Dva důvody:
 
@@ -99,13 +103,13 @@ Krok za krokem:
 1. Jako administrátor založ lekci a přiřaď ji lektorovi.
 2. Přihlas se tím lektorem (klidně v anonymním okně), otevři lekci, zaškrtni
    **„Lekce proběhla (potvrzuji)"** a ulož.
-3. Zpátky jako administrátor klikni na **„Výkaz hodin"** – v aktuálním měsíci
-   lektorovi přibyly hodiny odpovídající délce lekce. Když potvrzení zase
-   odškrtneš, hodiny zmizí.
+3. Zpátky jako administrátor otevři **Lektoři** (kartotéka lektorů) – v
+   aktuálním měsíci lektorovi přibyly hodiny odpovídající délce lekce. Když
+   potvrzení zase odškrtneš, hodiny zmizí.
 
 ### b) Křížová kontrola v SQL editoru
 
-Čísla z tlačítka **Výkaz hodin** musí sedět s dotazem:
+Čísla ze sloupce **Hodin** v kartotéce lektorů musí sedět s dotazem:
 
 ```sql
 select * from lector_monthly_hours;
@@ -119,7 +123,7 @@ from work_log w join lectors l on l.id = w.lector_id
 order by w.work_date desc limit 20;
 ```
 
-Když obojí sedí, celý řetězec appka → trigger → výkaz funguje.
+Když obojí sedí, celý řetězec appka → trigger → kartotéka lektorů funguje.
 
 Roční úklid (`purge_old_lessons`) hodiny **zachovává** – před mazáním starých
 lekcí je od nich odpojí (`work_log.lesson_id = null`), takže trigger
@@ -219,11 +223,13 @@ s nejvíc lektory) – jinak by se sloupce svisle rozjely proti časové ose.
 **Hlavní lektor dne.** V detailu směny je zaškrtávátko *★ Hlavní lektor dne*
 (sloupec `lessons.is_lead`). Označený proužek dostane v rozvrhu hvězdičku a
 žluté pozadí – aby bylo na první pohled vidět, kdo ten den pobočku „drží".
-V jednom dni je hlavní lektor **právě jeden**: když ho administrátor přiřadí
-někomu jinému, appka hvězdičku ostatním směnám téhož dne sama odebere.
-Nekopíruje se – ani *Protáhnout týden →*, ani opakování ho nepřenášejí,
-určuje se každý den zvlášť. Do běžící databáze sloupec přidá
-`migrace_hlavni_lektor.sql`.
+Hlavních lektorů může být v jednom dni **víc**: na pobočce běžně drží službu
+dva lidi (jeden dopoledne, druhý odpoledne, nebo každý jiné patro). Dřív se
+hvězdička ostatním směnám téhož dne automaticky odebírala – to už neplatí,
+vypíná se ručně u toho konkrétního proužku. *Protáhnout týden →* hvězdičku
+nekopíruje, ale **zápis lektora na několik týdnů dopředu ano** – kdo drží
+pobočku v pondělí, drží ji obvykle každé pondělí. Do běžící databáze sloupec
+přidá `migrace_hlavni_lektor.sql`.
 
 **Konec dne.** Tlačítko **✓ Vše odučeno (N)** označí naráz všechny naplánované
 lekce zobrazeného dne. Vynechá zrušené, nedostavené i směny a bere lekce obou
@@ -316,8 +322,9 @@ Podrobný postup krok za krokem je v [`NASAZENI.md`](NASAZENI.md). Ve zkratce:
 3. V Supabase vypnout *Authentication → Sign In / Providers → Email →
    Confirm email*, jinak nejdou zakládat účty z appky.
 4. Založit účet šéfové (Authentication → Users) a povýšit ho na `admin`.
-   Ostatní účty už zakládá ona sama v appce (Rozvrh → **Lektoři**).
-5. Vyplnit `lectors.hourly_rate` u každého lektora.
+   Ostatní účty už zakládá ona sama v appce (Rozvrh → **Účty**).
+5. Vyplnit hodinovou sazbu u každého lektora – v appce Rozvrh → **Lektoři** →
+   karta lektora → *Hodinová sazba Kč/h* (sloupec `lectors.hourly_rate`).
 6. V [`config.js`](config.js) vyplnit URL + anon klíč a spustit migrace
    `migrace_*.sql`.
 7. Když v databázi zůstala zkušební data, smazat je skriptem

@@ -12,7 +12,7 @@
        Počítače se to netýká, prohlížeč na desktopu tuhle značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Rozvrh – PoraDys osobní výuka</title>
-  <link rel="stylesheet" href="styles.css?v=44" />
+  <link rel="stylesheet" href="styles.css?v=45" />
 </head>
 <body class="app-schedule">
   <!-- Přihlášení -->
@@ -59,9 +59,9 @@
     <span class="tb-sep"></span>
 
     <button id="diagBtn" title="Diagnostické testy a plán přípravy žáka">Diagnostika</button>
-    <button id="kartotekaBtn" class="hidden" title="Klienti, platby a kredity hodin">Kartotéka</button>
-    <button id="hoursBtn" class="hidden" title="Odpracované hodiny lektorů za měsíc">Výkaz</button>
-    <button id="usersBtn" class="hidden" title="Přihlašovací účty lektorů – založit nový, odebrat přístup">Lektoři</button>
+    <button id="kartotekaBtn" class="hidden" title="Kartotéka klientů – platby a kredity hodin">Klienti</button>
+    <button id="lektoriBtn" class="hidden" title="Kartotéka lektorů – kontakt, smlouva, klíče a odučené hodiny za měsíc">Lektoři</button>
+    <button id="usersBtn" class="hidden" title="Přihlašovací účty – založit nový, odebrat přístup">Účty</button>
 
     <!-- Pohledy Týden a Měsíc byly jen zástupné (ukazovaly hlášku, že jsou
          zatím náhled). Nic neuměly a braly místo, tak jsou pryč. -->
@@ -87,30 +87,13 @@
   <div id="toast" class="toast hidden"></div>
   <!-- Našeptávač jmen klientů z kartotéky (pole Žák v detailu lekce) -->
   <datalist id="studentsList"></datalist>
-  <!-- Našeptávač jmen lektorů (pole Lektor). Výkaz hodin se sčítá podle
-       jména, takže překlep by lektora z přehledu vyřadil. -->
+  <!-- Našeptávač jmen lektorů (pole Lektor). Odučené hodiny se párují podle
+       jména, takže překlep by lektorovi část hodin ukrojil. -->
   <datalist id="lectorsList"></datalist>
 
-  <!-- Výkaz hodin lektorů (admin) -->
-  <div id="hoursModal" class="hours-modal hidden">
-    <div class="hours-card">
-      <div class="hours-head">
-        <h2>Výkaz hodin lektorů</h2>
-        <button id="hoursClose" class="close">×</button>
-      </div>
-      <div class="hours-controls">
-        <button id="hoursPrev">◀</button>
-        <span id="hoursMonth"></span>
-        <button id="hoursNext">▶</button>
-      </div>
-      <div id="hoursBody" class="hours-body"></div>
-      <p class="hours-note">
-        Počítají se jen lekce potvrzené jako <b>Odučeno</b>. V ostré verzi se hodiny
-        ukládají do tabulky <code>work_log</code> a drží se i po smazání starých lekcí
-        (viz <code>DATABASE.md</code>).
-      </p>
-    </div>
-  </div>
+  <!-- Samostatný „Výkaz hodin" tu bývalo modální okno se součty odučených
+       hodin po lektorech. Zrušil se: totéž číslo je teď v kartotéce lektorů
+       (kartoteka-lektori.html) hned vedle kontaktu, smlouvy a klíčů. -->
 
   <!-- Přihlašovací účty lektorů (admin) -->
   <div id="usersModal" class="hours-modal hidden">
@@ -180,8 +163,8 @@
        rozdělané práce a návratu zpátky. Prohlížeč si cache klíčuje podle URL,
        takže na „app.js?v=30" podruhé podá tu starou verzi a stránka běží
        s kódem, který na disku vůbec není. Vždycky číslo jen zvyšuj. -->
-  <script src="config.js?v=44"></script>
-  <script src="opakovani.js?v=44"></script>
-  <script src="app.js?v=44"></script>
+  <script src="config.js?v=45"></script>
+  <script src="opakovani.js?v=45"></script>
+  <script src="app.js?v=45"></script>
 </body>
 </html>
