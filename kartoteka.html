@@ -10,7 +10,7 @@
        prsty je čitelné. Počítač tuhle značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Kartotéka – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=53" />
+  <link rel="stylesheet" href="styles.css?v=54" />
   <style>
     /* Styly jen pro kartotéku */
     .kt-wrap { max-width: 1500px; margin: 0 auto; padding: 14px 20px 60px; }
@@ -240,6 +240,28 @@
       .pay-form { grid-template-columns: 1fr; }
     }
 
+    /* -------------------------------------------------------------------
+       TELEFON NA ŠÍŘKU
+       Pevný viewport 1200 px znamená, že si telefon stránku zmenší poměrem
+       šířka displeje / 1200. Na výšku je to ~0,31, na šířku ~0,61 – tedy
+       dvakrát míň. Zvětšení 3× z bloku výš je vyladěné na výšku, takže na
+       šířku dělá ovládání skoro dvojnásobně velké než na počítači
+       (naměřeno: tlačítko 57×196 px na displeji vysokém 414 px).
+       1,5× vychází na šířku stejně jako 3× na výšku. Stejné pravidlo je
+       v styles.css pro rozvrh.
+       ------------------------------------------------------------------- */
+    @media (pointer: coarse) and (min-width: 1000px) and (max-height: 800px) {
+      .kt-top,
+      .kt-sub,
+      .kt-controls,
+      .kt-summary,
+      .kt-money,
+      .kt-method-detail,
+      .kt-legend,
+      .imp-card,
+      .kt-locked { zoom: 1.5; }
+    }
+
     /* iOS Safari přiblíží celou stránku, když se klepne do pole s písmem
        menším než 16 px, a přiblížení pak zůstane. Obecné pravidlo je
        v styles.css, ale tahle dvě pole mají styl tady – a tenhle <style>
@@ -350,9 +372,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N musí být stejné ve všech třech stránkách – viz index.html -->
-  <script src="config.js?v=53"></script>
+  <script src="config.js?v=54"></script>
   <!-- opakovani.js počítá termíny pravidelných lekcí (série na X týdnů). -->
-  <script src="opakovani.js?v=53"></script>
-  <script src="kartoteka.js?v=53"></script>
+  <script src="opakovani.js?v=54"></script>
+  <script src="kartoteka.js?v=54"></script>
 </body>
 </html>

@@ -9,7 +9,7 @@
        Počítač tuhle značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Kartotéka lektorů – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=53" />
+  <link rel="stylesheet" href="styles.css?v=54" />
   <style>
     /* Styly jsou schválně stejné jako v kartoteka.html – obě kartotéky mají
        vypadat a ovládat se identicky, jen v nich stojí jiní lidé. */
@@ -137,6 +137,23 @@
       .card-fields { grid-template-columns: 1fr; }
     }
 
+    /* -------------------------------------------------------------------
+       TELEFON NA ŠÍŘKU
+       Pevný viewport 1200 px znamená, že si telefon stránku zmenší poměrem
+       šířka displeje / 1200. Na výšku je to ~0,31, na šířku ~0,61 – tedy
+       dvakrát míň. Zvětšení 3× z bloku výš je vyladěné na výšku, takže na
+       šířku dělá ovládání skoro dvojnásobně velké než na počítači.
+       1,5× vychází na šířku stejně jako 3× na výšku. Stejné pravidlo je
+       v styles.css pro rozvrh.
+       ------------------------------------------------------------------- */
+    @media (pointer: coarse) and (min-width: 1000px) and (max-height: 800px) {
+      .kt-top,
+      .kt-sub,
+      .kt-controls,
+      .kt-summary,
+      .kt-locked { zoom: 1.5; }
+    }
+
     /* iOS Safari přiblíží celou stránku, když se klepne do pole s písmem
        menším než 16 px, a přiblížení pak zůstane. */
     @media (pointer: coarse) {
@@ -224,7 +241,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N musí být stejné ve všech stránkách – viz index.html -->
-  <script src="config.js?v=53"></script>
-  <script src="kartoteka-lektori.js?v=53"></script>
+  <script src="config.js?v=54"></script>
+  <script src="kartoteka-lektori.js?v=54"></script>
 </body>
 </html>

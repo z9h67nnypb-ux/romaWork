@@ -2,9 +2,15 @@
 <html lang="cs">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Stejně jako rozvrh a obě kartotéky: stránka se na telefonu
+       NEPŘIZPŮSOBUJE šířce displeje, ale vykreslí se, jako by okno mělo
+       1200 px, a telefon ji celou zmenší. Seznam žáků i karta s výsledky
+       jsou tak vidět celé najednou, bez rolování do stran.
+       Ovládání by se tím zmenšilo taky, takže se dole zvětšuje zpátky.
+       Počítače se to netýká, prohlížeč na desktopu značku ignoruje. -->
+  <meta name="viewport" content="width=1200" />
   <title>Diagnostika – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=53" />
+  <link rel="stylesheet" href="styles.css?v=54" />
   <style>
     /* Styly jen pro stránku diagnostiky */
     .diag-wrap { max-width: 1180px; margin: 0 auto; padding: 14px 20px 60px; }
@@ -309,6 +315,64 @@
       #printArea .bar-row { grid-template-columns: minmax(70px, 130px) minmax(50px, 1fr) 88px 96px; }
     }
 
+    /* -------------------------------------------------------------------
+       DOTYKOVÝ DISPLEJ S ODDÁLENOU STRÁNKOU
+       Stránka má pevný viewport 1200 px (viz značka nahoře), takže telefon
+       všechno zmenší asi na třetinu – o to nám jde, ať je stránka vidět
+       celá. Jenže se tím zmenší i ovládání: do vyhledávacího pole ani do
+       tlačítek by se prstem netrefil. Lišty, karty a dialogy se proto
+       zvětšují zpátky.
+
+       SAMOTNÉ TABULKY SE TO NETÝKÁ – seznam žáků má zůstat oddálený,
+       stejně jako tabulka v kartotéce.
+
+       Zvětšuje se po jednotlivých blocích, ne celý .diag-wrap – zoom se
+       násobí do potomků, takže obal by zvětšil i tabulku.
+
+       `pointer: coarse` = ovládá se prstem, ne myší. Na počítači se
+       z tohohle bloku nepoužije nic. Stejný postup je v kartoteka.html.
+       ------------------------------------------------------------------- */
+    @media (pointer: coarse) and (min-width: 1000px) {
+      .diag-top,
+      .diag-sub,
+      .diag-controls,
+      .diag-card,
+      .diag-modal,
+      #testDetail,
+      #lockedBox .locked { zoom: 3; }
+
+      /* Zvětšený obsah je na displeji široký jako telefon, takže se v něm
+         musí chovat jako úzké okno – všechno pod sebe. Pravidlo pro úzká
+         okna (max-width: 700px) se sem nedostane, protože stránka hlásí
+         šířku 1200 px. */
+      .res-grid,
+      .card-main { grid-template-columns: 1fr; }
+
+      /* Dialog je vycentrovaný přes celou obrazovku; po zvětšení by pevných
+         460 px přeteklo displej. */
+      .diag-modal .box { width: 100%; max-width: 100%; }
+    }
+
+    /* -------------------------------------------------------------------
+       TELEFON NA ŠÍŘKU
+       Pevný viewport 1200 px znamená, že si telefon stránku zmenší poměrem
+       šířka displeje / 1200. Na výšku je to ~0,31, na šířku ~0,61 – tedy
+       dvakrát míň. Zvětšení 3× z bloku výš je vyladěné na výšku, takže na
+       šířku dělá ovládání skoro dvojnásobně velké než na počítači
+       (naměřeno: tlačítko 57×196 px na displeji vysokém 414 px).
+       1,5× vychází na šířku stejně jako 3× na výšku. Stejné pravidlo je
+       v styles.css pro rozvrh.
+       ------------------------------------------------------------------- */
+    @media (pointer: coarse) and (min-width: 1000px) and (max-height: 800px) {
+      .diag-top,
+      .diag-sub,
+      .diag-controls,
+      .diag-card,
+      .diag-modal,
+      #testDetail,
+      #lockedBox .locked { zoom: 1.5; }
+    }
+
     /* iOS Safari přiblíží celou stránku, když se klepne do pole s písmem
        menším než 16 px, a přiblížení pak zůstane – uživatel se pak dívá na
        zvětšenou rozházenou stránku, dokud ji neobnoví. Obecné pravidlo je
@@ -503,7 +567,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N musí být stejné ve všech třech stránkách – viz index.html -->
-  <script src="config.js?v=53"></script>
-  <script src="diagnostika.js?v=53"></script>
+  <script src="config.js?v=54"></script>
+  <script src="diagnostika.js?v=54"></script>
 </body>
 </html>
