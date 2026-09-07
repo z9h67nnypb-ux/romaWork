@@ -777,14 +777,39 @@ body.app-schedule .day-scroll { max-height: none; }
   .login-card,
   .detail-panel,
   .hours-card { zoom: 3; }
+
+  /* --- Ovládání drobnější, rozvrh větší ---
+     Zákazník appku používá hlavně na telefonu a lišta mu brala třetinu
+     displeje (naměřeno 275 z 812 px). Tlačítka se proto stahují – zůstávají
+     všechna, jen se jich na řádek vejde víc, takže lišta spadla z osmi řádků
+     na čtyři a mřížka dostala o 30 % výšky navíc (naměřeno 107 px pás,
+     705 px rozvrh). Písmo zůstává na 11 px displeje, čitelné.
+     Počítače se to netýká – `pointer: coarse` na myši neplatí.
+
+     Odsazení je schválně 6/8, ne míň: na 4/7 spadne pás na 108 px, ale
+     tlačítko má na displeji jen 22 px a prstem se do něj míří špatně. Na 7/9
+     zase přibude celý řádek navíc (165 px). 6/8 je to místo mezi tím –
+     26 px tlačítko a pořád čtyři řádky. */
+  .toolbar { gap: 3px; padding: 2px 5px; }
+  .toolbar button { padding: 6px 8px; font-size: 12px; }
+  .toolbar select { padding: 5px 6px; font-size: 12px; max-width: none; }
+
+  /* Nápověda mluví o dvojkliku, tažení myší a Ctrl+C – na telefonu nic
+     z toho nejde, tak jen brala řádek. */
+  .admin-hint { display: none; }
+
+  /* --- Kalendář se rozbaluje klepnutím na datum ---
+     Vedle lišty ukrajoval třetinu její šířky, takže se tlačítka lámala do
+     dalších řádků, a sám bral 111 px displeje. Schovaný je pás o polovinu
+     nižší; klepnutím na datum se vysune a po výběru dne zase zmizí. */
+  .mini-calendar { display: none; }
+  .topband.cal-open .mini-calendar { display: block; }
+  .nav-date { cursor: pointer; }
+  .nav-date::after { content: " ▾"; opacity: 0.55; }
+  .topband.cal-open .nav-date::after { content: " ▴"; }
   /* Karta účtů je širší než výkaz; se zoomem 3 by přerostla displej,
      tak ji srovnáme na stejnou šířku (formulář se uvnitř zalomí). */
   .users-card { width: 420px; }
-
-  /* Zvětšení samo o sobě nestačí – tlačítko musí mít i vyšší dotykovou
-     plochu, jinak zůstane vysoké pár pixelů a míří se do něj špatně. */
-  .toolbar button { padding: 7px 10px; }
-  .toolbar select { padding: 6px 8px; }
 
   /* Výška panelu se musí počítat v JEHO soustavě, ne v soustavě stránky.
      Uvnitř prvku se zoomem 3 vyjde 100vh trojnásobně, takže by panel přerostl
@@ -794,4 +819,52 @@ body.app-schedule .day-scroll { max-height: none; }
      musí se změnit i druhé. Uvnitř se pak posouvá jen tělo panelu, přesně
      jako na počítači. */
   .detail-panel { height: calc(100vh / 3); }
+}
+
+/* ===========================================================================
+   TELEFON NA ŠÍŘKU (LANDSCAPE)
+   ---------------------------------------------------------------------------
+   Pevný viewport (width=1200) znamená, že si stránku telefon zmenší poměrem
+   šířka displeje / 1200. Na výšku je to ~0,31, na šířku ~0,61 – tedy dvakrát
+   míň. Se zoomem 3 z bloku výš vycházelo ovládání na šířku DVOJNÁSOBNĚ velké
+   než na počítači: pás měřil 540 px na displeji vysokém 414 px, #viewContainer
+   se smrskl na nulu a `overflow: hidden` na body nedovolil nikam odrolovat.
+   Rozvrh tedy na šířku nebyl vidět vůbec a nedalo se k němu dostat.
+
+   Zoom proto musí jít dolů úměrně tomu, jak málo se stránka zmenšuje.
+   1,5 dává na displeji stejně velké ovládání jako 3 na výšku (naměřeno
+   112 px pás, 286 px rozvrh, písmo 11 px).
+
+   max-height cílí právě na telefon na šířku: layoutový viewport má na výšku
+   ~675 px, kdežto na výšku telefonu ~2600 px a na tabletu ~900 px.
+   =========================================================================== */
+@media (pointer: coarse) and (min-width: 1000px) and (max-height: 800px) {
+  .topband,
+  .admin-hint,
+  .toast,
+  .login-card,
+  .detail-panel,
+  .hours-card { zoom: 1.5; }
+
+  /* Výška panelu se počítá v jeho vlastní soustavě – musí se dělit stejným
+     číslem jako zoom výš. Když se změní jedno, musí se změnit i druhé. */
+  .detail-panel { height: calc(100vh / 1.5); }
+}
+
+/* ===========================================================================
+   POJISTKA: ROZVRH SE NESMÍ ZTRATIT
+   ---------------------------------------------------------------------------
+   Rozvrh drží celý layout ve výšce okna a body má `overflow: hidden`, takže
+   když horní pás přeroste displej, plocha rozvrhu se srazí na nulu a nedá se
+   nikam odrolovat – přesně to se dělo na telefonu na šířku. Bloky výš to řeší
+   u známých rozměrů; tohle je záchrana pro všechno ostatní (jiný telefon,
+   větší systémové písmo, další tlačítko v liště).
+
+   Mřížka si drží minimální výšku a když se pak celek nevejde, roluje stránka
+   místo toho, aby obsah zmizel. Dokud se všechno vejde, nemá stránka co
+   rolovat a chová se přesně jako dosud.
+   =========================================================================== */
+@media (pointer: coarse) {
+  body.app-schedule { overflow: auto; }
+  body.app-schedule #viewContainer { min-height: 240px; }
 }
