@@ -820,14 +820,24 @@ body.app-schedule .day-scroll { max-height: none; }
      z toho nejde, tak jen brala řádek. */
   .admin-hint { display: none; }
 
-  /* --- Kalendář zůstává vedle lišty, jen užší ---
-     Zákazník ho chce vidět pořád. V základní šířce (158 px) ale ukrajuje
-     skoro polovinu pásu, takže se tlačítka lámou do dalších řádků a pás
-     naroste na 236 px displeje. Na 120 px vyjde 179 px – proti schovanému
-     kalendáři je to 57 px rozvrhu navíc, proti základní šířce 57 px míň.
-     Užší než 120 px už nepomáhá: pod tou hranicí o výšce pásu rozhoduje
-     počet řádků lišty, ne kalendář. */
-  .mini-calendar { width: 120px; margin: 1px 3px; }
+  /* --- Kalendář o polovinu větší ---
+     Zákazník ho chce vidět pořád a pořádně: 113×111 px displeje bylo málo
+     a do buňky dne (15×13 px) se prstem skoro nedalo trefit. Všechno je
+     proto 1,5× – kalendář vyjde na 169×163 px a buňka na 23×20 px.
+
+     Zaplatí se to výškou pásu (179 -> 236 px), protože širší kalendář ubere
+     liště šířku a ta se zalomí o řádek víc. Rozvrh o nic nepřijde: mřížka
+     má strop hodinové výšky (HOUR_H_MAX_FIT v app.js), takže pod ní zbývalo
+     314 px prázdna – i po zvětšení jich zbývá 256.
+
+     Kdyby se čísla ladila znovu: rozhodující je šířka. Nad 200 px začne
+     lišta přidávat další řádky rychleji, než kalendář roste. */
+  .mini-calendar { width: 180px; margin: 1px 4px; font-size: 15px; }
+  .mini-head .m-title { font-size: 15.5px; }
+  .mini-head button { font-size: 16.5px; padding: 0 7px; }
+  .mini-grid { gap: 2px; }
+  .mini-grid .dow { font-size: 13.5px; line-height: 16.5px; }
+  .mini-grid .day { font-size: 14px; line-height: 21px; border-radius: 4px; }
   /* Karta účtů je širší než výkaz; se zoomem 3 by přerostla displej,
      tak ji srovnáme na stejnou šířku (formulář se uvnitř zalomí). */
   .users-card { width: 420px; }
@@ -860,6 +870,16 @@ body.app-schedule .day-scroll { max-height: none; }
   .login-card,
   .detail-panel,
   .hours-card { zoom: 1.5; }
+
+  /* Kalendář o něco menší než na výšku. Na šířku je displej nízký a nic
+     tam nezbývá – ve velikosti z portrétu by pás zabral 41 % výšky. Na
+     1,25× vyjde 138×140 px a pás 35 %; proti stavu před zvětšením
+     (110×115 px) je pořád znatelně větší. */
+  .mini-calendar { width: 150px; font-size: 12.5px; }
+  .mini-head .m-title { font-size: 13px; }
+  .mini-head button { font-size: 14px; }
+  .mini-grid .dow { font-size: 11px; line-height: 14px; }
+  .mini-grid .day { font-size: 12px; line-height: 17.5px; }
 }
 
 /* ===========================================================================
