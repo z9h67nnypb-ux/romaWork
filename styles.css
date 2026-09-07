@@ -781,9 +781,9 @@ body.app-schedule .day-scroll { max-height: none; }
   /* --- Ovládání drobnější, rozvrh větší ---
      Zákazník appku používá hlavně na telefonu a lišta mu brala třetinu
      displeje (naměřeno 275 z 812 px). Tlačítka se proto stahují – zůstávají
-     všechna, jen se jich na řádek vejde víc, takže lišta spadla z osmi řádků
-     na čtyři a mřížka dostala o 30 % výšky navíc (naměřeno 107 px pás,
-     705 px rozvrh). Písmo zůstává na 11 px displeje, čitelné.
+     všechna, jen se jich na řádek vejde víc, takže pás spadl z 275 na
+     179 px a mřížka dostala o 20 % výšky navíc (naměřeno 179 px pás,
+     633 px rozvrh). Písmo zůstává na 11 px displeje, čitelné.
      Počítače se to netýká – `pointer: coarse` na myši neplatí.
 
      Odsazení je schválně 6/8, ne míň: na 4/7 spadne pás na 108 px, ale
@@ -798,15 +798,14 @@ body.app-schedule .day-scroll { max-height: none; }
      z toho nejde, tak jen brala řádek. */
   .admin-hint { display: none; }
 
-  /* --- Kalendář se rozbaluje klepnutím na datum ---
-     Vedle lišty ukrajoval třetinu její šířky, takže se tlačítka lámala do
-     dalších řádků, a sám bral 111 px displeje. Schovaný je pás o polovinu
-     nižší; klepnutím na datum se vysune a po výběru dne zase zmizí. */
-  .mini-calendar { display: none; }
-  .topband.cal-open .mini-calendar { display: block; }
-  .nav-date { cursor: pointer; }
-  .nav-date::after { content: " ▾"; opacity: 0.55; }
-  .topband.cal-open .nav-date::after { content: " ▴"; }
+  /* --- Kalendář zůstává vedle lišty, jen užší ---
+     Zákazník ho chce vidět pořád. V základní šířce (158 px) ale ukrajuje
+     skoro polovinu pásu, takže se tlačítka lámou do dalších řádků a pás
+     naroste na 236 px displeje. Na 120 px vyjde 179 px – proti schovanému
+     kalendáři je to 57 px rozvrhu navíc, proti základní šířce 57 px míň.
+     Užší než 120 px už nepomáhá: pod tou hranicí o výšce pásu rozhoduje
+     počet řádků lišty, ne kalendář. */
+  .mini-calendar { width: 120px; margin: 1px 3px; }
   /* Karta účtů je širší než výkaz; se zoomem 3 by přerostla displej,
      tak ji srovnáme na stejnou šířku (formulář se uvnitř zalomí). */
   .users-card { width: 420px; }

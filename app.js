@@ -431,10 +431,6 @@ function renderMiniCalendar() {
       const [y, m, day] = cell.dataset.date.split("-").map(Number);
       state.date = new Date(y, m - 1, day);
       clearSelection();
-      // Na telefonu je kalendář vysunutý klepnutím na datum – po výběru dne
-      // se zase schová, ať nebere výšku rozvrhu. Na počítači je vidět pořád
-      // a tahle třída pro něj nic neznamená.
-      document.querySelector(".topband").classList.remove("cal-open");
       refresh();
     };
   });
@@ -2089,12 +2085,6 @@ async function startApp(user) {
     document.getElementById("prevDay").onclick = () => { state.date.setDate(state.date.getDate() - 1); state.date = new Date(state.date); goRefresh(); };
     document.getElementById("nextDay").onclick = () => { state.date.setDate(state.date.getDate() + 1); state.date = new Date(state.date); goRefresh(); };
     document.getElementById("todayBtn").onclick = () => { state.date = new Date(); state.miniMonth = new Date(); goRefresh(); };
-    // Datum funguje jako přepínač mini kalendáře. Na telefonu je kalendář
-    // schovaný (bral třetinu šířky lišty), tímhle se vysune. Na počítači je
-    // vidět pořád, takže se tam kliknutím nic nezmění.
-    document.getElementById("navDate").onclick = () => {
-      document.querySelector(".topband").classList.toggle("cal-open");
-    };
     // Jen skutečné přepínače pohledů! Ve .view-tabs sedí i tlačítko Odhlásit
     // a bez [data-view] mu tenhle řádek přepsal obsluhu na přepnutí pohledu –
     // odhlášení pak nedělalo nic (a shodilo state.view na undefined).
