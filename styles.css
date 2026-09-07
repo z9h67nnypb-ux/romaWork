@@ -284,6 +284,12 @@ body.app-schedule .day-scroll { max-height: none; }
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 .event:hover { filter: brightness(1.05); box-shadow: var(--shadow); z-index: 5; }
+/* Prstem otevírá detail jedno klepnutí, takže dvojklepnutí na lekci nemá co
+   dělat – manipulation ho prohlížeči zakáže brát jako přiblížení stránky.
+   Platí jen na bloku lekce; ve zbytku mřížky dvojklepnutí přiblíží dál,
+   protože rozvrh je na telefonu schválně oddálený a je to potřeba.
+   Roztažení dvěma prsty funguje pořád i tady. */
+.event { touch-action: manipulation; }
 .event > div {
   white-space: nowrap;
   overflow: hidden;

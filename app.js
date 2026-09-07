@@ -244,6 +244,10 @@ function isAdmin() { return state.user && state.user.role === "admin"; }
 function isAuditor() { return state.user && state.user.role === "auditor"; }
 function isStaff() { return isAdmin() || isAuditor(); }
 
+// Ovládá se appka prstem, nebo myší? Rozhoduje o tom, jestli detail lekce
+// otevírá jedno klepnutí, nebo dvojklik – viz buildEvent.
+function isTouch() { return window.matchMedia("(pointer: coarse)").matches; }
+
 const ROLE_LABELS = { admin: "administrátor", auditor: "auditor", lektor: "lektor" };
 function roleLabel(r) { return ROLE_LABELS[r] || "lektor"; }
 
@@ -852,8 +856,14 @@ function buildEvent(l, room) {
     note ? "Poznámka: " + note : "",
   ].filter(Boolean).join("\n");
 
-  if (isStaff()) {
-    // Admin: klik = výběr (Ctrl/⌘ přidává), dvojklik = úprava.
+  if (isStaff() && isTouch()) {
+    // Prstem otevírá detail JEDNO klepnutí. Dvojklepnutí bere prohlížeč jako
+    // přiblížení stránky, takže se místo detailu jen škubne obrazem – a výběr
+    // lekcí, kvůli kterému je na myši jednoduchý klik obsazený, se stejně dělá
+    // tažením myši, Ctrl+klikem a klávesou Delete. Nic z toho na telefonu není.
+    ev.onclick = (e) => { e.stopPropagation(); openDetail(l.id); };
+  } else if (isStaff()) {
+    // Myš: klik = výběr (Ctrl/⌘ přidává), dvojklik = úprava.
     ev.onclick = (e) => {
       e.stopPropagation();
       if (e.ctrlKey || e.metaKey) {
