@@ -235,7 +235,7 @@ const DbStore = {
       scores: entry.scores,
       strengths: ev.strengths.map((r) => r.name),
       weaknesses: ev.weaknesses.map((r) => r.name),
-      plan: plan.weeks.map((w) => w.n + ". týden: " + w.focus.name + " – " + w.exercises).join("\n"),
+      plan: plan.weeks.map((w) => w.n + ". krok: " + w.focus.name + " – " + w.exercises).join("\n"),
     }).select("id, student_id, student_name, subject, grade, taken_at, note, scores").single();
     if (error) throw error;
     return fromDbRow(data);
@@ -377,7 +377,7 @@ function totals(subjKey, scores) {
 function overallPct(subjKey, scores) { return totals(subjKey, scores).pct; }
 
 // Vybere z oblasti pár konkrétních poddovedností „na co se zaměřit".
-// Prostřídá je podle pořadí týdne, ať se v plánu neopakuje pořád totéž.
+// Prostřídá je podle pořadí kroku, ať se v plánu neopakuje pořád totéž.
 function focusPicks(area, week) {
   const f = area.focus || [];
   if (!f.length) return "procvičování dané oblasti";
@@ -397,7 +397,7 @@ function buildPlan(ev) {
     weeks.push({
       n: w + 1, focus,
       exercises: focusPicks(focus, w),
-      review: w === 3 || w === 7, // ve 4. a 8. týdnu kontrolní opakování
+      review: w === 3 || w === 7, // ve 4. a 8. kroku kontrolní opakování
     });
   }
   // Konkrétní počet lekcí za týden se záměrně neuvádí – rozvrh i cenu řeší
@@ -886,8 +886,8 @@ function resultHtml(test, ev, plan, opts) {
       : '<span class="diag-note">Všechny oblasti žák zvládá – žádné cílené doplnění není potřeba. 🎉</span>') +
     "</div>";
 
-  html += '<div class="avoid-break"><h3>Doporučená příprava na 8 týdnů</h3>' +
-    '<table class="plan-table"><tr><th>Týden</th><th>Hlavní zaměření</th><th>Co procvičovat na lekcích</th></tr>' +
+  html += '<div class="avoid-break"><h3>Doporučený plán procvičování</h3>' +
+    '<table class="plan-table"><tr><th>Krok</th><th>Hlavní zaměření</th><th>Co procvičovat na lekcích</th></tr>' +
     plan.weeks.map((w) =>
       "<tr><td>" + w.n + ".</td><td><b>" + escapeHtml(w.focus.name) + "</b> " +
       '<span class="lvl ' + BAND[w.focus.band].cls + '">' + escapeHtml(bandLabel(test.subject, w.focus.band)) + "</span></td><td>" +
@@ -895,7 +895,7 @@ function resultHtml(test, ev, plan, opts) {
       "</td></tr>"
     ).join("") + "</table>" +
     '<p class="diag-note" style="margin-top:8px;">Doporučujeme <b>' + plan.intensity +
-    "</b>. Po 8 týdnech test zopakujte a plán aktualizujte.</p></div>";
+    "</b>. Až žák plán projde, test zopakujte a plán podle výsledků aktualizujte.</p></div>";
 
   return html;
 }
