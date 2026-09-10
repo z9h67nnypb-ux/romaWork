@@ -400,8 +400,12 @@ function buildPlan(ev) {
       review: w === 3 || w === 7, // ve 4. a 8. týdnu kontrolní opakování
     });
   }
-  const perWeek = ev.weaknesses.length >= 3 ? 3 : ev.weaknesses.length >= 1 ? 2 : 1;
-  return { weeks, perWeek };
+  // Konkrétní počet lekcí za týden se záměrně neuvádí – rozvrh i cenu řeší
+  // rodič s poradnou, takže místo čísla jde do zprávy slovní doporučení.
+  const intensity = ev.weaknesses.length >= 3
+    ? "pravidelné a intenzivní doučování"
+    : ev.weaknesses.length >= 1 ? "pravidelné doučování" : "udržovací doučování";
+  return { weeks, intensity };
 }
 
 function summaryText(test, ev, plan) {
@@ -411,12 +415,12 @@ function summaryText(test, ev, plan) {
     ", celkem <b>" + t.pts + " / " + t.max + " b. (" + t.pct + " %)</b>. " +
     "Celkové hodnocení: <b>" + overallAssessment(t.pct) + "</b>. ";
   if (ev.weaknesses.length) {
-    s += "Doporučujeme <b>" + plan.perWeek + "× týdně</b> doučování se zaměřením na: " +
+    s += "Doporučujeme <b>" + plan.intensity + "</b> se zaměřením na: " +
       ev.weaknesses.map((r) => "<b>" + escapeHtml(r.name) + "</b>").join(", ") + ". ";
   } else if (ev.mids.length) {
-    s += "Doporučujeme <b>" + plan.perWeek + "× týdně</b> upevnit oblasti, které žák zvládá jen částečně. ";
+    s += "Doporučujeme <b>" + plan.intensity + "</b> a upevnit oblasti, které žák zvládá jen částečně. ";
   } else {
-    s += "Žák nemá slabou oblast – stačí <b>1× týdně</b> udržovací lekce. ";
+    s += "Žák nemá slabou oblast – stačí <b>udržovací doučování</b>. ";
   }
   if (ev.strengths.length) {
     s += "Bez problémů zvládá: " + ev.strengths.map((r) => escapeHtml(r.name)).join(", ") + ".";
@@ -890,8 +894,8 @@ function resultHtml(test, ev, plan, opts) {
       escapeHtml(w.exercises) + (w.review ? "<br><b>Kontrolní opakování a mini-test pokroku.</b>" : "") +
       "</td></tr>"
     ).join("") + "</table>" +
-    '<p class="diag-note" style="margin-top:8px;">Doporučená frekvence: <b>' + plan.perWeek +
-    "× týdně</b>. Po 8 týdnech test zopakujte a plán aktualizujte.</p></div>";
+    '<p class="diag-note" style="margin-top:8px;">Doporučujeme <b>' + plan.intensity +
+    "</b>. Po 8 týdnech test zopakujte a plán aktualizujte.</p></div>";
 
   return html;
 }
