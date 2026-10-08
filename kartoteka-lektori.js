@@ -55,18 +55,53 @@ function keyOptions(sel) {
   ).join("");
 }
 
-// Stav smlouvy. Prošlá smlouva je provozní průšvih, tak ať je vidět z dálky –
-// řádek se tónuje a v buňce svítí chip. Do 30 dní varuje předem.
-function contractState(iso) {
-  if (!iso) return { cls: "none", label: "neuvedeno" };
-  const dnes = new Date(); dnes.setHours(0, 0, 0, 0);
+// Jak lektor učí. Jedna hodnota ze tří (viz migrace_smlouva_a_mazani.sql),
+// prázdno = neuvedeno.
+const TEACH_MODES = [
+  { key: "", label: "— neuvedeno —", short: "" },
+  { key: "inperson", label: "osobně", short: "osobně" },
+  { key: "online", label: "online", short: "online" },
+  { key: "both", label: "osobně i online", short: "osobně i online" },
+];
+function teachLabel(k) {
+  const f = TEACH_MODES.find((x) => x.key === (k || ""));
+  return f ? f.short : String(k);
+}
+function teachOptions(sel) {
+  return TEACH_MODES.map((t) =>
+    '<option value="' + t.key + '"' + (t.key === (sel || "") ? " selected" : "") + ">" + escapeHtml(t.label) + "</option>"
+  ).join("");
+}
+
+function isoToDate(iso) {
   const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number);
-  const konec = new Date(y, m - 1, d);
-  const dni = Math.round((konec - dnes) / 86400000);
+  return new Date(y, m - 1, d);
+}
+
+// Stav smlouvy podle začátku i konce. Prošlá smlouva je provozní průšvih,
+// tak ať je vidět z dálky – řádek se tónuje a v buňce svítí chip. Do 30 dní
+// varuje předem. Smlouva bez konce platí na dobu neurčitou.
+function contractState(r) {
+  const od = r && r.contract_from, doKdy = r && r.contract_until;
+  if (!od && !doKdy) return { cls: "none", label: "neuvedeno" };
+  const dnes = new Date(); dnes.setHours(0, 0, 0, 0);
+  if (od && isoToDate(od) > dnes) return { cls: "future", label: "ještě nezačala" };
+  if (!doKdy) return { cls: "ok", label: "na neurčito" };
+  const dni = Math.round((isoToDate(doKdy) - dnes) / 86400000);
   if (dni < 0) return { cls: "over", label: "PROŠLÁ" };
   if (dni === 0) return { cls: "soon", label: "končí dnes" };
   if (dni <= 30) return { cls: "soon", label: "končí za " + dni + " " + dayWord(dni) };
   return { cls: "ok", label: "platí" };
+}
+
+// Rozsah smlouvy do jednoho textu: „1. 9. 2026 – 31. 8. 2027", „od 1. 9. 2026",
+// „do 31. 8. 2027".
+function contractRange(r) {
+  const od = r && r.contract_from, doKdy = r && r.contract_until;
+  if (od && doKdy) return fmtDateCz(od) + " – " + fmtDateCz(doKdy);
+  if (od) return "od " + fmtDateCz(od);
+  if (doKdy) return "do " + fmtDateCz(doKdy);
+  return "";
 }
 
 // ---------- Provider: SUPABASE ----------
@@ -116,7 +151,24 @@ const DbLek = {
     if (error) throw error;
     return data || [];
   },
+  // Začátek smlouvy a způsob výuky přidává migrace_smlouva_a_mazani.sql.
+  // Na databázi bez ní by uložení karty spadlo celé – tak se ty dva sloupce
+  // vynechají, zbytek se uloží a saveCard na to upozorní (missingCols).
+  missingCols: false,
   async saveLector(fields, id) {
+    try {
+      return await this._saveLector(fields, id);
+    } catch (e) {
+      const m = String((e && e.message) || e);
+      if (!/contract_from|teaching_mode/.test(m)) throw e;
+      this.missingCols = true;
+      const rest = Object.assign({}, fields);
+      delete rest.contract_from;
+      delete rest.teaching_mode;
+      return await this._saveLector(rest, id);
+    }
+  },
+  async _saveLector(fields, id) {
     const c = this._c();
     if (id) {
       const { error } = await c.from("lectors").update(fields).eq("id", id);
@@ -127,7 +179,24 @@ const DbLek = {
     if (error) throw error;
     return data.id;
   },
+  // Smaže lektora i s hodinami a zápisy u stolu (funkce delete_lector).
+  // dryRun = jen spočítá, co by zmizelo – do potvrzovacího okna.
+  async deleteLector(id, dryRun) {
+    const { data, error } = await this._c().rpc("delete_lector", { p_lector: id, p_dry_run: !!dryRun });
+    if (error) throw new Error(rpcErrorCz(error));
+    return data || {};
+  },
 };
+
+// Funkce v databázi si hlášky píšou česky samy. Tohle chytá jen případ, kdy
+// funkce ještě neexistuje (nespuštěná migrace).
+function rpcErrorCz(error) {
+  const m = String((error && error.message) || error || "");
+  if (/Could not find the function|does not exist|schema cache/i.test(m)) {
+    return "Mazání zatím není v databázi zapnuté – spusťte migrace_smlouva_a_mazani.sql.";
+  }
+  return m;
+}
 
 const lek = DbLek;
 
@@ -161,8 +230,8 @@ function renderTable() {
   const vis = visibleRows();
   const sumH = vis.reduce((s, r) => s + Number((hours[r.id] && hours[r.id].hours) || 0), 0);
   // Prošlá smlouva se hlídá jen u aktivních – u bývalého lektora je to v pořádku.
-  const prosle = vis.filter((r) => r.active !== false && contractState(r.contract_until).cls === "over").length;
-  const brzy = vis.filter((r) => r.active !== false && contractState(r.contract_until).cls === "soon").length;
+  const prosle = vis.filter((r) => r.active !== false && contractState(r).cls === "over").length;
+  const brzy = vis.filter((r) => r.active !== false && contractState(r).cls === "soon").length;
 
   $("ktSummary").innerHTML =
     "<b>" + vis.length + "</b> " + lectorWord(vis.length) +
@@ -173,7 +242,7 @@ function renderTable() {
   const tb = $("ktBody");
   tb.innerHTML = "";
   if (!vis.length) {
-    tb.innerHTML = '<tr><td colspan="9" style="color:#999;padding:18px;">' +
+    tb.innerHTML = '<tr><td colspan="10" style="color:#999;padding:18px;">' +
       "Žádní lektoři. Přibudou sem sami, jakmile se jejich jméno objeví v rozvrhu – " +
       "nebo je můžete založit tlačítkem „+ Nový lektor\".</td></tr>";
     return;
@@ -181,7 +250,8 @@ function renderTable() {
 
   vis.forEach((r) => {
     const tr = document.createElement("tr");
-    const sml = contractState(r.contract_until);
+    const sml = contractState(r);
+    const rozsah = contractRange(r);
     const classes = [];
     if (r.active === false) classes.push("former");
     else if (sml.cls === "over" || sml.cls === "soon") classes.push("row-" + sml.cls);
@@ -196,8 +266,9 @@ function renderTable() {
       "<td>" + escapeHtml(r.phone) + "</td>" +
       '<td title="' + escapeHtml(r.address) + '">' + escapeHtml(r.address) + "</td>" +
       "<td>" + escapeHtml(r.subjects) + "</td>" +
-      "<td>" + (r.contract_until
-        ? fmtDateCz(r.contract_until) + ' <span class="chip ' + sml.cls + '">' + escapeHtml(sml.label) + "</span>"
+      "<td>" + escapeHtml(teachLabel(r.teaching_mode)) + "</td>" +
+      '<td title="' + escapeHtml(rozsah ? rozsah + " · " + sml.label : "") + '">' + (rozsah
+        ? escapeHtml(rozsah) + ' <span class="chip ' + sml.cls + '">' + escapeHtml(sml.label) + "</span>"
         : '<span class="chip none">neuvedeno</span>') + "</td>" +
       "<td>" + escapeHtml(keyLabel(r.key_set)) + "</td>" +
       '<td class="' + (r.tax_signed ? "yes" : "no") + '">' + (r.tax_signed ? "✓ ano" : "ne") + "</td>" +
@@ -332,14 +403,15 @@ function renderCard() {
 
   // Přehled nahoře: hodiny vybraného měsíce + stav smlouvy.
   const h = openId ? hours[openId] : null;
-  const sml = contractState(l.contract_until);
+  const sml = contractState(l);
+  const rozsah = contractRange(l);
   let stateHtml = "";
   if (openId) {
     stateHtml = '<div class="kt-state">' +
       '<div class="box"><div class="v">' + fmtH(h && h.hours) + '</div><div class="k">hodin – ' + escapeHtml(monthLabel().toLowerCase()) + "</div></div>" +
       '<div class="box"><div class="v">' + ((h && h.lessons) || 0) + '</div><div class="k">odučených lekcí</div></div>' +
       '<div class="box"><div class="v"><span class="chip ' + sml.cls + '">' + escapeHtml(sml.label) + "</span></div>" +
-        '<div class="k">SMLOUVA' + (l.contract_until ? " do " + fmtDateCz(l.contract_until) : "") + "</div></div>" +
+        '<div class="k">SMLOUVA' + (rozsah ? " " + escapeHtml(rozsah) : "") + "</div></div>" +
       "</div>";
   }
 
@@ -349,7 +421,9 @@ function renderCard() {
     fieldHtml("E-mail", inp("kEmail", l.email)) +
     fieldHtml("Co učí", inp("kSubjects", l.subjects, "např. ČJ, MAT")) +
     fieldHtml("Adresa", inp("kAddress", l.address, "Ulice č. p., město"), "wide") +
+    fieldHtml("Smlouva od", '<input type="date" id="kContractFrom" value="' + escapeHtml(String(l.contract_from || "").slice(0, 10)) + '">') +
     fieldHtml("Smlouva do", '<input type="date" id="kContract" value="' + escapeHtml(String(l.contract_until || "").slice(0, 10)) + '">') +
+    fieldHtml("Učí", '<select id="kTeach">' + teachOptions(l.teaching_mode) + "</select>") +
     fieldHtml("Klíče", '<select id="kKeys">' + keyOptions(l.key_set) + "</select>") +
     // Daňové prohlášení: jen ano/ne, nic víc se k tomu nevede.
     '<div class="field check-field"><label class="check"><input type="checkbox" id="kTax"' +
@@ -403,6 +477,8 @@ function renderCard() {
 
   $("cardBody").innerHTML = html;
   $("cardSaved").textContent = "";
+  // Smazat jde jen uloženou kartu – nový lektor ještě nic nemá.
+  $("cardDelete").classList.toggle("hidden", !openId);
 }
 
 async function saveCard() {
@@ -414,15 +490,26 @@ async function saveCard() {
     email: $("kEmail").value.trim() || null,
     address: $("kAddress").value.trim() || null,
     subjects: $("kSubjects").value.trim() || null,
+    contract_from: $("kContractFrom").value || null,
     contract_until: $("kContract").value || null,
+    teaching_mode: $("kTeach").value || null,
     key_set: $("kKeys").value || null,
     tax_signed: $("kTax").checked,
     hourly_rate: Number($("kRate").value) || null,
     active: $("kActive").value === "1",
     note: $("kNote").value.trim() || null,
   };
+  // ISO data se dají porovnat jako text.
+  if (fields.contract_from && fields.contract_until && fields.contract_from > fields.contract_until) {
+    $("cardSaved").textContent = "Smlouva nemůže končit dřív, než začne.";
+    return;
+  }
   const btn = $("cardSave");
   btn.disabled = true;
+  // Upozornění, když databáze ještě nezná nové sloupce (viz DbLek.saveLector).
+  const migrWarn = () => lek.missingCols
+    ? " Smlouva od a způsob výuky se neuložily – v databázi chybí migrace_smlouva_a_mazani.sql."
+    : "";
   try {
     const isNew = !openId;
     const id = await lek.saveLector(fields, openId);
@@ -430,14 +517,14 @@ async function saveCard() {
     if (isNew) {
       closeCard();
       await refreshList();
-      ktToast("Lektor „" + name + "“ uložen.");
+      ktToast("Lektor „" + name + "“ uložen." + migrWarn());
       return;
     }
     await refreshList();
     openLector = rows.find((r) => r.id === id) || Object.assign({ id }, fields);
     try { openHistory = await lek.lectorHours(id); } catch (e) { console.error(e); }
     renderCard();
-    $("cardSaved").textContent = "Uloženo ✓";
+    $("cardSaved").textContent = "Uloženo ✓" + migrWarn();
   } catch (e) {
     // Jméno lektora je v databázi unikátní – páruje se podle něj rozvrh
     // i výkaz hodin, takže dvě karty se stejným jménem by hodiny rozpůlily.
@@ -450,9 +537,61 @@ async function saveCard() {
   }
 }
 
+// ---------- Smazání lektora ----------
+// Nejdřív se databáze zeptá „nanečisto", co by zmizelo, a to se ukáže
+// v potvrzení. Odučené hodiny jsou podklad k výplatám – kdo je smaže, přijde
+// o ně nadobro, tak to musí být v okně napsané černé na bílém.
+// Tvar podle počtu: [1, 2–4, 5 a víc]. Čeština s číslem mění i sloveso,
+// takže se skloňuje celá věta, ne jen podstatné jméno.
+function plural(n, forms) { return n === 1 ? forms[0] : n >= 2 && n <= 4 ? forms[1] : forms[2]; }
+function lessonWordCz(n) { return plural(n, ["lekce", "lekce", "lekcí"]); }
+
+async function deleteCard() {
+  if (!openId) return;
+  const l = openLector || {};
+  const btn = $("cardDelete");
+  btn.disabled = true;
+  $("cardSaved").textContent = "";
+  try {
+    const info = await lek.deleteLector(openId, true);
+    const co = [];
+    if (info.work_rows) {
+      co.push("• odučené hodiny: " + fmtH(info.hours) + " h (" + info.work_rows + " " + lessonWordCz(info.work_rows) +
+        ") – zmizí i z podkladů k výplatám");
+    }
+    if (info.future_lessons) {
+      const f = info.future_lessons;
+      co.push("• " + f + " " + plural(f, [
+        "lekce naplánovaná dopředu zůstane", "lekce naplánované dopředu zůstanou", "lekcí naplánovaných dopředu zůstane",
+      ]) + " v rozvrhu bez lektora – přidělte " + (f === 1 ? "ji" : "je") + " jinému");
+    }
+    if (info.shifts) {
+      co.push("• " + info.shifts + " " + plural(info.shifts, [
+        "zápis „lektor u stolu“ se smaže", "zápisy „lektor u stolu“ se smažou", "zápisů „lektor u stolu“ se smaže",
+      ]));
+    }
+    const msg =
+      "Smazat lektora " + (info.name || l.name) + " úplně?\n\n" +
+      (co.length ? co.join("\n") + "\n\n" : "Lektor nemá žádné odučené hodiny ani lekce.\n\n") +
+      "Nejde to vrátit. Když lektor jen odešel, stačí v kartě nastavit Stav: bývalý – " +
+      "hodiny zůstanou a z nabídky v rozvrhu zmizí.";
+    if (!confirm(msg)) return;
+
+    await lek.deleteLector(openId, false);
+    closeCard();
+    await refreshList();
+    ktToast("Lektor „" + (info.name || l.name) + "“ smazán." +
+      (info.has_account ? " Přihlašovací účet má pořád – zrušte ho v rozvrhu v Účtech." : ""));
+  } catch (e) {
+    $("cardSaved").textContent = "Chyba: " + (e.message || e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // ---------- Export CSV (pro Excel) ----------
 function exportCsv() {
-  const cols = ["Lektor/ka", "Telefon", "E-mail", "Adresa", "Co učí", "Smlouva do", "Stav smlouvy",
+  const cols = ["Lektor/ka", "Telefon", "E-mail", "Adresa", "Co učí", "Výuka", "Smlouva od", "Smlouva do", "Stav smlouvy",
     "Klíče", "Podepsal daně", "Hodinová sazba Kč/h",
     "Odučeno lekcí (" + monthLabel() + ")", "Odučeno hodin (" + monthLabel() + ")",
     "Stav", "Poznámka"];
@@ -461,8 +600,8 @@ function exportCsv() {
   visibleRows().forEach((r) => {
     const h = hours[r.id];
     lines.push([
-      r.name, r.phone, r.email, r.address, r.subjects,
-      fmtDateCz(r.contract_until), contractState(r.contract_until).label,
+      r.name, r.phone, r.email, r.address, r.subjects, teachLabel(r.teaching_mode),
+      fmtDateCz(r.contract_from), fmtDateCz(r.contract_until), contractState(r).label,
       keyLabel(r.key_set), r.tax_signed ? "ano" : "ne", r.hourly_rate || "",
       (h && h.lessons) || 0, fmtH(h && h.hours),
       r.active === false ? "bývalý" : "aktivní", r.note,
@@ -518,6 +657,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("overlay").onclick = closeCard;
   $("cardClose").onclick = closeCard;
   $("cardSave").onclick = saveCard;
+  $("cardDelete").onclick = deleteCard;
 
   await refreshList();
 });

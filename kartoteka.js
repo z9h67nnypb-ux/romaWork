@@ -114,6 +114,18 @@ const DbKt = {
     const { error } = await this._c().from("payments").delete().eq("id", id);
     if (error) throw error;
   },
+  // Smaže klienta úplně i s platbami, kreditem a testy (funkce delete_student).
+  // dryRun = jen spočítá, co by zmizelo – do potvrzovacího okna.
+  async deleteStudent(id, dryRun) {
+    const { data, error } = await this._c().rpc("delete_student", { p_student: id, p_dry_run: !!dryRun });
+    if (error) {
+      const m = String(error.message || error);
+      throw new Error(/Could not find the function|does not exist|schema cache/i.test(m)
+        ? "Mazání zatím není v databázi zapnuté – spusťte migrace_smlouva_a_mazani.sql."
+        : m);
+    }
+    return data || {};
+  },
 
   // --- rozvrh (pravidelná lekce zakládaná z karty klienta) ---
   async rooms() {
@@ -550,6 +562,8 @@ function renderCard() {
 
   $("cardBody").innerHTML = html;
   $("cardSaved").textContent = "";
+  // Smazat jde jen uloženou kartu.
+  $("cardDelete").classList.toggle("hidden", !openId);
 
   // handlery uvnitř karty
   document.querySelectorAll("#cardBody [data-payid]").forEach((b) => {
@@ -792,6 +806,49 @@ async function saveCard() {
   }
 }
 
+// ---------- Smazání klienta ----------
+// Nejdřív se databáze zeptá „nanečisto", co by zmizelo, a to se ukáže
+// v potvrzení – platby jsou finanční záznam a po smazání nejdou dohledat.
+// Proběhlé lekce v rozvrhu zůstávají (lektor je odučil a hodiny mu patří),
+// jen bez jména klienta.
+function paymentWord(n) { return n === 1 ? "platba" : n >= 2 && n <= 4 ? "platby" : "plateb"; }
+function testWord(n) { return n === 1 ? "diagnostický test" : n >= 2 && n <= 4 ? "diagnostické testy" : "diagnostických testů"; }
+
+async function deleteCard() {
+  if (!openId) return;
+  const s = (openCard && openCard.student) || {};
+  const btn = $("cardDelete");
+  btn.disabled = true;
+  $("cardSaved").textContent = "";
+  try {
+    const info = await kt.deleteStudent(openId, true);
+    const co = [];
+    if (info.payments) co.push("• " + info.payments + " " + paymentWord(info.payments) + " a celý kredit hodin");
+    if (info.future_lessons) {
+      const f = info.future_lessons;
+      co.push("• " + f + " " + (f === 1 ? "lekce naplánovaná" : f <= 4 ? "lekce naplánované" : "lekcí naplánovaných") +
+        " dopředu, kde je sám (ze skupinových lekcí jen vypadne)");
+    }
+    if (info.tests) co.push("• " + info.tests + " " + testWord(info.tests));
+    const name = info.name || s.name;
+    const msg =
+      "Smazat klienta " + name + " úplně?\n\n" +
+      (co.length ? "Smaže se i:\n" + co.join("\n") + "\n\n" : "") +
+      "Proběhlé lekce v rozvrhu zůstanou, jen bez jména klienta – lektorům se odučené hodiny neberou.\n\n" +
+      "Nejde to vrátit. Když klient jen skončil, stačí v kartě nastavit Stav: bývalý.";
+    if (!confirm(msg)) return;
+
+    await kt.deleteStudent(openId, false);
+    closeCard();
+    await refreshList();
+    ktToast("Klient „" + name + "“ smazán.");
+  } catch (e) {
+    $("cardSaved").textContent = "Chyba: " + (e.message || e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // ---------- Export CSV (pro Excel) ----------
 function exportCsv() {
   const cols = ["Klient", "Telefon", "Kategorie", "Třída/ročník", "Škola", "Předměty", "Lektor/ka",
@@ -891,6 +948,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("overlay").onclick = closeCard;
   $("cardClose").onclick = closeCard;
   $("cardSave").onclick = saveCard;
+  $("cardDelete").onclick = deleteCard;
 
   await refreshList();
 });

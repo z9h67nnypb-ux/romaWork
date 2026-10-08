@@ -15,10 +15,10 @@ spustit v Supabase SQL editoru.
 | Tabulka | Co drží | Jak dlouho |
 |---|---|---|
 | `lessons` | lekce v rozvrhu (čas, učebna, lektor, stav); `kind = 'shift'` = záznam „kdo je u stolu od–do" | **~13 měsíců**, starší maže `purge_old_lessons()` |
-| `students` | klienti/žáci – aktuální i bývalí (`status: active/former`) | **nemaže se** – bývalý klient se jen označí `former` |
-| `lectors` | pracovníci (jméno, kontakt, **hodinová sazba**, nástup/odchod) | **nemaže se** (požadavek 10+ let) – odchod = `left_at` + `active=false` |
+| `students` | klienti/žáci – aktuální i bývalí (`status: active/former`) | běžně se nemaže – bývalý klient se jen označí `former`; smazat úplně jde ručně z kartotéky (viz níž) |
+| `lectors` | pracovníci (jméno, kontakt, **hodinová sazba**, smlouva od–do, výuka osobně/online) | běžně se nemaže (požadavek 10+ let) – odchod = `active=false`; smazat úplně jde ručně z kartotéky lektorů (viz níž) |
 | `work_log` | **odpracované hodiny** – 1 řádek za každou potvrzenou lekci | **nemaže se** (10+ let); je maličký |
-| `attendance` | kdo byl na které lekci (žák ↔ lekce) | maže se spolu s lekcí |
+| `attendance` | kdo byl na které lekci (žák ↔ lekce); skupinová lekce = víc řádků | maže se spolu s lekcí |
 | `payments` | platby klientů (částka + kredit hodin) – kartotéka | **nemaže se** (finanční podklad) |
 | `credit_log` | čerpání kreditu (1 řádek = účast na odučené lekci) | **nemaže se**, plní se triggery |
 | `diagnostics` | výsledky diagnostických testů + vygenerovaný plán | nemaže se |
@@ -30,6 +30,26 @@ vyčerpáno. Korekce (`credit_log` s `manual = true`) se zadává v hodinách �
 kladně přidá (lekce se protáhla, doučovalo se mimo rozvrh), záporně odečte
 (zapsáno omylem). Zápisy z rozvrhu zůstávají nedotčené, takže je vždy poznat,
 co spočítala appka a co do toho někdo sáhl rukou.
+
+**Smazání klienta nebo lektora úplně.** Tlačítko v kartě klienta (jen
+administrátor) a v kartě lektora volá databázové funkce `delete_student`
+a `delete_lector` (přidává je `migrace_smlouva_a_mazani.sql`). Smazání proběhne
+celé, nebo vůbec, a appka se předtím zeptá „nanečisto" (`p_dry_run`), co
+všechno zmizí, a ukáže to v potvrzení.
+
+- **Klient**: smažou se platby, čerpání kreditu, účast na lekcích,
+  diagnostické testy, záznamy o SMS a **budoucí neodučené lekce, kde byl
+  jediným žákem**. Proběhlé lekce zůstávají (bez jména klienta) – lektor je
+  odučil a jeho hodiny ve `work_log` se nemažou. Ze skupinové lekce klient jen
+  vypadne.
+- **Lektor**: smažou se jeho odpracované hodiny ve `work_log` (**přijdete
+  o podklad k výplatám**) a jeho zápisy „lektor u stolu". Lekce zůstávají
+  v rozvrhu bez lektora, ať se dají přidělit jinému. Lektora s hodinami smí
+  smazat jen administrátor; auditor jen kartu bez hodin (překlep). Přihlašovací
+  účet zůstává – ruší se v Rozvrh → **Účty**.
+
+Když člověk jen skončil, je lepší ho označit jako bývalého – nic se neztratí
+a z nabídek v appce zmizí.
 
 **Kartotéka (kreditový systém):** klient předplatí hodiny (řádek v `payments`),
 každá odučená lekce s jeho účastí kredit čerpá (`credit_log`, plní se triggery
@@ -257,8 +277,15 @@ nezná, formulář nabídne kategorii (ZŠ/SŠ/pracující…), třídu, telefon
 platby – uloží se s lekcí do `students`, takže se karta nemusí zakládat zvlášť.
 U známého jména se místo toho ukáže, co už kartotéka ví.
 
+**Skupinová lekce.** Žáků může být v lekci víc – každý má v detailu svůj řádek
+a tlačítko *+ Přidat dalšího žáka* přidá další. V databázi je to jen víc
+řádků v `attendance`; trigger strhne kredit každému žákovi zvlášť za celou
+délku lekce a lektorovi se hodiny zapíšou jednou. Pohled `lesson_details`
+skládá jména do jednoho textu oddělená čárkou.
+
 **Export do Excelu.** Tlačítko *⬇ Excel* stáhne den, týden nebo měsíc jako
 `.csv` s BOM a středníkem – Excel ho otevře dvojklikem včetně diakritiky.
+Vidí ho administrátor a auditor, lektor ne.
 
 **Vzhled.** Původní vysoká hlavička (název, dlaždice učeben, kalendář) je
 pryč: filtr učeben je rozbalovací seznam v liště a kalendář se otevře

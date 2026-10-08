@@ -9,7 +9,7 @@
        Počítač tuhle značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Kartotéka lektorů – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=55" />
+  <link rel="stylesheet" href="styles.css?v=56" />
   <style>
     /* Styly jsou schválně stejné jako v kartoteka.html – obě kartotéky mají
        vypadat a ovládat se identicky, jen v nich stojí jiní lidé. */
@@ -51,16 +51,18 @@
     .kt-table tbody tr { cursor: pointer; }
     .kt-table tbody tr:hover { background: #f6f8fc; }
     .kt-table .former td { color: #999; }
-    /* Pořadí: Lektor, Telefon, Adresa, Co učí, Smlouva do, Klíče, Daně, Hodin, Poznámka */
-    .kt-table col.c-jmeno   { width: 14%; }
-    .kt-table col.c-tel     { width: 9%; }
-    .kt-table col.c-adresa  { width: 17%; }
-    .kt-table col.c-uci     { width: 10%; }
-    .kt-table col.c-smlouva { width: 15%; }
-    .kt-table col.c-klice   { width: 12%; }
-    .kt-table col.c-dane    { width: 6%; }
-    .kt-table col.c-hodin   { width: 8%; }
-    .kt-table col.c-pozn    { width: 9%; }
+    /* Pořadí: Lektor, Telefon, Adresa, Co učí, Výuka, Smlouva, Klíče, Daně, Hodin, Poznámka.
+       Smlouva je nejširší – nese rozsah od–do a vedle něj chip se stavem. */
+    .kt-table col.c-jmeno   { width: 13%; }
+    .kt-table col.c-tel     { width: 8%; }
+    .kt-table col.c-adresa  { width: 13%; }
+    .kt-table col.c-uci     { width: 8%; }
+    .kt-table col.c-vyuka   { width: 9%; }
+    .kt-table col.c-smlouva { width: 20%; }
+    .kt-table col.c-klice   { width: 10%; }
+    .kt-table col.c-dane    { width: 5%; }
+    .kt-table col.c-hodin   { width: 7%; }
+    .kt-table col.c-pozn    { width: 7%; }
 
     /* Bývalého lektora lze vrátit mezi aktivní přímo z tabulky */
     .kt-table button.reactivate {
@@ -76,6 +78,7 @@
     .chip.soon  { background: #fff3e0; color: #b45309; }
     .chip.over  { background: #fdeaea; color: #c62828; }
     .chip.none  { background: #eee;    color: #777; }
+    .chip.future { background: #e8f0fe; color: #2a56a8; }
     tr.row-over  { background: #fdeaea; box-shadow: inset 4px 0 0 #c62828; }
     tr.row-soon  { background: #fff6e6; box-shadow: inset 4px 0 0 #b45309; }
     tr.row-over:hover, tr.row-soon:hover { filter: brightness(0.97); }
@@ -170,7 +173,7 @@
       <button id="ktLogout" class="page-logout" title="Odhlásit se a vrátit se na přihlášení">Odhlásit</button>
     </div>
     <p class="kt-sub">
-      Kontakt, smlouva, klíče a odučené hodiny. Lektoři se sem doplňují sami –
+      Kontakt, smlouva od–do, výuka osobně/online, klíče a odučené hodiny. Lektoři se sem doplňují sami –
       jakmile se jméno napíše do rozvrhu (k lekci nebo k zápisu „lektor u stolu"),
       objeví se tu jeho karta a stačí ji dovyplnit.
     </p>
@@ -206,13 +209,13 @@
         <table class="kt-table">
           <colgroup>
             <col class="c-jmeno" /><col class="c-tel" /><col class="c-adresa" /><col class="c-uci" />
-            <col class="c-smlouva" /><col class="c-klice" /><col class="c-dane" />
+            <col class="c-vyuka" /><col class="c-smlouva" /><col class="c-klice" /><col class="c-dane" />
             <col class="c-hodin" /><col class="c-pozn" />
           </colgroup>
           <thead>
             <tr>
               <th>Lektor/ka</th><th>Telefon</th><th>Adresa</th><th>Co učí</th>
-              <th>Smlouva do</th><th>Klíče</th><th>Daně</th>
+              <th>Výuka</th><th>Smlouva</th><th>Klíče</th><th>Daně</th>
               <th class="num" id="thHours">Hodin</th><th>Poznámka</th>
             </tr>
           </thead>
@@ -232,6 +235,7 @@
     <div class="detail-body" id="cardBody"></div>
     <div class="detail-foot">
       <button id="cardSave" class="save">Uložit kartu</button>
+      <button id="cardDelete" class="delete hidden" title="Smaže lektora z kartotéky úplně, i s odučenými hodinami">Smazat lektora</button>
       <span id="cardSaved" class="saved"></span>
     </div>
   </aside>
@@ -241,7 +245,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N musí být stejné ve všech stránkách – viz index.html -->
-  <script src="config.js?v=55"></script>
-  <script src="kartoteka-lektori.js?v=55"></script>
+  <script src="config.js?v=56"></script>
+  <script src="kartoteka-lektori.js?v=56"></script>
 </body>
 </html>

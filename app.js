@@ -137,10 +137,21 @@ const SupabaseProvider = {
       if (res.error) throw res.error;
       lessonId = res.data.id;
     }
-    // Žák (počítá se s jedním jménem; skupinu lze rozšířit)
-    if (payload.student_names) {
-      const student_id = await this._resolveStudent(payload.student_names, payload.student_fields);
-      await c.from("attendance").insert({ lesson_id: lessonId, student_id });
+    // Žáci lekce. Většinou jeden, skupinová lekce jich má víc – každý dostane
+    // svůj řádek v attendance a čerpá kredit za celou délku lekce.
+    // `students` posílá formulář ([{ name, fields }]). Kopírování lekcí
+    // (Ctrl+V, + Týden, série) nese jen text z rozvrhu – jména oddělená čárkou.
+    const list = payload.students ||
+      studentNamesFromText(payload.student_names).map((name) => ({ name, fields: null }));
+    const ids = [];
+    for (const st of list) {
+      const sid = await this._resolveStudent(st.name, st.fields);
+      if (sid && !ids.includes(sid)) ids.push(sid);
+    }
+    if (ids.length) {
+      const { error } = await c.from("attendance")
+        .insert(ids.map((student_id) => ({ lesson_id: lessonId, student_id })));
+      if (error) throw error;
     }
     return { id: lessonId };
   },
@@ -452,6 +463,9 @@ function renderToolbar() {
   doneAll.textContent = pending ? "✓ Odučeno (" + pending + ")" : "✓ Odučeno";
   doneAll.disabled = !pending;
   document.getElementById("extendWeekBtn").classList.toggle("hidden", !isStaff());
+  // Stažení rozvrhu do Excelu je pro administrátora a auditora, lektor ho
+  // nepotřebuje – rozvrh si prohlíží přímo v appce.
+  document.getElementById("exportBtn").classList.toggle("hidden", !isStaff());
   // Kartotéka je jediné, co auditor nesmí – proto tady is_admin(), ne isStaff().
   document.getElementById("kartotekaBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("lektoriBtn").classList.toggle("hidden", !isStaff());
@@ -622,6 +636,23 @@ function buildShiftRow(room) {
   return row;
 }
 
+// Barva písma v záhlaví stolu. Bílé písmo bylo čitelné jen na tmavých
+// barvách (Office); na světle zelené, růžové a modré skoro mizelo. Vybere se
+// bílá, nebo skoro černá – podle toho, která má s barvou stolu větší
+// kontrast (výpočet podle WCAG). Při změně barvy v číselníku se to
+// přizpůsobí samo.
+function headTextColor(bg) {
+  let hex = String(bg || "").trim().replace(/^#/, "");
+  if (/^[0-9a-f]{3}$/i.test(hex)) hex = hex.split("").map((c) => c + c).join("");
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return "#fff";
+  const n = parseInt(hex, 16);
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const L = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  const vsWhite = 1.05 / (L + 0.05);
+  const vsDark = (L + 0.05) / 0.0556; // #111
+  return vsWhite >= vsDark ? "#fff" : "#111";
+}
+
 function buildDayView() {
   const wrap = document.createElement("div");
   wrap.className = "day-scroll";
@@ -662,6 +693,7 @@ function buildDayView() {
     const head = document.createElement("div");
     head.className = "col-head";
     head.style.background = room.color;
+    head.style.color = headTextColor(room.color);
     head.textContent = room.name;
     col.appendChild(head);
 
@@ -797,6 +829,21 @@ function splitStudentName(s) {
   return { last: t.slice(0, i), first: t.slice(i + 1).trim() };
 }
 
+// Žáci lekce jako seznam jmen. Pohled lesson_details je slepí do jednoho
+// textu (seřazené podle jména, oddělené čárkou).
+function studentNamesFromText(t) {
+  return String(t || "").split(",").map((x) => x.trim()).filter(Boolean);
+}
+// „1 žák / 2 žáci / 5 žáků"
+function pupilWord(n) { return n === 1 ? "žák" : n >= 2 && n <= 4 ? "žáci" : "žáků"; }
+
+// Jeden řádek o žákovi z kartotéky: „Novák Jan · 5. třída ZŠ · tel. 777…"
+function studentLine(name, withPhone) {
+  const s = findStudent(name);
+  const bits = s ? [[s.grade, s.category].filter(Boolean).join(" "), withPhone && s.phone ? "tel. " + s.phone : ""] : [];
+  return [name].concat(bits.filter(Boolean)).join(" · ");
+}
+
 function buildEvent(l, room) {
   const startMin = l.starts_at.getHours() * 60 + l.starts_at.getMinutes();
   const endMin = l.ends_at.getHours() * 60 + l.ends_at.getMinutes();
@@ -808,7 +855,13 @@ function buildEvent(l, room) {
   const note = (l.description || "").trim();
   const level = [l.student_grade, l.student_category].filter(Boolean).join(" ").trim();
   const phone = (l.student_phone || "").trim();
-  const who = splitStudentName(l.student_names);
+  // Skupinová lekce: nahoře příjmení všech žáků, pod tím kolik jich je.
+  // Celá jména jsou v tooltipu a v detailu lekce.
+  const names = studentNamesFromText(l.student_names);
+  const group = names.length > 1;
+  const who = group
+    ? { last: names.map((x) => splitStudentName(x).last).join(", "), first: names.length + " " + pupilWord(names.length) }
+    : splitStudentName(l.student_names);
   const subject = (l.subject && l.subject !== "—" ? l.subject : "") +
     (l.mode === "online" ? (l.subject && l.subject !== "—" ? " · " : "") + "ONLINE" : "");
 
@@ -850,8 +903,10 @@ function buildEvent(l, room) {
   ev.title = [
     fmtRange(l.starts_at, l.ends_at) + " · " + (room ? room.name : ""),
     extra ? "MIMOŘÁDNÁ lekce (jednorázová)" : "",
-    (l.student_names || "—") + (level ? " · " + level : ""),
-    phone ? "Tel: " + phone : "",
+    group
+      ? "Skupina – " + names.length + " " + pupilWord(names.length) + ":\n" + names.map((x) => "  " + studentLine(x, true)).join("\n")
+      : (l.student_names || "—") + (level ? " · " + level : ""),
+    phone && !group ? "Tel: " + phone : "",
     sub,
     note ? "Poznámka: " + note : "",
   ].filter(Boolean).join("\n");
@@ -983,9 +1038,12 @@ function renderAdminForm(l, title) {
   // a hledalo se v tom špatně.
   document.getElementById("detailBody").innerHTML =
     '<div class="detail-main">' +
+      // Žáci: většinou jeden, u skupinové lekce víc. Každý má svůj řádek.
       '<div id="lessonOnly"' + (shift ? ' class="hidden"' : "") + ">" +
-        field("Žák", '<input type="text" id="fStudent" list="studentsList" value="' + escapeHtml(l.student_names || "") + '">') +
-        '<div id="studentInfo" class="student-info"></div>' +
+        '<div class="field"><label id="fStudentsLabel">Žák</label>' +
+          '<div id="fStudents" class="student-rows">' + studentRowsHtml(studentNamesFromText(l.student_names)) + "</div>" +
+          '<button type="button" id="fAddStudent" class="add-student">+ Přidat dalšího žáka</button>' +
+        "</div>" +
       "</div>" +
       '<div class="field-row">' +
         field("Datum", '<input type="date" id="fDate" value="' + dateVal(l.starts_at) + '">') +
@@ -1054,12 +1112,7 @@ function renderAdminForm(l, title) {
     fEnd.value = addMinutesToTimeVal(fStart.value, mins);
   };
 
-  if (!shift) {
-    const fStudent = document.getElementById("fStudent");
-    const showInfo = () => renderStudentInfo(fStudent.value.trim());
-    fStudent.oninput = showInfo;
-    showInfo();
-  }
+  if (!shift) bindStudentRows();
 
   document.getElementById("detailDelete").classList.toggle("hidden", !state.openLessonId);
   document.getElementById("detailSaved").textContent = "";
@@ -1191,7 +1244,7 @@ async function createSeries(payload, list) {
         // pobočku v pondělí, drží ji obvykle každé pondělí. U lekce se
         // nepoužívá vůbec.
         is_lead: shift ? !!payload.is_lead : false,
-        student_fields: null, // klienta zakládá jen první lekce
+        students: stripStudentFields(payload.students), // klienta zakládá jen první lekce
       }), null);
       added++;
     } catch (e) { console.error(e); skipped++; }
@@ -1211,11 +1264,12 @@ async function extendSeries() {
   const btn = document.getElementById("fSeriesBtn");
   btn.disabled = true;
   const payload = readAdminForm(shift ? "shift" : "lesson");
-  payload.student_fields = null;
+  payload.students = stripStudentFields(payload.students);
   if (shift) {
     // Směna nemá žáka, předmět ani druh lekce – pole ve formuláři sice jsou,
     // ale schovaná, tak ať se do databáze nenesou prázdné zbytky.
     payload.student_names = "";
+    payload.students = [];
     payload.subject = "";
     payload.lesson_type = null;
     payload.mode = "offline";
@@ -1248,11 +1302,87 @@ function findStudent(name) {
   return state.students.find((s) => String(s.name || "").trim().toLowerCase() === q) || null;
 }
 
-// Pod polem „Žák" ukáže, co o klientovi ví kartotéka (telefon, ročník,
+// ---------- Žáci v lekci ----------
+// Většina lekcí má jednoho žáka, skupinová jich má víc. Každý má ve formuláři
+// svůj řádek s našeptávačem a pod ním, co o něm ví kartotéka (nebo pole pro
+// založení nového klienta). Křížkem se řádek odebere, tlačítkem
+// „+ Přidat dalšího žáka" přibude.
+function studentRowHtml(name) {
+  return '<div class="student-row">' +
+    '<div class="sr-line">' +
+      '<input type="text" class="f-student" list="studentsList" value="' + escapeHtml(name || "") + '">' +
+      '<button type="button" class="sr-remove" title="Odebrat žáka z lekce">×</button>' +
+    "</div>" +
+    '<div class="student-info"></div>' +
+  "</div>";
+}
+function studentRowsHtml(names) {
+  return (names.length ? names : [""]).map(studentRowHtml).join("");
+}
+
+function bindStudentRows() {
+  const box = document.getElementById("fStudents");
+  if (!box) return;
+  box.querySelectorAll(".student-row").forEach(bindStudentRow);
+  updateStudentRows();
+  document.getElementById("fAddStudent").onclick = () => {
+    box.insertAdjacentHTML("beforeend", studentRowHtml(""));
+    const row = box.lastElementChild;
+    bindStudentRow(row);
+    updateStudentRows();
+    row.querySelector(".f-student").focus();
+  };
+}
+
+function bindStudentRow(row) {
+  const input = row.querySelector(".f-student");
+  const show = () => renderStudentInfo(row.querySelector(".student-info"), input.value.trim());
+  input.oninput = show;
+  show();
+  row.querySelector(".sr-remove").onclick = () => {
+    row.remove();
+    updateStudentRows();
+  };
+}
+
+// Popisek „Žák" / „Žáci (3)"; křížek jen tam, kde je co odebírat.
+function updateStudentRows() {
+  const box = document.getElementById("fStudents");
+  if (!box) return;
+  const count = box.querySelectorAll(".student-row").length;
+  box.classList.toggle("single", count <= 1);
+  document.getElementById("fStudentsLabel").textContent = count > 1 ? "Žáci (" + count + ")" : "Žák";
+}
+
+// Žáci z formuláře: [{ name, fields }]. Prázdné řádky se přeskočí a stejný
+// žák napsaný dvakrát se bere jednou. Známé jméno se přepíše na přesný tvar
+// z kartotéky – „novák jan" by se jinak v databázi nespároval s „Novák Jan"
+// a vznikla by druhá karta.
+function readStudentsFromForm() {
+  const seen = new Set();
+  const out = [];
+  document.querySelectorAll("#fStudents .student-row").forEach((row) => {
+    const typed = row.querySelector(".f-student").value.trim();
+    if (!typed) return;
+    const known = findStudent(typed);
+    const name = known ? known.name : typed;
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ name, fields: known ? null : readNewStudentFields(row) });
+  });
+  return out;
+}
+
+// Kopie lekce (série, + Týden) klienta nezakládá – to udělala už ta první.
+function stripStudentFields(list) {
+  return list ? list.map((x) => ({ name: x.name, fields: null })) : undefined;
+}
+
+// Pod jménem žáka ukáže, co o klientovi ví kartotéka (telefon, ročník,
 // kategorie). Když je jméno nové, rovnou nabídne doplnění těchto údajů –
 // uloží se do kartotéky spolu s lekcí, aby se karta nemusela zakládat zvlášť.
-function renderStudentInfo(name) {
-  const box = document.getElementById("studentInfo");
+function renderStudentInfo(box, name) {
   if (!box) return;
   if (!name) { box.innerHTML = ""; return; }
 
@@ -1270,28 +1400,29 @@ function renderStudentInfo(name) {
     return;
   }
 
-  const opts = (arr, id, ph) =>
-    '<select id="' + id + '"><option value="">' + ph + "</option>" +
+  const opts = (arr, cls, ph) =>
+    '<select class="' + cls + '"><option value="">' + ph + "</option>" +
     arr.map((x) => '<option value="' + escapeHtml(x) + '">' + escapeHtml(x) + "</option>").join("") + "</select>";
   box.innerHTML =
     '<div class="si-new"><b>Nový klient</b> – doplňte, ať se rovnou založí i v kartotéce:' +
     '<div class="si-grid">' +
-      opts(CATEGORIES, "fNewCategory", "kategorie…") +
-      '<input type="text" id="fNewGrade" placeholder="třída / ročník">' +
-      '<input type="text" id="fNewPhone" placeholder="telefon">' +
-      opts(PAY_METHODS, "fNewPay", "způsob platby…") +
+      opts(CATEGORIES, "sn-category", "kategorie…") +
+      '<input type="text" class="sn-grade" placeholder="třída / ročník">' +
+      '<input type="text" class="sn-phone" placeholder="telefon">' +
+      opts(PAY_METHODS, "sn-pay", "způsob platby…") +
     "</div></div>";
 }
 
-// Údaje pro založení nového klienta (prázdné, když už v kartotéce je).
-function readNewStudentFields() {
-  const g = (id) => document.getElementById(id);
-  if (!g("fNewCategory")) return null;
+// Údaje pro založení nového klienta z jednoho řádku žáka (null, když už
+// v kartotéce je).
+function readNewStudentFields(row) {
+  const q = (cls) => row.querySelector("." + cls);
+  if (!q("sn-category")) return null;
   return {
-    category: g("fNewCategory").value || null,
-    grade: g("fNewGrade").value.trim() || null,
-    phone: g("fNewPhone").value.trim() || null,
-    payment_method: g("fNewPay").value || null,
+    category: q("sn-category").value || null,
+    grade: q("sn-grade").value.trim() || null,
+    phone: q("sn-phone").value.trim() || null,
+    payment_method: q("sn-pay").value || null,
   };
 }
 
@@ -1310,6 +1441,7 @@ function addMinutesToTimeVal(hhmm, mins) {
 function readAdminForm(kind) {
   const g = (id) => document.getElementById(id);
   const [y, mo, d] = g("fDate").value.split("-").map(Number);
+  const students = g("fStudents") ? readStudentsFromForm() : [];
   const mk = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return new Date(y, mo - 1, d, h, m); };
   return {
     starts_at: mk(g("fStart").value),
@@ -1318,7 +1450,8 @@ function readAdminForm(kind) {
     // Ořez mezer je nutnost, ne kosmetika: podle jména se páruje karta
     // lektora i klienta, takže „Novák " a „Novák" by v databázi byly dva
     // různí lidé a hodiny by se rozdělily na dvě půlky.
-    student_names: g("fStudent") ? g("fStudent").value.trim() : "",
+    student_names: students.map((x) => x.name).join(", "),
+    students,
     lector_name: g("fLector").value.trim(),
     subject: g("fSubject") ? g("fSubject").value.trim() : "",
     mode: g("fMode") ? g("fMode").value : "offline",
@@ -1331,17 +1464,37 @@ function readAdminForm(kind) {
   };
 }
 
+// Žáci v detailu lekce u lektora. U jednoho žáka jako dřív (žák, ročník,
+// telefon), u skupiny každý žák na svém řádku i s telefonem. Údaje se u
+// skupiny berou z kartotéky po jednom – pohled lesson_details je slepí do
+// jednoho textu a prázdné hodnoty v něm vypadnou, takže by se k sobě
+// nepřiřadily.
+function telLink(phone) {
+  return '<a href="tel:' + escapeHtml(String(phone).replace(/\s/g, "")) + '">' + escapeHtml(phone) + "</a>";
+}
+function lektorStudentsHtml(l) {
+  const names = studentNamesFromText(l.student_names);
+  if (names.length <= 1) {
+    return metaRow("Žák", escapeHtml(l.student_names || "—")) +
+      metaRow("Ročník", escapeHtml([l.student_grade, l.student_category].filter(Boolean).join(" · ") || "—")) +
+      metaRow("Telefon", l.student_phone ? telLink(l.student_phone) : "—");
+  }
+  return metaRow("Žáci (" + names.length + ")", names.map((x) => {
+    const s = findStudent(x);
+    const lv = s ? [s.grade, s.category].filter(Boolean).join(" ") : "";
+    return '<div class="group-student"><b>' + escapeHtml(x) + "</b>" +
+      (lv ? " · " + escapeHtml(lv) : "") +
+      (s && s.phone ? " · " + telLink(s.phone) : "") + "</div>";
+  }).join(""));
+}
+
 // Formulář pro lektora (jen popis + potvrzení)
 function renderLektorForm(l) {
   const room = roomById(l.room_id);
   document.getElementById("detailTitle").textContent = l.student_names || "Lekce";
   document.getElementById("detailBody").innerHTML =
     '<div class="role-note">Jako lektor můžeš zapsat popis a potvrdit, že lekce proběhla. Rozvrh mění administrátor.</div>' +
-    metaRow("Žák", escapeHtml(l.student_names || "—")) +
-    metaRow("Ročník", escapeHtml([l.student_grade, l.student_category].filter(Boolean).join(" · ") || "—")) +
-    metaRow("Telefon", l.student_phone
-      ? '<a href="tel:' + escapeHtml(l.student_phone.replace(/\s/g, "")) + '">' + escapeHtml(l.student_phone) + "</a>"
-      : "—") +
+    lektorStudentsHtml(l) +
     metaRow("Předmět", escapeHtml(l.subject || "—")) +
     metaRow("Lektor", escapeHtml(l.lector_name || "—")) +
     metaRow("Místnost", room ? escapeHtml(room.name) : "—") +
@@ -1399,13 +1552,14 @@ async function saveDetail() {
           return;
         }
       }
+      const students = shift ? [] : readStudentsFromForm();
       const payload = {
         kind,
         starts_at: starts,
         ends_at: ends,
         room_id: roomId,
-        student_names: shift ? "" : document.getElementById("fStudent").value.trim(),
-        student_fields: shift ? null : readNewStudentFields(),
+        student_names: students.map((x) => x.name).join(", "),
+        students,
         lector_name: document.getElementById("fLector").value.trim(),
         subject: shift ? "" : document.getElementById("fSubject").value.trim(),
         mode: shift ? "offline" : document.getElementById("fMode").value,
@@ -1485,6 +1639,7 @@ function escapeHtml(s) {
 function csvEscape(v) { return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; }
 
 async function exportSchedule() {
+  if (!isStaff()) return;
   const choice = prompt("Stáhnout rozvrh jako Excel (.csv):\n\n1 = zobrazený den\n2 = celý týden\n3 = celý měsíc", "1");
   if (choice === null) return;
   const range = { 1: "den", 2: "tyden", 3: "mesic" }[choice.trim()];

@@ -12,7 +12,7 @@
        Počítače se to netýká, prohlížeč na desktopu tuhle značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Rozvrh – PoraDys osobní výuka</title>
-  <link rel="stylesheet" href="styles.css?v=55" />
+  <link rel="stylesheet" href="styles.css?v=56" />
 </head>
 <body class="app-schedule">
   <!-- Přihlášení -->
@@ -46,7 +46,7 @@
     <button id="doneAllBtn" class="hidden" title="Označí všechny naplánované lekce zobrazeného dne jako odučené">✓ Odučeno</button>
     <button id="selectAllBtn" class="hidden" title="Vybere všechny lekce dne (Ctrl/⌘+A)">Vybrat vše</button>
     <button id="extendWeekBtn" class="hidden" title="Zkopíruje pravidelné lekce z aktuálního týdne do týdne následujícího (mimořádné a kolize se přeskočí)">+ Týden</button>
-    <button id="exportBtn" title="Stáhne rozvrh jako .csv – otevře se v Excelu">Excel</button>
+    <button id="exportBtn" class="hidden" title="Stáhne rozvrh jako .csv – otevře se v Excelu">Excel</button>
 
     <span class="tb-sep"></span>
 
@@ -161,10 +161,10 @@
 
        Číslo se NIKDY nesmí použít podruhé na jiný obsah – ani po zahození
        rozdělané práce a návratu zpátky. Prohlížeč si cache klíčuje podle URL,
-       takže na „app.js?v=55" podruhé podá tu starou verzi a stránka běží
+       takže na „app.js?v=56" podruhé podá tu starou verzi a stránka běží
        s kódem, který na disku vůbec není. Vždycky číslo jen zvyšuj. -->
-  <script src="config.js?v=55"></script>
-  <script src="opakovani.js?v=55"></script>
-  <script src="app.js?v=55"></script>
+  <script src="config.js?v=56"></script>
+  <script src="opakovani.js?v=56"></script>
+  <script src="app.js?v=56"></script>
 </body>
 </html>

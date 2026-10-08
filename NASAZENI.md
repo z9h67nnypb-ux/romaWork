@@ -42,7 +42,8 @@ Celkový čas: ~1 hodina. Postupuj po krocích, nic nepřeskakuj.
    [`migrace_prava_ostry_provoz.sql`](migrace_prava_ostry_provoz.sql) →
    [`migrace_role_auditor.sql`](migrace_role_auditor.sql) →
    [`migrace_materialy.sql`](migrace_materialy.sql) →
-   [`migrace_kartoteka_lektoru.sql`](migrace_kartoteka_lektoru.sql).
+   [`migrace_kartoteka_lektoru.sql`](migrace_kartoteka_lektoru.sql) →
+   [`migrace_smlouva_a_mazani.sql`](migrace_smlouva_a_mazani.sql).
    Zkušební data pak smaže
    [`reset_ostry_provoz.sql`](reset_ostry_provoz.sql). Je nevratný, čti
    komentáře v souboru – nejdřív jen vypíše, kolik řádků by smazal.
@@ -223,6 +224,7 @@ jen připojíš, nic jiného se nemění.)*
 - [ ] spuštěné migrace `migrace_*.sql` v pořadí: `migrace_ucty_lektoru.sql`
       → `migrace_prava_ostry_provoz.sql` → `migrace_role_auditor.sql`
       → `migrace_materialy.sql` → `migrace_kartoteka_lektoru.sql`
+      → `migrace_smlouva_a_mazani.sql`
 - [ ] v Supabase existuje bucket `materialy` (Storage) a je **neveřejný**
 - [ ] Web běží na GitHub Pages / Netlify
 - [ ] Test z kroku 8 prošel (appka i SQL ukazují stejné hodiny)

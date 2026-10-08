@@ -36,7 +36,7 @@ v appce (Rozvrh → **Účty**), viz kapitola 3c.
 - **Mini kalendář / šipky / Dnes** – přepínání dne.
 - **Kontrola kolizí** – nejde založit/přesunout lekci do místnosti, kde se čas
   překrývá s jinou lekcí (online lekce bez místnosti se nehlídají).
-- **Administrátor** – „+ Nová lekce", úprava (čas, učebna, žák, lektor, předmět,
+- **Administrátor** – „+ Nová lekce", úprava (čas, učebna, žáci, lektor, předmět,
   režim, stav) a mazání. Navíc:
   - **klik** vybere lekci, **Ctrl/⌘+klik** přidá další, **tažením myši** vybereš
     víc lekcí najednou,
@@ -44,7 +44,16 @@ v appce (Rozvrh → **Účty**), viz kapitola 3c.
     přeskočí), **Delete** smaže výběr,
   - **dvojklik** na lekci otevře úpravu.
 - **Lektor** – klik na lekci → může jen **zapsat popis** a potvrdit **„Lekce
-  proběhla"**. Rozvrh nemění.
+  proběhla"**. Rozvrh nemění a nestahuje ho do Excelu (tlačítko *Excel* vidí
+  jen administrátor a auditor).
+- **Skupinová lekce (víc žáků najednou)** – v detailu lekce je každý žák na
+  svém řádku a tlačítko **„+ Přidat dalšího žáka"** přidá dalšího; křížkem se
+  žák z lekce odebere. Každý žák čerpá kredit za celou délku lekce, lektor
+  dostane hodiny jednou. V rozvrhu má blok nahoře příjmení všech žáků a pod
+  nimi jejich počet („3 žáci"), celá jména a telefony jsou v tooltipu
+  a v detailu.
+- **Názvy stolů v záhlaví** mají barvu písma podle barvy stolu – na tmavých
+  bílou, na světlých skoro černou – a jsou tučně, ať jdou přečíst na všech.
 - **Agenda** – seznamový pohled na daný den.
 - **Dropdown „Výuka"** – přepíná zobrazení: prezenční / online (vždy jen jeden
   režim, ať se lekce nemíchají v jednom sloupci).
@@ -72,14 +81,18 @@ v appce (Rozvrh → **Účty**), viz kapitola 3c.
   do týdne následujícího (mimořádné a zrušené se vynechají, kolize přeskočí).
 - **🧑‍🏫 Kartotéka lektorů** (admin i auditor) – stránka
   [`kartoteka-lektori.html`](kartoteka-lektori.html), tlačítko **Lektoři**:
-  jméno, adresa, telefon, co učí, do kdy má smlouvu, jaké má klíče (1. čip /
+  jméno, adresa, telefon, co učí, jestli učí **osobně, online, nebo obojí**,
+  **od kdy do kdy má smlouvu**, jaké má klíče (1. čip /
   2. čip + podkroví / celý svazek), jestli podepsal daně, poznámka a
   **kolik odučil hodin za vybraný měsíc** (od prvního do posledního dne;
   měsíce jde listovat zpět). Lektoři se sem doplňují sami – stačí, aby se
   jejich jméno objevilo v rozvrhu. Prošlá nebo brzy končící smlouva tónuje
   řádek, ať se na to nepřijde pozdě. Nahradilo to dřívější tlačítko *Výkaz*;
   hodiny se počítají pořád stejně (smazání lekce je odebere, roční úklid je
-  zachová), jen stojí vedle zbytku údajů o lektorovi. Detail v
+  zachová), jen stojí vedle zbytku údajů o lektorovi. Lektora jde v kartě
+  **smazat úplně** – i s odučenými hodinami a zápisy u stolu; jeho lekce
+  zůstanou v rozvrhu bez lektora. Lektora s odučenými hodinami smí smazat jen
+  administrátor, auditor jen kartu bez hodin (typicky překlep). Detail v
   [`DATABASE.md`](DATABASE.md).
 - **📇 Kartotéka klientů** (admin), tlačítko **Klienti** – stránka
   [`kartoteka.html`](kartoteka.html):
@@ -88,7 +101,9 @@ v appce (Rozvrh → **Účty**), viz kapitola 3c.
   klienta ve stylu Excelu; export CSV; hromadný import počátečních zůstatků.
   **Barevné označení klientů** (online / osobně / končí / kontaktováno /
   problémový) a **souhrny peněz podle způsobu platby** (kolik klientů a Kč
-  platí hotově / účet PoraDys / účet jazykovka / účet DR).
+  platí hotově / účet PoraDys / účet jazykovka / účet DR). Klienta jde v kartě
+  **smazat úplně** – i s platbami, kreditem, testy a budoucími lekcemi, kde byl
+  sám. Proběhlé lekce zůstanou (bez jména), lektorům se hodiny neberou.
 - **👤 Účty** (admin i auditor) – zakládání přihlašovacích účtů. Vyplní se
   jméno, e-mail, heslo a role, účet vznikne v Supabase Auth a člověk se rovnou
   přihlásí. **Zrušit přístup** účet jen zamkne, **Smazat** ho odstraní nadobro;
@@ -141,7 +156,9 @@ v appce (Rozvrh → **Účty**), viz kapitola 3c.
    a mazání účtů z appky), [`migrace_materialy.sql`](migrace_materialy.sql)
    (materiály na procvičování + úložiště souborů) a
    [`migrace_kartoteka_lektoru.sql`](migrace_kartoteka_lektoru.sql)
-   (kartotéka lektorů – adresa, smlouva, klíče, daně, poznámka).
+   (kartotéka lektorů – adresa, smlouva, klíče, daně, poznámka) a
+   [`migrace_smlouva_a_mazani.sql`](migrace_smlouva_a_mazani.sql)
+   (smlouva od–do, výuka osobně/online, mazání klientů a lektorů z kartoték).
 4. Kdyby v databázi zůstala testovací data z prototypu, smaže je
    [`reset_ostry_provoz.sql`](reset_ostry_provoz.sql) (nevratné, čti
    komentáře v souboru).
@@ -208,7 +225,10 @@ Po přihlášení appka zná roli uživatele. Role se nastavuje při zakládán�
 | Diagnostické testy – zadávání | – | ✅ | ✅ |
 | Materiály na procvičování – otevřít | ✅ | ✅ | ✅ |
 | Materiály na procvičování – nahrát a smazat | – | ✅ | ✅ |
+| Stáhnout rozvrh do Excelu | – | ✅ | ✅ |
 | Kartotéka lektorů (kontakt, smlouva, klíče, hodiny) | – | ✅ | ✅ |
+| Smazat lektora bez odučených hodin | – | ✅ | ✅ |
+| Smazat lektora i s odučenými hodinami | – | – | ✅ |
 | Účty (zakládat, zamykat, mazat) | – | ✅¹ | ✅ |
 | **Kartotéka – klienti, platby, kredit** | – | **–** | ✅ |
 
@@ -277,6 +297,7 @@ Plán automatizace (zatím nenaprogramováno):
 | `migrace_role_auditor.sql` | Role auditor + mazání účtů z appky |
 | `migrace_materialy.sql` | Materiály na procvičování (tabulka + úložiště souborů) |
 | `migrace_kartoteka_lektoru.sql` | Kartotéka lektorů (adresa, smlouva, klíče, daně) |
+| `migrace_smlouva_a_mazani.sql` | Smlouva od–do, výuka osobně/online, mazání klientů a lektorů |
 | `reset_ostry_provoz.sql` | Jednorázové smazání všech provozních dat |
 | `diagnostika.html` + `diagnostika.js` | Diagnostický test a plán přípravy |
 | `kartoteka.html` + `kartoteka.js` | Kartotéka klientů: platby a kredit hodin |
