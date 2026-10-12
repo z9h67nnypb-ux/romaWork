@@ -56,7 +56,9 @@ v appce (Rozvrh → **Účty**), viz kapitola 3c.
   bílou, na světlých skoro černou – a jsou tučně, ať jdou přečíst na všech.
 - **Agenda** – seznamový pohled na daný den.
 - **Dropdown „Výuka"** – přepíná zobrazení: prezenční / online (vždy jen jeden
-  režim, ať se lekce nemíchají v jednom sloupci).
+  režim, ať se lekce nemíchají v jednom sloupci). Online výuka má vlastní stoly
+  **Online 1, Online 2…**, osobní fyzické stoly pobočky. Co se založí
+  v online rozvrhu (lekce i „+ Lektor"), je online.
 - **Druh lekce** – u každé lekce se vybírá **klasická (opakovaná)** nebo
   **mimořádná (jednorázová)**. U klasické jde rovnou naplánovat několik
   dalších termínů dopředu – stejný den v týdnu i čas, obsazené termíny se
@@ -158,7 +160,9 @@ v appce (Rozvrh → **Účty**), viz kapitola 3c.
    [`migrace_kartoteka_lektoru.sql`](migrace_kartoteka_lektoru.sql)
    (kartotéka lektorů – adresa, smlouva, klíče, daně, poznámka) a
    [`migrace_smlouva_a_mazani.sql`](migrace_smlouva_a_mazani.sql)
-   (smlouva od–do, výuka osobně/online, mazání klientů a lektorů z kartoték).
+   (smlouva od–do, výuka osobně/online, mazání klientů a lektorů z kartoték)
+   a [`migrace_online_stoly.sql`](migrace_online_stoly.sql) (vlastní stoly
+   Online 1, 2… pro online výuku).
 4. Kdyby v databázi zůstala testovací data z prototypu, smaže je
    [`reset_ostry_provoz.sql`](reset_ostry_provoz.sql) (nevratné, čti
    komentáře v souboru).
@@ -298,6 +302,7 @@ Plán automatizace (zatím nenaprogramováno):
 | `migrace_materialy.sql` | Materiály na procvičování (tabulka + úložiště souborů) |
 | `migrace_kartoteka_lektoru.sql` | Kartotéka lektorů (adresa, smlouva, klíče, daně) |
 | `migrace_smlouva_a_mazani.sql` | Smlouva od–do, výuka osobně/online, mazání klientů a lektorů |
+| `migrace_online_stoly.sql` | Vlastní stoly Online 1, 2… pro online výuku |
 | `reset_ostry_provoz.sql` | Jednorázové smazání všech provozních dat |
 | `diagnostika.html` + `diagnostika.js` | Diagnostický test a plán přípravy |
 | `kartoteka.html` + `kartoteka.js` | Kartotéka klientů: platby a kredit hodin |

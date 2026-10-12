@@ -14,6 +14,7 @@ spustit v Supabase SQL editoru.
 
 | Tabulka | Co drží | Jak dlouho |
 |---|---|---|
+| `rooms` | stoly – fyzické pro osobní výuku a „Online 1, 2…" pro online (`mode`) | číselník |
 | `lessons` | lekce v rozvrhu (čas, učebna, lektor, stav); `kind = 'shift'` = záznam „kdo je u stolu od–do" | **~13 měsíců**, starší maže `purge_old_lessons()` |
 | `students` | klienti/žáci – aktuální i bývalí (`status: active/former`) | běžně se nemaže – bývalý klient se jen označí `former`; smazat úplně jde ručně z kartotéky (viz níž) |
 | `lectors` | pracovníci (jméno, kontakt, **hodinová sazba**, smlouva od–do, výuka osobně/online) | běžně se nemaže (požadavek 10+ let) – odchod = `active=false`; smazat úplně jde ručně z kartotéky lektorů (viz níž) |

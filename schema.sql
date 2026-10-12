@@ -12,6 +12,11 @@ create table if not exists rooms (
   color text not null default '#4569b0',
   sort  int  not null default 0
 );
+-- Osobní výuka má fyzické stoly, online výuka své „Online 1, 2…". Online
+-- rozvrh ukazuje jen online stoly, osobní jen fyzické.
+alter table rooms add column if not exists mode text not null default 'offline';  -- 'offline' | 'online'
+alter table rooms drop constraint if exists rooms_mode_chk;
+alter table rooms add constraint rooms_mode_chk check (mode in ('offline', 'online'));
 
 -- Lektoři
 create table if not exists lectors (
@@ -460,6 +465,14 @@ insert into rooms (id, name, color, sort) values
   ('mat-4','Matematická stůl 4','#587bc0',15),
   ('mat-5','Matematická stůl 5','#4f72b8',16),
   ('mat-6','Matematická stůl 6','#4569b0',17)
+on conflict (id) do nothing;
+
+-- Online stoly: jeden za každý fyzický, ve stejném pořadí.
+insert into rooms (id, name, color, sort, mode)
+select 'online-' || rn, 'Online ' || rn,
+       case when rn % 2 = 1 then '#1f7a8c' else '#287271' end,
+       100 + rn, 'online'
+from (select row_number() over (order by sort, id) as rn from rooms where mode = 'offline') x
 on conflict (id) do nothing;
 
 -- Žádná ukázková data tu nejsou. Databáze začíná prázdná, naplní ji provoz.

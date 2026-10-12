@@ -368,8 +368,11 @@ async function refresh() {
 // Barvu učebny stejně nese záhlaví sloupce, takže legenda nechybí.
 function renderRoomFilter() {
   const sel = document.getElementById("roomSelect");
+  const list = roomsForMode(state.modeFilter);
+  // Po přepnutí Osobní/Online může vybraný stůl patřit do druhého režimu.
+  if (state.roomFilter && !list.some((r) => r.id === state.roomFilter)) state.roomFilter = null;
   sel.innerHTML = '<option value="">Vše</option>' +
-    state.rooms.map((r) =>
+    list.map((r) =>
       '<option value="' + escapeHtml(r.id) + '"' + (state.roomFilter === r.id ? " selected" : "") +
       ' style="color:' + r.color + '">' + escapeHtml(r.name) + "</option>"
     ).join("");
@@ -518,8 +521,30 @@ function renderView() {
   else c.innerHTML = '<div class="placeholder">Pohled „' + state.view + '" je zatím jen náhled. Hlavní je denní rozvrh.</div>';
 }
 
+// Osobní a online výuka mají každá své stoly: fyzické („Matematická stůl 1")
+// a online („Online 1, Online 2…", rooms.mode = 'online' – viz
+// migrace_online_stoly.sql). Dřív online rozvrh kreslil fyzické stoly
+// a lektoři nevěděli, jestli jsou zapsaní online, nebo na pobočce.
+function roomMode(r) { return r && r.mode === "online" ? "online" : "offline"; }
+function hasOnlineRooms() { return state.rooms.some((r) => roomMode(r) === "online"); }
+// Stoly daného režimu. Databáze bez online stolů (nespuštěná migrace) kreslí
+// online výuku do fyzických stolů jako dřív.
+function roomsForMode(mode) {
+  return hasOnlineRooms() ? state.rooms.filter((r) => roomMode(r) === mode) : state.rooms;
+}
+
 function visibleRooms() {
-  return state.roomFilter ? state.rooms.filter((r) => r.id === state.roomFilter) : state.rooms;
+  const list = roomsForMode(state.modeFilter);
+  return state.roomFilter ? list.filter((r) => r.id === state.roomFilter) : list;
+}
+
+// Přepne rozvrh na osobní, nebo online výuku (přepínač v liště i po uložení
+// lekce z druhého režimu, ať zmizelá lekce nevypadá jako ztracená).
+function setModeFilter(mode) {
+  state.modeFilter = mode === "online" ? "online" : "offline";
+  sessionStorage.setItem("poradys_mode", state.modeFilter);
+  const sel = document.getElementById("modeSelect");
+  if (sel) sel.value = state.modeFilter;
 }
 
 // Filtr podle dropdownu Prezenční/Online v toolbaru.
@@ -976,9 +1001,26 @@ function statusOptions(sel) {
     .map((k) => '<option value="' + k + '"' + (k === sel ? " selected" : "") + ">" + STATUS_LABELS[k] + "</option>")
     .join("");
 }
-function roomOptions(sel) {
-  return '<option value="">— bez místnosti (online) —</option>' +
-    state.rooms.map((r) => '<option value="' + r.id + '"' + (r.id === sel ? " selected" : "") + ">" + escapeHtml(r.name) + "</option>").join("");
+// Nabídka stolů ve formuláři – jen stoly zvoleného režimu.
+function roomOptions(sel, mode) {
+  return '<option value="">' + (hasOnlineRooms() ? "— bez stolu —" : "— bez místnosti (online) —") + "</option>" +
+    roomsForMode(mode).map((r) => '<option value="' + r.id + '"' + (r.id === sel ? " selected" : "") + ">" + escapeHtml(r.name) + "</option>").join("");
+}
+
+// Přepnutí Režimu ve formuláři vymění nabídku stolů. Vybraný stůl se přenese
+// na stůl se stejným pořadím v druhém režimu (Matematická stůl 1 -> Online 12
+// a zpátky), ať se lekce neocitne bez stolu.
+function swapRoomForMode(mode) {
+  const sel = document.getElementById("fRoom");
+  if (!sel || !hasOnlineRooms()) return;
+  const cur = roomById(sel.value);
+  let target = "";
+  if (cur && roomMode(cur) === mode) target = cur.id;
+  else if (cur) {
+    const other = roomsForMode(mode)[roomsForMode(roomMode(cur)).indexOf(cur)];
+    target = other ? other.id : "";
+  }
+  sel.innerHTML = roomOptions(target, mode);
 }
 function dateVal(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
 function timeVal(d) { return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
@@ -1004,7 +1046,9 @@ function openCreate(kind, slot) {
   renderAdminForm(
     { starts_at: base, ends_at: end, room_id: (slot && slot.room_id) || "",
       lector_name: "", subject: "", student_names: "",
-      mode: "offline", status: "planned", done: false, description: "", kind: kind || "lesson" },
+      // Režim podle toho, který rozvrh je otevřený – v online rozvrhu se
+      // zakládá online lekce i online zápis lektora, ne osobní.
+      mode: state.modeFilter, status: "planned", done: false, description: "", kind: kind || "lesson" },
     kind === "shift" ? "Nový lektor u stolu" : "Nová lekce"
   );
   showPanel();
@@ -1066,7 +1110,7 @@ function renderAdminForm(l, title) {
       '<div id="repeatBox" class="repeat-box' + (shift || lessonType === "regular" ? "" : " hidden") + '">' +
         repeatBoxHtml(isNew, shift) +
       "</div>" +
-      field(shift ? "Stůl / učebna" : "Místnost / stůl", '<select id="fRoom">' + roomOptions(l.room_id) + "</select>") +
+      field(shift ? "Stůl / učebna" : "Místnost / stůl", '<select id="fRoom">' + roomOptions(l.room_id, l.mode) + "</select>") +
       '<div class="field-row">' +
         '<div id="lessonOnly2"' + (shift ? ' class="hidden"' : "") + ' style="flex:1;">' +
           field("Předmět", '<input type="text" id="fSubject" value="' + escapeHtml(l.subject || "") + '">') +
@@ -1113,6 +1157,7 @@ function renderAdminForm(l, title) {
   };
 
   if (!shift) bindStudentRows();
+  document.getElementById("fMode").onchange = (e) => swapRoomForMode(e.target.value);
 
   document.getElementById("detailDelete").classList.toggle("hidden", !state.openLessonId);
   document.getElementById("detailSaved").textContent = "";
@@ -1272,7 +1317,6 @@ async function extendSeries() {
     payload.students = [];
     payload.subject = "";
     payload.lesson_type = null;
-    payload.mode = "offline";
     payload.status = "planned";
     payload.done = false;
   }
@@ -1553,6 +1597,11 @@ async function saveDetail() {
         }
       }
       const students = shift ? [] : readStudentsFromForm();
+      // Režim: u stolu ho určuje stůl (online stůl = online), bez stolu
+      // volba Režim. Platí i pro zápis lektora – dřív byl vždycky osobní,
+      // takže se lektor zapsaný v online rozvrhu objevil v osobním.
+      const room = roomById(roomId);
+      const mode = room && hasOnlineRooms() ? roomMode(room) : document.getElementById("fMode").value;
       const payload = {
         kind,
         starts_at: starts,
@@ -1562,7 +1611,7 @@ async function saveDetail() {
         students,
         lector_name: document.getElementById("fLector").value.trim(),
         subject: shift ? "" : document.getElementById("fSubject").value.trim(),
-        mode: shift ? "offline" : document.getElementById("fMode").value,
+        mode,
         status: shift ? "planned" : document.getElementById("fStatus").value,
         done: shift ? false : document.getElementById("fDone").checked,
         is_lead: shift ? document.getElementById("fLead").checked : false,
@@ -1589,6 +1638,7 @@ async function saveDetail() {
       }
       await loadStudents(); // v kartotéce mohl přibýt nový klient
       state.date = new Date(starts); // přepni na den lekce, ať je vidět
+      if (mode !== state.modeFilter) setModeFilter(mode); // …i na její režim
     } else {
       const id = state.openLessonId;
       if (!id) return;
@@ -2270,9 +2320,10 @@ async function startApp(user) {
     const modeSel = document.getElementById("modeSelect");
     modeSel.value = state.modeFilter;
     modeSel.onchange = () => {
-      state.modeFilter = modeSel.value;
-      sessionStorage.setItem("poradys_mode", state.modeFilter);
+      setModeFilter(modeSel.value);
       clearSelection();
+      invalidateLayout(); // v druhém režimu můžou být jiné řádky se směnami
+      renderRoomFilter(); // a jiné stoly
       renderView();
     };
     document.getElementById("diagBtn").onclick = () => { location.href = "diagnostika.html" + location.search; };

@@ -7,9 +7,10 @@
 // Databáze musí mít spuštěné schema.sql a všechny migrace z migrace_*.sql
 // (naposledy migrace_ucty_lektoru.sql, migrace_prava_ostry_provoz.sql,
 // migrace_role_auditor.sql, migrace_materialy.sql,
-// migrace_kartoteka_lektoru.sql a migrace_smlouva_a_mazani.sql – účty
-// z appky, ostrá práva, role auditor, materiály na procvičování, kartotéka
-// lektorů a smlouva od–do s mazáním z kartoték).
+// migrace_kartoteka_lektoru.sql, migrace_smlouva_a_mazani.sql
+// a migrace_online_stoly.sql – účty z appky, ostrá práva, role auditor,
+// materiály na procvičování, kartotéka lektorů, smlouva od–do s mazáním
+// z kartoték a vlastní stoly pro online výuku).
 //
 // Účty lektorů zakládá administrátor přímo v appce: Rozvrh -> „Účty".
 // ---------------------------------------------------------------------------

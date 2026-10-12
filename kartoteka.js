@@ -583,6 +583,11 @@ function renderCard() {
     const el = $(id);
     if (el) el.addEventListener("change", updateRecurringInfo);
   });
+  // Přepnutí Režimu vymění nabídku stolů (osobní ↔ online).
+  if ($("rMode")) $("rMode").onchange = () => {
+    $("rRoom").innerHTML = ktRoomOptions("", $("rMode").value);
+    updateRecurringInfo();
+  };
   updateRecurringInfo();
   const rCreate = $("rCreate");
   if (rCreate) rCreate.onclick = async () => {
@@ -636,9 +641,17 @@ async function ensureRooms() {
   return ktRooms;
 }
 
-function ktRoomOptions(sel) {
-  return '<option value="">— bez místnosti (online) —</option>' +
-    (ktRooms || []).map((r) =>
+// Stoly zvoleného režimu – osobní výuka má fyzické stoly, online své
+// „Online 1, 2…" (rooms.mode, viz migrace_online_stoly.sql). Bez online stolů
+// v databázi se nabízí všechny jako dřív.
+function ktRoomMode(r) { return r && r.mode === "online" ? "online" : "offline"; }
+function ktRoomsForMode(mode) {
+  const all = ktRooms || [];
+  return all.some((r) => ktRoomMode(r) === "online") ? all.filter((r) => ktRoomMode(r) === mode) : all;
+}
+function ktRoomOptions(sel, mode) {
+  return '<option value="">— bez stolu —</option>' +
+    ktRoomsForMode(mode).map((r) =>
       '<option value="' + escapeHtml(r.id) + '"' + (r.id === sel ? " selected" : "") + ">" + escapeHtml(r.name) + "</option>"
     ).join("");
 }
@@ -647,6 +660,7 @@ function todayIso() { return new Date().toISOString().slice(0, 10); }
 
 function recurringHtml(s) {
   const O = window.Opakovani;
+  const mode = s.flag === "online" ? "online" : "offline";
   return '<div class="kt-section-h">Pravidelná lekce v rozvrhu</div>' +
     '<div class="rec-box">' +
       '<label class="check"><input type="checkbox" id="rEnabled"> Chodí pravidelně – naplánovat do rozvrhu</label>' +
@@ -655,7 +669,7 @@ function recurringHtml(s) {
         '<label>První termín od<input type="date" id="rFrom" value="' + todayIso() + '"></label>' +
         '<label>Od<input type="time" id="rTimeFrom" value="15:00"></label>' +
         '<label>Do<input type="time" id="rTimeTo" value="16:00"></label>' +
-        '<label>Stůl / učebna<select id="rRoom">' + ktRoomOptions("") + "</select></label>" +
+        '<label>Stůl / učebna<select id="rRoom">' + ktRoomOptions("", mode) + "</select></label>" +
         '<label>Předmět<input type="text" id="rSubject" value="' + escapeHtml(s.subjects || "") + '"></label>' +
         '<label>Lektor/ka<input type="text" id="rLector" value="' + escapeHtml(s.lector_name || "") + '"></label>' +
         '<label>Režim<select id="rMode"><option value="offline"' + (s.flag === "online" ? "" : " selected") + ">Osobní</option>" +
@@ -699,7 +713,7 @@ function updateRecurringInfo() {
   const step = Number($("rEvery").value) === 2 ? 2 : 1;
   box.innerHTML = "Do rozvrhu se založí <b>" + list.length + " " + ktLessonWord(list.length) + "</b> – " +
     escapeHtml(window.Opakovani.describe(list, step)) + ". Obsazené termíny se přeskočí." +
-    ($("rRoom").value ? "" : " <b>Bez stolu</b> se lekce zapíší jako online a kolize se nekontrolují.");
+    ($("rRoom").value ? "" : " <b>Bez stolu</b> se kolize nekontrolují.");
 }
 
 function ktLessonWord(n) { return n === 1 ? "lekce" : n >= 2 && n <= 4 ? "lekce" : "lekcí"; }
