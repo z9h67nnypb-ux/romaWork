@@ -334,14 +334,17 @@ body.app-schedule .day-scroll { max-height: none; }
    místo. Celá je vždycky v tooltipu a v detailu lekce. */
 .event .e-note { font-size: 10px; line-height: 11px; opacity: 0.88; font-style: italic; }
 
-/* Záchranná brzda pro bloky kratší, než na kolik je mřížka stavěná (lekce
-   pod půl hodiny). Řádky se stáhnou, ale žádný se nezahazuje – radši drobněji
-   než vůbec. */
+/* Lekce kratší než hodina. Mřížka je stavěná na hodinové lekce a kvůli
+   kratší se nenatahuje, takže blok se zhustí – buildEvent v app.js vybere
+   řádky podle místa (výšky řádků tady musí sedět s tamními prahy 32/21/11 px).
+   Čtvrthodinovka (.tiny) ukáže jen jméno drobným písmem. */
 .event.compact { padding: 1px 4px; }
 .event.compact .e-last,
 .event.compact .e-first { font-size: 10.5px; line-height: 11px; }
 .event.compact .e-lector,
 .event.compact .e-subject { font-size: 9px; line-height: 10px; }
+.event.tiny { padding: 0 3px; }
+.event.tiny .e-last { font-size: 8.5px; line-height: 9px; }
 
 /* Mimořádná (jednorázová) lekce – celá buňka žlutá, ať je v rozvrhu vidět
    na dálku. Barvu místnosti tím ztratí, ale tu nese sloupec, ve kterém blok
@@ -853,7 +856,7 @@ body.app-schedule .day-scroll { max-height: none; }
 
      Zaplatí se to výškou pásu (179 -> 236 px), protože širší kalendář ubere
      liště šířku a ta se zalomí o řádek víc. Rozvrh o nic nepřijde: mřížka
-     má strop hodinové výšky (HOUR_H_MAX_FIT v app.js), takže pod ní zbývalo
+     má strop hodinové výšky (80 px, computeHourHeight v app.js), takže pod ní zbývalo
      314 px prázdna – i po zvětšení jich zbývá 256.
 
      Kdyby se čísla ladila znovu: rozhodující je šířka. Nad 200 px začne

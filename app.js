@@ -561,28 +561,16 @@ function matchesMode(l) {
 // předmět) + 4 px padding + 2 px rámeček.
 const EV_LINE_H = 11;   // výška jednoho řádku s poznámkou
 const EV_MIN_H = 54;    // blok, do kterého se vejdou všechny čtyři řádky
-// Nad tuhle výšku hodiny už nejdeme, i kdyby v rozvrhu byla čtvrthodinová
-// lekce – jinak by se den natáhl do nesmyslné délky kvůli jedinému bloku.
-const HOUR_H_MAX_FIT = 120;
 
-// Nejkratší lekce zobrazeného dne v hodinách (prázdný den = počítej s hodinou).
-function shortestLessonHours() {
-  let m = 1;
-  state.lessons.forEach((l) => {
-    if (!isLesson(l) || !matchesMode(l)) return;
-    const h = (l.ends_at - l.starts_at) / 3600000;
-    if (h > 0 && h < m) m = h;
-  });
-  return m;
-}
-
-// Kolik musí měřit hodina, aby se i do NEJKRATŠÍ lekce dne vešly všechny
-// čtyři povinné řádky. Tohle je tvrdé dno pro výšku mřížky – když se den
-// přestane vejít na obrazovku, radši ať se roluje svisle, než aby se z buňky
-// ztratilo jméno žáka nebo lektor.
+// Dno pro výšku hodiny: do HODINOVÉ lekce se musí vejít všechny čtyři
+// povinné řádky. Když se den přestane vejít na obrazovku, radši ať se roluje
+// svisle, než aby se z buňky ztratilo jméno žáka nebo lektor.
+//
+// Dřív se dno počítalo podle NEJKRATŠÍ lekce dne, takže jediná půlhodinová
+// lekce zdvojnásobila výšku celého dne a rozvrh se musel rolovat. Teď
+// kratší lekce mřížku nenatahují – vykreslí se zhuštěně (viz buildEvent).
 function requiredHourHeight() {
-  // +2 = mezera mezi bloky (buildEvent odečítá 2 px z výšky slotu)
-  return Math.min(Math.ceil((EV_MIN_H + 2) / shortestLessonHours()), HOUR_H_MAX_FIT);
+  return EV_MIN_H + 2; // +2 = mezera mezi bloky (buildEvent odečítá 2 px z výšky slotu)
 }
 
 function computeHourHeight(withShiftRow) {
@@ -891,13 +879,17 @@ function buildEvent(l, room) {
     (l.mode === "online" ? (l.subject && l.subject !== "—" ? " · " : "") + "ONLINE" : "");
 
   const ev = document.createElement("div");
-  // Záchranná brzda pro bloky kratší, než na kolik je mřížka stavěná (viz
-  // requiredHourHeight) – řádky se stáhnou, ale žádný se nezahazuje.
+  // Lekce kratší než hodina se do mřížky stavěné na hodinové lekce
+  // nevejde celá – blok se zhustí (viz níž), mřížka se kvůli ní nenatahuje.
   const compact = height < EV_MIN_H;
+  // Vnitřní výška zhuštěného bloku: bez rámečku (2 px) a paddingu (2 px).
+  const inner = height - 4;
+  const tiny = compact && inner < 11; // čtvrthodinovka – jen jméno, drobně
   const extra = isLesson(l) && l.lesson_type === "extra";
   ev.className =
     "event" +
     (compact ? " compact" : "") +
+    (tiny ? " tiny" : "") +
     (extra ? " is-extra" : "") +
     (l.done ? " is-done" : "") +
     (l.status === "cancelled" ? " is-cancelled" : "") +
@@ -911,19 +903,36 @@ function buildEvent(l, room) {
   if (!extra) ev.style.background = room.color;
 
   // Pevné pořadí řádků: příjmení / jméno / lektor / předmět / poznámka.
-  // První čtyři jsou VŽDY vidět – výška hodiny se dopočítává tak, aby se do
-  // nejkratší lekce dne vešly (requiredHourHeight). Poznámka je jediná, co se
-  // zahodí, když na ni nezbude místo; celá je pak v tooltipu a v detailu.
-  // Prázdné řádky se nevykreslují, ať nezůstává díra (žák bez křestního
-  // jména, lekce bez lektora). Ročník a telefon jsou v detailu lekce.
+  // U hodinové a delší lekce jsou první čtyři VŽDY vidět – výška hodiny se
+  // dopočítává tak, aby se do hodinové lekce vešly (requiredHourHeight).
+  // Poznámka je jediná, co se zahodí, když na ni nezbude místo; celá je pak
+  // v tooltipu a v detailu. Prázdné řádky se nevykreslují, ať nezůstává díra
+  // (žák bez křestního jména, lekce bez lektora). Ročník a telefon jsou
+  // v detailu lekce.
+  //
+  // Kratší lekce se zhustí podle toho, kolik místa má:
+  //   45 min  – příjmení / jméno / lektor · předmět
+  //   30 min  – příjmení a jméno na jednom řádku / lektor · předmět
+  //   15 min  – jen jméno, drobným písmem
+  // Všechno ostatní je v tooltipu a v detailu lekce.
   const noteFits = height >= EV_MIN_H + EV_LINE_H;
   const row = (cls, txt) => (txt ? '<div class="' + cls + '">' + escapeHtml(txt) + "</div>" : "");
-  ev.innerHTML =
-    row("e-last", who.last) +
-    row("e-first", who.first) +
-    row("e-lector", l.lector_name || "") +
-    row("e-subject", subject) +
-    (note && noteFits ? row("e-note", note) : "");
+  const lecSubj = [l.lector_name || "", subject].filter(Boolean).join(" · ");
+  const fullName = group ? who.last : [who.last, who.first].filter(Boolean).join(" ");
+  if (!compact) {
+    ev.innerHTML =
+      row("e-last", who.last) +
+      row("e-first", who.first) +
+      row("e-lector", l.lector_name || "") +
+      row("e-subject", subject) +
+      (note && noteFits ? row("e-note", note) : "");
+  } else if (inner >= 32) {
+    ev.innerHTML = row("e-last", who.last) + row("e-first", who.first) + row("e-lector", lecSubj);
+  } else if (inner >= 21) {
+    ev.innerHTML = row("e-last", fullName) + row("e-lector", lecSubj);
+  } else {
+    ev.innerHTML = row("e-last", fullName);
+  }
 
   ev.title = [
     fmtRange(l.starts_at, l.ends_at) + " · " + (room ? room.name : ""),
