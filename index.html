@@ -12,7 +12,7 @@
        Počítače se to netýká, prohlížeč na desktopu tuhle značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Rozvrh – PoraDys osobní výuka</title>
-  <link rel="stylesheet" href="styles.css?v=58" />
+  <link rel="stylesheet" href="styles.css?v=59" />
 </head>
 <body class="app-schedule">
   <!-- Přihlášení -->
@@ -62,6 +62,7 @@
     <button id="kartotekaBtn" class="hidden" title="Kartotéka klientů – platby a kredity hodin">Klienti</button>
     <button id="lektoriBtn" class="hidden" title="Kartotéka lektorů – kontakt, smlouva, klíče a odučené hodiny za měsíc">Lektoři</button>
     <button id="usersBtn" class="hidden" title="Přihlašovací účty – založit nový, odebrat přístup">Účty</button>
+    <button id="settingsBtn" class="hidden" title="Barvy stolů a záloha dat">Nastavení</button>
 
     <!-- Pohledy Týden a Měsíc byly jen zástupné (ukazovaly hlášku, že jsou
          zatím náhled). Nic neuměly a braly místo, tak jsou pryč. -->
@@ -136,6 +137,34 @@
     </div>
   </div>
 
+  <!-- Nastavení: barvy stolů (admin i auditor), záloha dat (jen admin) -->
+  <div id="settingsModal" class="hours-modal hidden">
+    <div class="hours-card">
+      <div class="hours-head">
+        <h2>Nastavení</h2>
+        <button id="settingsClose" class="close">×</button>
+      </div>
+      <div class="hours-body">
+        <h3 class="set-h" id="colorsTitle">Barvy stolů</h3>
+        <div id="colorsGrid" class="colors-grid"></div>
+        <div id="backupBox" class="hidden">
+          <h3 class="set-h">Záloha dat</h3>
+          <p class="set-note">
+            Stáhne všechna data z rozvrhu a kartoték do jednoho souboru. Soubor si ulož mimo
+            tenhle počítač. Jsou v něm osobní údaje a platby, tak ho nikam nerozesílej.
+            Hesla ani nahrané soubory materiálů v něm nejsou.
+          </p>
+          <div class="backup-btns">
+            <button id="backupDownload" class="set-btn primary">⬇ Stáhnout zálohu</button>
+            <button id="backupRestore" class="set-btn">Obnovit ze zálohy…</button>
+            <input type="file" id="backupFile" accept=".json,application/json" class="hidden" />
+          </div>
+          <div id="backupMsg" class="set-msg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Detail rezervace -->
   <div id="overlay" class="overlay hidden"></div>
   <aside id="detailPanel" class="detail-panel hidden">
@@ -145,8 +174,12 @@
     </div>
     <div class="detail-body" id="detailBody"></div>
     <div class="detail-foot">
+      <label id="detailFutureWrap" class="detail-future hidden" title="Změna se promítne i do dalších stejných termínů (stejný den v týdnu, čas, stůl, lektor a žáci) na měsíc dopředu. Odučené termíny se nemění.">
+        <input type="checkbox" id="detailFuture" /> Změnit i budoucí termíny (měsíc dopředu)
+      </label>
       <button id="detailSave" class="save">Uložit</button>
       <button id="detailDelete" class="delete hidden">Smazat</button>
+      <button id="detailDeleteFuture" class="delete hidden" title="Smaže tento termín a všechny další stejné termíny v rozvrhu. Odučené zůstanou.">Smazat i budoucí</button>
       <span id="detailSaved" class="saved"></span>
     </div>
   </aside>
@@ -161,10 +194,10 @@
 
        Číslo se NIKDY nesmí použít podruhé na jiný obsah – ani po zahození
        rozdělané práce a návratu zpátky. Prohlížeč si cache klíčuje podle URL,
-       takže na „app.js?v=58" podruhé podá tu starou verzi a stránka běží
+       takže na „app.js?v=59" podruhé podá tu starou verzi a stránka běží
        s kódem, který na disku vůbec není. Vždycky číslo jen zvyšuj. -->
-  <script src="config.js?v=58"></script>
-  <script src="opakovani.js?v=58"></script>
-  <script src="app.js?v=58"></script>
+  <script src="config.js?v=59"></script>
+  <script src="opakovani.js?v=59"></script>
+  <script src="app.js?v=59"></script>
 </body>
 </html>

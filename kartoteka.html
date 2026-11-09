@@ -10,7 +10,7 @@
        prsty je čitelné. Počítač tuhle značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Kartotéka – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=58" />
+  <link rel="stylesheet" href="styles.css?v=59" />
   <style>
     /* Styly jen pro kartotéku */
     .kt-wrap { max-width: 1500px; margin: 0 auto; padding: 14px 20px 60px; }
@@ -50,17 +50,25 @@
     .dot.fl-online { background: #2563eb; }
     .dot.fl-inperson { background: #16a34a; }
     .dot.fl-ending { background: #6b7280; }
-    .dot.fl-contacted { background: #dc2626; }
-    .dot.fl-problem { background: #ea580c; }
 
     /* Tónování celého řádku podle označení – sytější, s barevným levým pruhem */
     .kt-table tr.row-online   { background: #dbeafe; box-shadow: inset 4px 0 0 #2563eb; }
     .kt-table tr.row-inperson { background: #cdf2d8; box-shadow: inset 4px 0 0 #16a34a; }
     .kt-table tr.row-ending   { background: #e2e5ea; color: #6b7280; box-shadow: inset 4px 0 0 #6b7280; }
-    .kt-table tr.row-contacted{ background: #fdd7d7; box-shadow: inset 4px 0 0 #dc2626; }
-    .kt-table tr.row-problem  { background: #fde3c8; box-shadow: inset 4px 0 0 #ea580c; }
-    .kt-table tr.row-online:hover, .kt-table tr.row-inperson:hover, .kt-table tr.row-ending:hover,
-    .kt-table tr.row-contacted:hover, .kt-table tr.row-problem:hover { filter: brightness(0.96); }
+    .kt-table tr.row-online:hover, .kt-table tr.row-inperson:hover, .kt-table tr.row-ending:hover { filter: brightness(0.96); }
+
+    /* Kontaktováno a problémový – přepínače nezávislé na typu klienta */
+    .mark-btn {
+      width: 20px; height: 20px; padding: 0; border-radius: 50%; cursor: pointer;
+      border: 1px solid var(--line-strong); background: #fff; color: transparent;
+      font-size: 12px; font-weight: 800; line-height: 18px; text-align: center;
+    }
+    .mark-btn:hover { border-color: #888; color: #bbb; }
+    .mark-btn.m-contacted.on { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+    .mark-btn.m-problem.on { background: #dc2626; border-color: #dc2626; color: #fff; }
+    .mark-btn:disabled { opacity: .5; }
+    .kt-table td.mark-cell, .kt-table th.mark-cell { text-align: center; padding-left: 2px; padding-right: 2px; }
+    .kt-legend .mark-btn { pointer-events: none; width: 16px; height: 16px; font-size: 10px; line-height: 14px; }
     .flag-select { border: 1px solid var(--line-strong); border-radius: 4px; padding: 2px 4px; font-size: 11px; background: #fff; cursor: pointer; }
 
     .kt-table-wrap { background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
@@ -73,19 +81,20 @@
     .kt-table .former td { color: #999; }
     /* Pevné šířky sloupců, ať se tabulka vejde bez vodorovného rolování.
        Pořadí: Klient, Telefon, Kat., Třída, Předměty, Lektor, Cena, Platba,
-       Označení, Zapl., Vyč., Zůstatek, chip */
-    .kt-table col.c-klient   { width: 15%; }
+       Označení, Kontakt., Probl., Zapl., Vyč., Zůstatek, chip */
+    .kt-table col.c-klient   { width: 14%; }
     .kt-table col.c-tel      { width: 8%; }
     .kt-table col.c-kat      { width: 4%; }
-    .kt-table col.c-trida    { width: 11%; }
-    .kt-table col.c-predm    { width: 7%; }
-    .kt-table col.c-lektor   { width: 9%; }
-    .kt-table col.c-cena     { width: 5%; }
-    .kt-table col.c-platba   { width: 9%; }
-    .kt-table col.c-oznac    { width: 10%; }
-    .kt-table col.c-num      { width: 6%; }
+    .kt-table col.c-trida    { width: 9%; }
+    .kt-table col.c-predm    { width: 6%; }
+    .kt-table col.c-lektor   { width: 8%; }
+    .kt-table col.c-cena     { width: 4%; }
+    .kt-table col.c-platba   { width: 8%; }
+    .kt-table col.c-oznac    { width: 9%; }
+    .kt-table col.c-mark     { width: 4%; }
+    .kt-table col.c-num      { width: 5%; }
     /* poslední sloupec nese buď stav kreditu, nebo tlačítko „↩ aktivovat" */
-    .kt-table col.c-chip     { width: 9%; }
+    .kt-table col.c-chip     { width: 7%; }
     .kt-table .flag-select { max-width: 100%; }
 
     /* Bývalého klienta lze vrátit mezi aktivní přímo z tabulky */
@@ -120,30 +129,6 @@
     .md-table td.num, .md-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
     .md-table tbody tr { cursor: pointer; }
     .md-table tr:hover { background: #f6f8fc; }
-
-    /* Pravidelná lekce zakládaná rovnou z karty klienta */
-    .rec-box {
-      border: 1px solid var(--line); border-left: 3px solid var(--accent);
-      background: #f6f8fc; border-radius: 0 6px 6px 0; padding: 9px 11px; margin-top: 4px;
-    }
-    .rec-box .check { display: flex; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; }
-    .rec-grid {
-      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 7px 10px; margin-top: 9px;
-    }
-    .rec-grid label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); }
-    .rec-grid input, .rec-grid select {
-      border: 1px solid var(--line-strong); border-radius: 4px; padding: 5px 7px;
-      font-size: 12.5px; font-family: inherit; width: 100%; background: #fff;
-    }
-    .rec-info { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.35; }
-    .rec-info b { color: var(--text); }
-    .rec-btn {
-      margin-top: 8px; border: 1px solid var(--accent); background: #fff; color: var(--accent);
-      border-radius: 5px; padding: 6px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer;
-    }
-    .rec-btn:hover { background: var(--accent); color: #fff; }
-    .rec-btn:disabled { opacity: .5; cursor: default; }
 
     .chip-credit { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 10px; padding: 1px 9px; }
     .chip-credit.ok { background: #e6f4ea; color: #1e6b30; }
@@ -181,6 +166,10 @@
     .card-fields .field label { min-height: 30px; display: flex; align-items: flex-end; margin-bottom: 4px; }
     /* Stejná výška u input i select, ať jsou pole zarovnaná na pixel */
     .card-fields .field input, .card-fields .field select { height: 33px; margin-top: 0; }
+    /* Zaškrtávátka v mřížce – bez tohohle by zdědila výšku 33 px a roztáhla se */
+    .card-fields .field.check-field { justify-content: flex-end; }
+    .card-fields .field.check-field label.check { min-height: 33px; display: flex; align-items: center; gap: 7px; font-size: 12.5px; cursor: pointer; margin: 0; }
+    .card-fields .field.check-field input[type="checkbox"] { width: 17px; height: 17px; }
     /* Dlouhý seznam výuky se posouvá uvnitř svého sloupce, ne celá karta */
     .lessons-scroll { max-height: 260px; overflow-y: auto; }
     @media (max-width: 700px) { .card-main { grid-template-columns: 1fr; } }
@@ -280,7 +269,7 @@
       <span id="storeBadge" class="store-badge" style="display:inline-block;font-size:11.5px;border-radius:10px;padding:2px 10px;background:#eee;color:#555;"></span>
       <button id="ktLogout" class="page-logout" title="Odhlásit se a vrátit se na přihlášení">Odhlásit</button>
     </div>
-    <p class="kt-sub">Klienti, platby a kredit hodin. Lekce čerpají kredit automaticky z rozvrhu – tady se zapisují platby a zakládá pravidelná lekce.</p>
+    <p class="kt-sub">Klienti, platby a kredit hodin. Lekce čerpají kredit automaticky z rozvrhu – tady se zapisují platby.</p>
 
     <div id="lockedBox" class="kt-locked hidden">
       <h2 style="margin:0 0 8px;">Jen pro přihlášené</h2>
@@ -308,9 +297,9 @@
         <span class="kt-legend-title">Označení:</span>
         <span class="kt-legend-item"><span class="dot fl-online"></span> online</span>
         <span class="kt-legend-item"><span class="dot fl-inperson"></span> osobně</span>
-        <span class="kt-legend-item"><span class="dot fl-ending"></span> končí / ukončuje</span>
-        <span class="kt-legend-item"><span class="dot fl-contacted"></span> kontaktováno</span>
-        <span class="kt-legend-item"><span class="dot fl-problem"></span> problémový</span>
+        <span class="kt-legend-item"><span class="dot fl-ending"></span> končí / odchází</span>
+        <span class="kt-legend-item"><span class="mark-btn m-contacted on" style="display:inline-block">✓</span> kontaktováno</span>
+        <span class="kt-legend-item"><span class="mark-btn m-problem on" style="display:inline-block">!</span> problémový</span>
       </div>
 
       <div class="kt-table-wrap">
@@ -318,12 +307,13 @@
           <colgroup>
             <col class="c-klient" /><col class="c-tel" /><col class="c-kat" /><col class="c-trida" />
             <col class="c-predm" /><col class="c-lektor" /><col class="c-cena" /><col class="c-platba" />
-            <col class="c-oznac" /><col class="c-num" /><col class="c-num" /><col class="c-num" /><col class="c-chip" />
+            <col class="c-oznac" /><col class="c-mark" /><col class="c-mark" /><col class="c-num" /><col class="c-num" /><col class="c-num" /><col class="c-chip" />
           </colgroup>
           <thead>
             <tr>
               <th>Klient</th><th>Telefon</th><th>Kat.</th><th>Třída</th><th>Předm.</th>
               <th>Lektor/ka</th><th class="num">Kč/h</th><th>Platba</th><th>Označení</th>
+              <th class="mark-cell" title="Kontaktováno">Kont.</th><th class="mark-cell" title="Problémový">Probl.</th>
               <th class="num">Zapl. h</th><th class="num">Vyč. h</th><th class="num">Zůstatek</th><th></th>
             </tr>
           </thead>
@@ -373,9 +363,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N musí být stejné ve všech třech stránkách – viz index.html -->
-  <script src="config.js?v=58"></script>
-  <!-- opakovani.js počítá termíny pravidelných lekcí (série na X týdnů). -->
-  <script src="opakovani.js?v=58"></script>
-  <script src="kartoteka.js?v=58"></script>
+  <script src="config.js?v=59"></script>
+  <script src="kartoteka.js?v=59"></script>
 </body>
 </html>

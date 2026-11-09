@@ -9,7 +9,7 @@
        Počítač tuhle značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Kartotéka lektorů – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=58" />
+  <link rel="stylesheet" href="styles.css?v=59" />
   <style>
     /* Styly jsou schválně stejné jako v kartoteka.html – obě kartotéky mají
        vypadat a ovládat se identicky, jen v nich stojí jiní lidé. */
@@ -83,6 +83,18 @@
     tr.row-soon  { background: #fff6e6; box-shadow: inset 4px 0 0 #b45309; }
     tr.row-over:hover, tr.row-soon:hover { filter: brightness(0.97); }
 
+    /* Barva řádku podle výuky: osobně (i obojí) zelená, online modrá. Prošlou
+       nebo končící smlouvu dál hlásí chip a červený/oranžový pruh vlevo. */
+    .kt-table tr.teach-inperson { background: #c8ecd2; }
+    .kt-table tr.teach-online   { background: #cfe0fb; }
+    .kt-table tr.teach-inperson td { color: #123f22; border-bottom-color: #9fd3ae; }
+    .kt-table tr.teach-online td   { color: #142f6b; border-bottom-color: #a9c4ef; }
+    .kt-table tr.teach-inperson:not(.row-over):not(.row-soon) { box-shadow: inset 4px 0 0 #15803d; }
+    .kt-table tr.teach-online:not(.row-over):not(.row-soon)   { box-shadow: inset 4px 0 0 #1d4ed8; }
+    .kt-table tbody tr.teach-inperson:hover { background: #b2e2bf; }
+    .kt-table tbody tr.teach-online:hover   { background: #b9d1f8; }
+    .kt-table tr.teach-inperson .yes, .kt-table tr.teach-online .yes { color: #0f5a2a; }
+
     .yes { color: #1e6b30; font-weight: 600; }
     .no  { color: #c62828; }
 
@@ -119,6 +131,17 @@
        v mřížce a roztáhlo se do obdélníku. */
     .card-fields .field.check-field input[type="checkbox"] { width: 17px; height: 17px; }
     .hrs-scroll { max-height: 320px; overflow-y: auto; }
+    /* Odučené lekce v kartě – stejné řádky jako v kartě klienta */
+    .lessons-scroll { max-height: 260px; overflow-y: auto; }
+    .lesson-row { display: flex; gap: 10px; font-size: 12.5px; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+    .lesson-row .d { width: 118px; color: var(--muted); flex: 0 0 auto; }
+    .lesson-row .s { flex: 1; min-width: 0; }
+    .lesson-row .h { width: 46px; text-align: right; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+    .kt-dl {
+      margin-top: 8px; border: 1px solid var(--accent); background: #fff; color: var(--accent);
+      border-radius: 5px; padding: 6px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    }
+    .kt-dl:hover { background: var(--accent); color: #fff; }
     @media (max-width: 700px) { .card-main { grid-template-columns: 1fr; } }
 
     .kt-locked { max-width: 460px; margin: 80px auto; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 26px; text-align: center; }
@@ -245,7 +268,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N musí být stejné ve všech stránkách – viz index.html -->
-  <script src="config.js?v=58"></script>
-  <script src="kartoteka-lektori.js?v=58"></script>
+  <script src="config.js?v=59"></script>
+  <script src="kartoteka-lektori.js?v=59"></script>
 </body>
 </html>

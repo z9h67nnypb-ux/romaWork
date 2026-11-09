@@ -484,9 +484,19 @@ body.app-schedule .day-scroll { max-height: none; }
   padding: 14px 18px;
   border-top: 1px solid var(--line);
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
 }
+.detail-foot .detail-future {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.detail-foot .detail-future input { width: 16px; height: 16px; }
 .detail-foot .save {
   background: var(--accent);
   color: #fff;
@@ -625,6 +635,20 @@ body.app-schedule .day-scroll { max-height: none; }
 .hours-head .close { border: none; background: none; font-size: 20px; cursor: pointer; color: var(--muted); }
 .hours-body { padding: 0 18px 8px; overflow-y: auto; }
 .hours-note { font-size: 11.5px; color: var(--muted); padding: 6px 18px 14px; margin: 0; }
+
+/* ---------- Nastavení: barvy stolů a záloha ---------- */
+.set-h { margin: 14px 0 8px; font-size: 13px; color: var(--title); }
+.set-note { margin: 0 0 10px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.set-msg { min-height: 18px; margin: 8px 0 10px; font-size: 12.5px; color: #2e7d32; word-break: break-word; }
+.colors-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.color-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
+.color-row input[type="color"] { width: 30px; height: 24px; padding: 0; border: 1px solid var(--line-strong); border-radius: 4px; background: #fff; cursor: pointer; flex: 0 0 auto; }
+.backup-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.set-btn { border: 1px solid var(--line-strong); background: #fff; border-radius: 5px; padding: 7px 12px; font-size: 13px; cursor: pointer; }
+.set-btn:hover { background: #f2f2f2; }
+.set-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.set-btn.primary:hover { background: #244e9e; }
+.set-btn:disabled { opacity: .5; cursor: default; }
 
 /* ---------- Účty lektorů (admin) ---------- */
 /* Širší než výkaz hodin – řádek nese jméno, e-mail, roli i dvě tlačítka. */

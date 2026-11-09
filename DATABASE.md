@@ -200,6 +200,20 @@ jednou měsíčně na něj stáhnout export databáze (bod 5).
 
 ## 6) Záloha jednou měsíčně (na ten starý počítač)
 
+**Nejjednodušší je záloha přímo z appky:** administrátor otevře Rozvrh →
+**Nastavení** → **Stáhnout zálohu** a dostane jeden soubor JSON se všemi daty
+(funkce `export_snapshot`). Stejné okno umí **Obnovit ze zálohy**: funkce
+`restore_snapshot` nahradí provozní data obsahem souboru v jedné transakci,
+takže když cokoli selže, nezmění se nic. Před obnovou se současný stav sám
+stáhne do počítače.
+
+V záloze nejsou hesla a nahrané soubory materiálů. Přihlašovací účty obnova
+nemění. Když zanikne celý projekt, založí se nový podle `schema.sql`, účty se
+vytvoří znovu a teprve pak se obnoví záloha. Tabulka `profiles` je v souboru
+jen pro přehled, kdo měl jakou roli.
+
+Mimo appku:
+
 Nejjednodušší cesta bez instalace čehokoli: v Supabase **Database → Backups**
 nejde na free tarifu, ale **SQL Editor → spustit `select * from ...` → Export CSV**
 funguje. Pohodlnější je `pg_dump` (Supabase → Project Settings → Database →
@@ -258,7 +272,7 @@ režimů (prezenční i online), takže večer stačí jedno kliknutí místo ob
 celého rozvrhu. Vidí ho jen administrátor; lektoři si dál odklikávají své
 lekce jednotlivě.
 
-**Poznámka v buňce.** Popis lekce se ukazuje přímo v bloku rozvrhu (kurzívou);
+**Poznámka v buňce.** Poznámka k lekci se ukazuje přímo v bloku rozvrhu (kurzívou);
 co se do bloku nevejde, je celé v tooltipu.
 
 **Co je v buňce vidět.** Čas, žák, jeho třída a kategorie, předmět, lektor,
@@ -287,6 +301,12 @@ skládá jména do jednoho textu oddělená čárkou.
 **Export do Excelu.** Tlačítko *⬇ Excel* stáhne den, týden nebo měsíc jako
 `.csv` s BOM a středníkem – Excel ho otevře dvojklikem včetně diakritiky.
 Vidí ho administrátor a auditor, lektor ne.
+
+**Odučeno ve 21:00.** Plánovač `pg_cron` volá funkci `auto_mark_lessons_done`,
+která označí dnešní skončené lekce jako odučené, se stejnými pravidly jako
+tlačítko *✓ Odučeno*. Plánovač běží v UTC, proto se úloha spouští v 19:00
+i 20:00 UTC a funkce si ověří, že je v Praze 21 hodin. Kontrola běhů:
+`select * from cron.job_run_details order by start_time desc limit 10;`.
 
 **Vzhled.** Původní vysoká hlavička (název, dlaždice učeben, kalendář) je
 pryč: filtr učeben je rozbalovací seznam v liště a kalendář se otevře

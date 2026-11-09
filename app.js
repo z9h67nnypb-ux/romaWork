@@ -54,6 +54,20 @@ const SupabaseProvider = {
       ends_at: new Date(l.ends_at),
     }));
   },
+  // Záznamy jednoho stolu v rozsahu (od–do včetně) – další termíny téže série.
+  async getRoomLessons(roomId, start, end) {
+    let q = this._init().from("lesson_details").select("*")
+      .gte("starts_at", start.toISOString())
+      .lte("starts_at", end.toISOString());
+    q = roomId ? q.eq("room_id", roomId) : q.is("room_id", null);
+    const { data, error } = await q.order("starts_at");
+    if (error) throw error;
+    return data.map((l) => ({ ...l, starts_at: new Date(l.starts_at), ends_at: new Date(l.ends_at) }));
+  },
+  async setRoomColor(id, color) {
+    const { error } = await this._init().from("rooms").update({ color }).eq("id", id);
+    if (error) throw error;
+  },
   // Částečná úprava (lektor): jen sloupce v tabulce lessons.
   async updateLessonFields(id, fields) {
     const { error } = await this._init().from("lessons").update(fields).eq("id", id);
@@ -473,6 +487,7 @@ function renderToolbar() {
   document.getElementById("kartotekaBtn").classList.toggle("hidden", !isAdmin());
   document.getElementById("lektoriBtn").classList.toggle("hidden", !isStaff());
   document.getElementById("usersBtn").classList.toggle("hidden", !isStaff());
+  document.getElementById("settingsBtn").classList.toggle("hidden", !isStaff());
   document.querySelectorAll(".view-tabs button[data-view]").forEach((b) => {
     b.classList.toggle("active", b.dataset.view === state.view);
   });
@@ -900,7 +915,14 @@ function buildEvent(l, room) {
   // Mimořádná lekce je celá žlutá – barvu místnosti u ní nepotřebujeme,
   // tu nese už sloupec, ve kterém blok stojí. Barvu dává třída .is-extra,
   // proto se tady inline pozadí nenastavuje (jinak by CSS přebilo).
-  if (!extra) ev.style.background = room.color;
+  // Barvu stolu si jde změnit v Nastavení, takže i písmo v bloku se musí řídit
+  // podle ní – bílé na světlé barvě by nešlo přečíst.
+  if (!extra) {
+    ev.style.background = room.color;
+    const fg = headTextColor(room.color);
+    ev.style.color = fg;
+    if (fg !== "#fff") ev.style.textShadow = "none";
+  }
 
   // Pevné pořadí řádků: příjmení / jméno / lektor / předmět / poznámka.
   // U hodinové a delší lekce jsou první čtyři VŽDY vidět – výška hodiny se
@@ -1136,7 +1158,7 @@ function renderAdminForm(l, title) {
         '<div class="role-note">Proužek se v rozvrhu zvýrazní žlutě a dostane hvězdičku. ' +
         "Hlavních lektorů může být v jednom dni víc – hvězdička se ostatním nesundává.</div>" +
       "</div>" +
-      field(shift ? "Poznámka" : "Popis – co se na lekci dělalo", '<textarea id="fDesc">' + escapeHtml(l.description || "") + "</textarea>") +
+      field("Poznámka", '<textarea id="fDesc">' + escapeHtml(l.description || "") + "</textarea>") +
     "</div>" +
 
     '<details class="detail-more"' + (shift ? " open" : "") + ">" +
@@ -1168,7 +1190,12 @@ function renderAdminForm(l, title) {
   if (!shift) bindStudentRows();
   document.getElementById("fMode").onchange = (e) => swapRoomForMode(e.target.value);
 
-  document.getElementById("detailDelete").classList.toggle("hidden", !state.openLessonId);
+  // „Tuhle a budoucí" má smysl jen u už založeného zápisu.
+  const existing = !!state.openLessonId;
+  document.getElementById("detailDelete").classList.toggle("hidden", !existing);
+  document.getElementById("detailDeleteFuture").classList.toggle("hidden", !existing);
+  document.getElementById("detailFutureWrap").classList.toggle("hidden", !existing);
+  document.getElementById("detailFuture").checked = false;
   document.getElementById("detailSaved").textContent = "";
 }
 
@@ -1546,7 +1573,7 @@ function renderLektorForm(l) {
   const room = roomById(l.room_id);
   document.getElementById("detailTitle").textContent = l.student_names || "Lekce";
   document.getElementById("detailBody").innerHTML =
-    '<div class="role-note">Jako lektor můžeš zapsat popis a potvrdit, že lekce proběhla. Rozvrh mění administrátor.</div>' +
+    '<div class="role-note">Jako lektor můžeš zapsat poznámku a potvrdit, že lekce proběhla. Rozvrh mění administrátor.</div>' +
     lektorStudentsHtml(l) +
     metaRow("Předmět", escapeHtml(l.subject || "—")) +
     metaRow("Lektor", escapeHtml(l.lector_name || "—")) +
@@ -1555,9 +1582,11 @@ function renderLektorForm(l) {
     metaRow("Režim", l.mode === "online" ? "Online" : "Osobní") +
     metaRow("Stav", STATUS_LABELS[l.status] || l.status) +
     '<label class="check"><input type="checkbox" id="fDone"' + (l.done ? " checked" : "") + "> Lekce proběhla (potvrzuji)</label>" +
-    field("Popis – co se na lekci dělalo", '<textarea id="fDesc" placeholder="Např.: Procvičili jsme kvadratické rovnice, zadán domácí úkol…">' + escapeHtml(l.description || "") + "</textarea>");
+    field("Poznámka", '<textarea id="fDesc" placeholder="Např.: Procvičili jsme kvadratické rovnice, zadán domácí úkol…">' + escapeHtml(l.description || "") + "</textarea>");
 
   document.getElementById("detailDelete").classList.add("hidden");
+  document.getElementById("detailDeleteFuture").classList.add("hidden");
+  document.getElementById("detailFutureWrap").classList.add("hidden");
   document.getElementById("detailSaved").textContent = "";
 }
 
@@ -1628,7 +1657,18 @@ async function saveDetail() {
         lesson_type: shift ? null : document.getElementById("fLessonType").value,
       };
       const isNewLesson = !state.openLessonId;
+      // Původní podoba je potřeba až po uložení, tak si ji vezmeme teď.
+      const orig = isNewLesson ? null : state.lessons.find((x) => x.id === state.openLessonId);
+      const withFuture = !!orig && document.getElementById("detailFuture").checked;
       await provider.saveLesson(payload, state.openLessonId);
+
+      if (withFuture) {
+        const r = await applyToFuture(orig, payload);
+        toast(r.changed || r.skipped
+          ? "Změněno i " + r.changed + " " + termWord(r.changed) + " dopředu" +
+            (r.skipped ? ", " + r.skipped + " přeskočeno kvůli kolizi" : "") + "."
+          : "Další termíny v příštím měsíci nejsou, změnil se jen tenhle.");
+      }
 
       // Klasická (opakovaná) lekce i zápis lektora u stolu se rovnou
       // naplánují na několik týdnů dopředu – stejný den v týdnu i čas.
@@ -1672,6 +1712,124 @@ async function saveDetail() {
 // platit mohla jen jedna. V provozu ale službu běžně drží dva lidi (jeden
 // dopoledne, druhý odpoledne, nebo každý jiné patro), takže se dnes žádná
 // hvězdička nesundává. Vypnout ji jde jen ručně v detailu daného proužku.
+
+// ---------- Tuhle a budoucí ----------
+// Lekce v databázi nenesou žádné číslo série, jsou to samostatné řádky. Série
+// se proto pozná podle toho, co mají termíny společné: stejný druh zápisu,
+// stůl, režim, den v týdnu, čas od–do, lektor a žáci. Díky tomu to funguje
+// i pro všechno, co už v rozvrhu je. Odučené termíny se nikdy nemění ani
+// nemažou – visí na nich hodiny lektora a kredit žáka.
+const SERIES_EDIT_MONTHS = 1;   // úprava „i budoucí" sahá měsíc dopředu
+const SERIES_DELETE_YEARS = 2;  // mazání „i budoucí" bere všechno, co je v rozvrhu
+
+function hhmm(d) { return d.getHours() * 60 + d.getMinutes(); }
+
+function sameSeries(a, b) {
+  return (a.kind || "lesson") === (b.kind || "lesson") &&
+    (a.room_id || null) === (b.room_id || null) &&
+    (a.mode || "offline") === (b.mode || "offline") &&
+    a.starts_at.getDay() === b.starts_at.getDay() &&
+    hhmm(a.starts_at) === hhmm(b.starts_at) &&
+    hhmm(a.ends_at) === hhmm(b.ends_at) &&
+    String(a.lector_name || "").trim() === String(b.lector_name || "").trim() &&
+    String(a.student_names || "") === String(b.student_names || "");
+}
+
+// Další neodučené termíny téže série po tomhle termínu, nejpozději do `until`.
+async function futureSeries(base, until) {
+  const from = new Date(base.starts_at.getTime() + 60000);
+  const list = await provider.getRoomLessons(base.room_id, from, until);
+  return list.filter((o) => o.id !== base.id && !o.done && sameSeries(base, o));
+}
+
+// Promítne úpravu jednoho termínu do dalších v následujícím měsíci. Předmět,
+// poznámka a druh lekce se přepíšou jen tehdy, když je někdo opravdu změnil –
+// jinak by jednorázová poznámka k jednomu termínu smazala ty ostatní.
+async function applyToFuture(orig, payload) {
+  const until = new Date(orig.starts_at);
+  until.setMonth(until.getMonth() + SERIES_EDIT_MONTHS);
+  const list = await futureSeries(orig, until);
+
+  const midnight = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dayShift = Math.round((midnight(payload.starts_at) - midnight(orig.starts_at)) / 86400000);
+  const changedField = (key, fallback) => (payload[key] || "") !== (orig[key] || "") ? payload[key] : fallback;
+  const shift = (orig.kind || "lesson") === "shift";
+
+  let changed = 0, skipped = 0;
+  for (const o of list) {
+    const place = (src) => {
+      const d = new Date(o.starts_at);
+      d.setDate(d.getDate() + dayShift);
+      d.setHours(src.getHours(), src.getMinutes(), 0, 0);
+      return d;
+    };
+    const starts = place(payload.starts_at);
+    const ends = place(payload.ends_at);
+    try {
+      const others = (await provider.getLessons(starts)).filter((x) => x.id !== o.id);
+      const clash = shift
+        ? sameShiftExists(others, payload.room_id, starts, payload.lector_name)
+        : findConflict(others, payload.room_id, starts, ends, null);
+      if (clash) { skipped++; continue; }
+      await provider.saveLesson({
+        kind: o.kind || "lesson",
+        starts_at: starts,
+        ends_at: ends,
+        room_id: payload.room_id,
+        mode: payload.mode,
+        lector_name: payload.lector_name,
+        student_names: payload.student_names,
+        students: stripStudentFields(payload.students),
+        subject: changedField("subject", o.subject),
+        description: changedField("description", o.description),
+        lesson_type: changedField("lesson_type", o.lesson_type),
+        is_lead: shift && payload.is_lead !== !!orig.is_lead ? payload.is_lead : !!o.is_lead,
+        status: o.status,
+        done: false,
+      }, o.id);
+      changed++;
+    } catch (e) { console.error(e); skipped++; }
+  }
+  return { changed, skipped };
+}
+
+function fmtDateShort(d) { return d.getDate() + ". " + (d.getMonth() + 1) + ". " + d.getFullYear(); }
+
+async function deleteDetailFuture() {
+  const id = state.openLessonId;
+  const l = state.lessons.find((x) => x.id === id);
+  if (!l) return;
+  const saved = document.getElementById("detailSaved");
+  const btn = document.getElementById("detailDeleteFuture");
+  btn.disabled = true;
+  try {
+    const until = new Date(l.starts_at);
+    until.setFullYear(until.getFullYear() + SERIES_DELETE_YEARS);
+    const list = await futureSeries(l, until);
+    const co = isShift(l) ? "tento zápis lektora u stolu" : "tuto lekci";
+    const dalsi = list.length === 1 ? "další termín" : list.length <= 4 ? "další termíny" : "dalších termínů";
+    if (!confirm(list.length
+      ? "Smazat " + co + " a " + list.length + " " + dalsi + " (poslední " +
+        fmtDateShort(list[list.length - 1].starts_at) + ")?\n\nOdučené termíny zůstanou."
+      : "Žádné další budoucí termíny nejsou. Smazat jen " + co + "?")) return;
+
+    await provider.deleteLesson(id);
+    let failed = 0;
+    for (const o of list) {
+      try { await provider.deleteLesson(o.id); }
+      catch (e) { console.error(e); failed++; }
+    }
+    await refresh();
+    closeDetail();
+    toast("Smazáno " + (1 + list.length - failed) + " " + termWord(1 + list.length - failed) +
+      (failed ? ", " + failed + " se nepodařilo" : "") + ".");
+  } catch (e) {
+    saved.textContent = "Chyba: " + (e.message || e);
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 async function deleteDetail() {
   const id = state.openLessonId;
@@ -2029,11 +2187,17 @@ const Accounts = {
 // píše česky sama. Tohle jen odchytí případ, kdy funkce v databázi ještě není
 // (nespuštěná migrace), aby uživatel nekoukal na "404" nebo anglickou hlášku.
 function dbErrorCz(error) {
-  const m = String((error && error.message) || error || "");
-  if (/Could not find the function|does not exist|schema cache/i.test(m)) {
+  if (isMissingFunction(error)) {
     return "Mazání účtů zatím není v databázi zapnuté – spusťte migrace_role_auditor.sql.";
   }
-  return m;
+  return String((error && error.message) || error || "");
+}
+
+// Funkce v databázi opravdu chybí jen při téhle konkrétní chybě. Nestačí
+// hledat „does not exist" – to napíše Postgres i při úplně jiném problému
+// uvnitř funkce a uživatel by pak marně pouštěl migraci.
+function isMissingFunction(error) {
+  return !!error && (error.code === "PGRST202" || /Could not find the function/i.test(String(error.message || "")));
 }
 
 async function openUsers() {
@@ -2180,6 +2344,126 @@ async function onCreateUser(e) {
   }
 }
 
+// ---------- Nastavení: barvy stolů a záloha dat ----------
+function openSettings() {
+  if (!isStaff()) return;
+  renderRoomColors();
+  document.getElementById("backupBox").classList.toggle("hidden", !isAdmin()); // jsou v ní platby
+  document.getElementById("backupMsg").textContent = "";
+  document.getElementById("settingsModal").classList.remove("hidden");
+}
+function closeSettings() { document.getElementById("settingsModal").classList.add("hidden"); }
+
+// Barvy se nastavují pro režim, který je zrovna otevřený v rozvrhu.
+function renderRoomColors() {
+  document.getElementById("colorsTitle").textContent =
+    "Barvy stolů – " + (state.modeFilter === "online" ? "online výuka" : "osobní výuka");
+  const grid = document.getElementById("colorsGrid");
+  grid.innerHTML = roomsForMode(state.modeFilter).map((r) =>
+    '<label class="color-row"><input type="color" data-room="' + escapeHtml(r.id) + '" value="' + escapeHtml(r.color) + '">' +
+    "<span>" + escapeHtml(r.name) + "</span></label>"
+  ).join("");
+  grid.querySelectorAll("input[type=color]").forEach((inp) => {
+    inp.onchange = async () => {
+      const room = roomById(inp.dataset.room);
+      const prev = room.color;
+      room.color = inp.value;
+      renderView();
+      try {
+        await provider.setRoomColor(room.id, inp.value);
+      } catch (e) {
+        room.color = prev;
+        inp.value = prev;
+        renderView();
+        toast("Barvu se nepodařilo uložit: " + (e.message || e));
+      }
+    };
+  });
+}
+
+// Záloha je jeden soubor JSON se všemi daty. Skládá ji databáze (funkce
+// export_snapshot), takže jsou všechny tabulky ze stejného okamžiku a nenarazí
+// se na limit 1000 řádků na dotaz.
+const Backup = {
+  _err(error) {
+    if (isMissingFunction(error)) return new Error("Zálohy zatím nejsou v databázi zapnuté – spusťte migrace_zalohy_oznaceni_oduceno.sql.");
+    return new Error(String((error && error.message) || error));
+  },
+  async create() {
+    const { data, error } = await SupabaseProvider._init().rpc("export_snapshot");
+    if (error) throw this._err(error);
+    return data;
+  },
+  async restore(snapshot) {
+    const { data, error } = await SupabaseProvider._init().rpc("restore_snapshot", { p_snapshot: snapshot });
+    if (error) throw this._err(error);
+    return data;
+  },
+  download(snapshot, prefix) {
+    const d = new Date();
+    const name = prefix + "-" + dayKey(d) + "-" + pad(d.getHours()) + pad(d.getMinutes()) + ".json";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(snapshot)], { type: "application/json" }));
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    return name;
+  },
+};
+
+async function onBackupDownload() {
+  const msg = document.getElementById("backupMsg");
+  const btn = document.getElementById("backupDownload");
+  btn.disabled = true;
+  msg.textContent = "Připravuji zálohu…";
+  try {
+    msg.textContent = "Staženo: " + Backup.download(await Backup.create(), "poradys-zaloha");
+  } catch (e) {
+    msg.textContent = "Chyba: " + (e.message || e);
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function onBackupFile(ev) {
+  const file = ev.target.files[0];
+  ev.target.value = ""; // ať jde vybrat stejný soubor znovu
+  if (!file) return;
+  const msg = document.getElementById("backupMsg");
+  msg.textContent = "";
+  try {
+    let snap;
+    try { snap = JSON.parse(await file.text()); }
+    catch (e) { throw new Error("Soubor se nedá přečíst – není to záloha z PoraDys."); }
+    if (!snap || snap.app !== "poradys-zaloha" || !snap.tables) throw new Error("Tohle není záloha z PoraDys.");
+
+    const t = snap.tables;
+    const kolik = (k) => (Array.isArray(t[k]) ? t[k].length : 0);
+    const answer = prompt(
+      "Obnovit zálohu z " + new Date(snap.created_at).toLocaleString("cs-CZ") + "?\n\n" +
+      "Lekcí: " + kolik("lessons") + ", klientů: " + kolik("students") + ", lektorů: " + kolik("lectors") +
+      ", plateb: " + kolik("payments") + ".\n\n" +
+      "VŠECHNA současná data v rozvrhu a kartotékách se nahradí obsahem zálohy.\n" +
+      "Přihlašovací účty se nemění. Současný stav se předtím sám stáhne do počítače.\n\n" +
+      "Pro potvrzení napište OBNOVIT:"
+    );
+    if (answer === null) return;
+    if (answer.trim().toUpperCase() !== "OBNOVIT") { msg.textContent = "Neobnovilo se – potvrzení nesouhlasilo."; return; }
+
+    // Pojistka: bez kopie současného stavu se nesmí nic přepsat.
+    msg.textContent = "Ukládám kopii současného stavu…";
+    Backup.download(await Backup.create(), "poradys-pred-obnovou");
+    msg.textContent = "Obnovuji…";
+    await Backup.restore(snap);
+    alert("Záloha je obnovená. Stránka se teď načte znovu.");
+    location.reload();
+  } catch (e) {
+    msg.textContent = "Chyba: " + (e.message || e);
+    console.error(e);
+  }
+}
+
 // Jména lektorů do našeptávače u pole „Lektor" v detailu lekce. Odučené
 // hodiny se párují podle jména, takže překlep = lektor, který v kartotéce
 // lektorů má hodin míň, než odučil (a vedle něj přibyla druhá, prázdná karta).
@@ -2239,6 +2523,7 @@ async function onLogout() {
   // Za přihlašovací vrstvou nesmí zůstat viset otevřený panel s daty klienta.
   closeDetail();
   document.getElementById("usersModal").classList.add("hidden");
+  document.getElementById("settingsModal").classList.add("hidden");
   document.getElementById("viewContainer").innerHTML = "";
   renderUserBadge();
 
@@ -2319,6 +2604,7 @@ async function startApp(user) {
     document.getElementById("detailClose").onclick = closeDetail;
     document.getElementById("detailSave").onclick = saveDetail;
     document.getElementById("detailDelete").onclick = deleteDetail;
+    document.getElementById("detailDeleteFuture").onclick = deleteDetailFuture;
     document.getElementById("newLessonBtn").onclick = () => openCreate("lesson");
     document.getElementById("newShiftBtn").onclick = () => openCreate("shift");
     document.getElementById("doneAllBtn").onclick = markDayDone;
@@ -2342,6 +2628,12 @@ async function startApp(user) {
     document.getElementById("usersClose").onclick = closeUsers;
     document.getElementById("newUserForm").onsubmit = onCreateUser;
     document.getElementById("usersModal").onclick = (e) => { if (e.target.id === "usersModal") closeUsers(); };
+    document.getElementById("settingsBtn").onclick = openSettings;
+    document.getElementById("settingsClose").onclick = closeSettings;
+    document.getElementById("settingsModal").onclick = (e) => { if (e.target.id === "settingsModal") closeSettings(); };
+    document.getElementById("backupDownload").onclick = onBackupDownload;
+    document.getElementById("backupRestore").onclick = () => document.getElementById("backupFile").click();
+    document.getElementById("backupFile").onchange = onBackupFile;
 
     // Při změně velikosti okna přepočítej výšku hodiny, ať se den pořád vejde.
     let _resizeT = null;
