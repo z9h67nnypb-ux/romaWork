@@ -4,23 +4,9 @@
 // Data: pohled student_credit + tabulky students a payments v Supabase.
 // Čerpání kreditu plní databázové triggery z rozvrhu – kartotéka jen čte,
 // co se odučilo, a zapisuje platby.
+// Společné pomůcky ($, db, escapeHtml, fmtH, showToast…) jsou ve spolecne.js.
 // ---------------------------------------------------------------------------
 
-const CFG = window.APP_CONFIG || {};
-const $ = (id) => document.getElementById(id);
-
-function escapeHtml(s) {
-  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-function fmtDateCz(iso) {
-  if (!iso) return "";
-  const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number);
-  return d + ". " + m + ". " + y;
-}
-function fmtH(n) {
-  const v = Math.round(Number(n) * 100) / 100;
-  return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1).replace(".", ","));
-}
 function balanceBand(b) { return b <= 0 ? "out" : b <= 3 ? "low" : "ok"; }
 function balanceLabel(b) { return b <= 0 ? "NÍZKÝ KREDIT" : b <= 3 ? "dochází" : "ok"; }
 
@@ -49,31 +35,13 @@ function flagOptions(selected) {
 
 // ---------- Provider: SUPABASE ----------
 const DbKt = {
-  client: null,
-  _c() {
-    if (!this.client) this.client = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
-    return this.client;
-  },
-  // Vrátí { role, active } přihlášeného, nebo null. Kartotéka je jen pro
-  // administrátora – lektor se sem umí dostat i přímou adresou, tak se role
-  // musí ověřit tady, ne jen schováním tlačítka v rozvrhu.
-  async session() {
-    const c = this._c();
-    const { data } = await c.auth.getSession();
-    if (!data || !data.session) return null;
-    const { data: p } = await c.from("profiles")
-      .select("*").eq("id", data.session.user.id).maybeSingle();
-    // Odebraný přístup (profiles.active = false) session rovnou zneplatní.
-    if (p && p.active === false) { try { await c.auth.signOut(); } catch (e) { console.error(e); } return null; }
-    return { name: (p && p.name) || data.session.user.email, role: (p && p.role) || "lektor" };
-  },
   async list() {
-    const { data, error } = await this._c().from("student_credit").select("*").order("name");
+    const { data, error } = await db().from("student_credit").select("*").order("name");
     if (error) throw error;
     return data.map((r) => ({ ...r, id: r.student_id }));
   },
   async getCard(id) {
-    const c = this._c();
+    const c = db();
     const [st, cr, pay, att] = await Promise.all([
       c.from("students").select("*").eq("id", id).single(),
       c.from("student_credit").select("*").eq("student_id", id).single(),
@@ -84,7 +52,6 @@ const DbKt = {
     const lessons = (att.data || [])
       .map((a) => a.lessons).filter(Boolean)
       .map((l) => ({
-        date: String(l.starts_at).slice(0, 16).replace("T", " "),
         starts: l.starts_at,
         subject: l.subject || "—",
         lector: (l.lectors && l.lectors.name) || "—",
@@ -95,24 +62,8 @@ const DbKt = {
       .slice(0, 60);
     return { student: st.data, credit: cr.data, payments: pay.data || [], lessons };
   },
-  // Sloupce contacted a problem přidává migrace_zalohy_oznaceni_oduceno.sql.
-  // Bez ní by neuložila celá karta – tak se vynechají a saveCard upozorní.
-  missingMarks: false,
   async saveStudent(fields, id) {
-    try {
-      return await this._saveStudent(fields, id);
-    } catch (e) {
-      if (!/'(contacted|problem)' column/.test(String((e && e.message) || e))) throw e;
-      this.missingMarks = true;
-      const rest = Object.assign({}, fields);
-      delete rest.contacted;
-      delete rest.problem;
-      if (!Object.keys(rest).length) throw new Error("Nejdřív je potřeba spustit migrace_zalohy_oznaceni_oduceno.sql.");
-      return await this._saveStudent(rest, id);
-    }
-  },
-  async _saveStudent(fields, id) {
-    const c = this._c();
+    const c = db();
     if (id) {
       const { error } = await c.from("students").update(fields).eq("id", id);
       if (error) throw error;
@@ -123,17 +74,17 @@ const DbKt = {
     return data.id;
   },
   async addPayment(p) {
-    const { error } = await this._c().from("payments").insert(p);
+    const { error } = await db().from("payments").insert(p);
     if (error) throw error;
   },
   async deletePayment(id) {
-    const { error } = await this._c().from("payments").delete().eq("id", id);
+    const { error } = await db().from("payments").delete().eq("id", id);
     if (error) throw error;
   },
   // Smaže klienta úplně i s platbami, kreditem a testy (funkce delete_student).
   // dryRun = jen spočítá, co by zmizelo – do potvrzovacího okna.
   async deleteStudent(id, dryRun) {
-    const { data, error } = await this._c().rpc("delete_student", { p_student: id, p_dry_run: !!dryRun });
+    const { data, error } = await db().rpc("delete_student", { p_student: id, p_dry_run: !!dryRun });
     if (error) {
       // Jen tahle chyba znamená, že funkce chybí. Hledat „does not exist" nestačí:
       // Postgres to napíše i při jiném problému uvnitř funkce a hláška o migraci
@@ -145,7 +96,6 @@ const DbKt = {
     }
     return data || {};
   },
-
 };
 
 const kt = DbKt;
@@ -175,11 +125,10 @@ function czkFmt(n) { return Math.round(n).toLocaleString("cs-CZ") + " Kč"; }
 // hodiny. Platba o 2 hodinách částku zvedne o 2× cenu, odučená hodina ji
 // o jednu cenu sníží. Klient, který jede na dluh, ji snižuje taky.
 function owedCzk(r) { return Number(r.balance_hours || 0) * Number(r.price_hour || 0); }
-function clientWord(n) { return n === 1 ? "klient" : n >= 2 && n <= 4 ? "klienti" : "klientů"; }
+function clientWord(n) { return plural(n, "klient", "klienti", "klientů"); }
 // „1 aktivní klient" / „3 aktivní klienti" / „7 aktivních klientů"
 function activeClients(n) {
-  const adj = n === 1 ? "aktivní" : n >= 2 && n <= 4 ? "aktivní" : "aktivních";
-  return n + " " + adj + " " + clientWord(n);
+  return n + " " + plural(n, "aktivní", "aktivní", "aktivních") + " " + clientWord(n);
 }
 
 function renderMoney() {
@@ -213,7 +162,6 @@ function renderMoney() {
     el.onclick = () => {
       openMethod = openMethod === el.dataset.method ? null : el.dataset.method;
       renderMoney();
-      renderMethodDetail();
     };
   });
   renderMethodDetail();
@@ -374,62 +322,10 @@ async function refreshList() {
 }
 
 // ---------- Karta klienta ----------
-function fieldHtml(label, inner) {
-  return '<div class="field"><label>' + label + "</label>" + inner + "</div>";
-}
-function inp(id, val, ph) {
-  return '<input type="text" id="' + id + '" value="' + escapeHtml(val || "") + '"' + (ph ? ' placeholder="' + ph + '"' : "") + ">";
-}
 function methodOptions(sel) {
   return '<option value="">—</option>' + PAY_METHODS.map((m) =>
     '<option value="' + m + '"' + (m === (sel || "") ? " selected" : "") + ">" + m + "</option>").join("") +
     (sel && !PAY_METHODS.includes(sel) ? '<option value="' + escapeHtml(sel) + '" selected>' + escapeHtml(sel) + "</option>" : "");
-}
-
-// Odhlášení. Session je společná pro rozvrh, kartotéku i diagnostiku, takže
-// se ruší stejně jako v rozvrhu; pak se jde na rozvrh, kde naskočí přihlášení.
-// signOut() jde po síti a umí se při výpadku zaseknout, ne spadnout – proto
-// se na něj čeká jen omezeně a session se tak jako tak smaže z prohlížeče.
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("Vypršel čas čekání na server.")), ms)),
-  ]);
-}
-
-function clearLocalAuth() {
-  try { sessionStorage.removeItem("poradys_user"); } catch (e) { /* privátní režim */ }
-  try {
-    Object.keys(localStorage)
-      .filter((k) => /^sb-.*-auth-token/.test(k))
-      .forEach((k) => localStorage.removeItem(k));
-  } catch (e) { /* privátní režim */ }
-}
-
-async function pageLogout(btn, client) {
-  if (btn) btn.disabled = true;
-  // Ze stránky stejně odcházíme, tak se na server čeká jen chvilku – když
-  // neodpoví, odhlásí se to lokálně a jde se dál. Zaseknout se to nesmí.
-  if (client) {
-    try {
-      const { error } = await withTimeout(client.auth.signOut(), 2500);
-      if (error) throw error;
-    } catch (e) {
-      console.error(e);
-    }
-  }
-  clearLocalAuth();
-  location.href = "index.html" + location.search;
-}
-
-let _toastTimer = null;
-function ktToast(msg) {
-  const t = $("toast");
-  if (!t) return;
-  t.textContent = msg;
-  t.classList.remove("hidden");
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => t.classList.add("hidden"), 4000);
 }
 
 async function openCardPanel(id) {
@@ -474,8 +370,6 @@ function renderCard() {
     fieldHtml("Telefon", inp("kPhone", s.phone)) +
     fieldHtml("Kategorie", inp("kCategory", s.category, "ZŠ / SŠ…")) +
     fieldHtml("Třída / ročník", inp("kGrade", s.grade)) +
-    // Škola se ukazuje i v diagnostice u karty žáka.
-    fieldHtml("Škola", inp("kSchool", s.school, "Např. ZŠ Norská, Kladno")) +
     fieldHtml("Předměty", inp("kSubjects", s.subjects, "např. ČJ, MAT")) +
     fieldHtml("Lektor/ka", inp("kLector", s.lector_name)) +
     fieldHtml("Cena Kč/hod", '<input type="number" id="kPrice" value="' + (s.price_hour || "") + '">') +
@@ -528,7 +422,7 @@ function renderCard() {
       const MONTHS = ["ledna","února","března","dubna","května","června","července","srpna","září","října","listopadu","prosince"];
       lessonsHtml += '<div class="lessons-scroll">';
       openCard.lessons.forEach((l) => {
-        const d = new Date(l.starts || l.date.replace(" ", "T"));
+        const d = new Date(l.starts);
         const mKey = d.getFullYear() + "-" + d.getMonth();
         if (mKey !== lastMonth) {
           lastMonth = mKey;
@@ -603,7 +497,6 @@ async function saveCard() {
     phone: $("kPhone").value.trim() || null,
     category: $("kCategory").value.trim() || null,
     grade: $("kGrade").value.trim() || null,
-    school: $("kSchool").value.trim() || null,
     subjects: $("kSubjects").value.trim() || null,
     lector_name: $("kLector").value.trim() || null,
     price_hour: Number($("kPrice").value) || null,
@@ -627,16 +520,14 @@ async function saveCard() {
       // Platbu přidáte otevřením klienta v seznamu, kam právě přibyl.
       closeCard();
       await refreshList();
-      ktToast("Klient „" + name + "\u201c uložen. Kredit hodin přidáte otevřením jeho karty.");
+      showToast("Klient „" + name + "\u201c uložen. Kredit hodin přidáte otevřením jeho karty.");
       return;
     }
 
     openCard = await kt.getCard(id);
     renderCard();
     await refreshList();
-    $("cardSaved").textContent = "Uloženo ✓" + (kt.missingMarks
-      ? " Kontaktováno a problémový se neuložily – v databázi chybí migrace_zalohy_oznaceni_oduceno.sql."
-      : "");
+    $("cardSaved").textContent = "Uloženo ✓";
   } catch (e) {
     $("cardSaved").textContent = "Chyba: " + (e.message || e);
   } finally {
@@ -649,8 +540,8 @@ async function saveCard() {
 // v potvrzení – platby jsou finanční záznam a po smazání nejdou dohledat.
 // Proběhlé lekce v rozvrhu zůstávají (lektor je odučil a hodiny mu patří),
 // jen bez jména klienta.
-function paymentWord(n) { return n === 1 ? "platba" : n >= 2 && n <= 4 ? "platby" : "plateb"; }
-function testWord(n) { return n === 1 ? "diagnostický test" : n >= 2 && n <= 4 ? "diagnostické testy" : "diagnostických testů"; }
+function paymentWord(n) { return plural(n, "platba", "platby", "plateb"); }
+function testWord(n) { return plural(n, "diagnostický test", "diagnostické testy", "diagnostických testů"); }
 
 async function deleteCard() {
   if (!openId) return;
@@ -664,7 +555,7 @@ async function deleteCard() {
     if (info.payments) co.push("• " + info.payments + " " + paymentWord(info.payments) + " a celý kredit hodin");
     if (info.future_lessons) {
       const f = info.future_lessons;
-      co.push("• " + f + " " + (f === 1 ? "lekce naplánovaná" : f <= 4 ? "lekce naplánované" : "lekcí naplánovaných") +
+      co.push("• " + f + " " + plural(f, "lekce naplánovaná", "lekce naplánované", "lekcí naplánovaných") +
         " dopředu, kde je sám (ze skupinových lekcí jen vypadne)");
     }
     if (info.tests) co.push("• " + info.tests + " " + testWord(info.tests));
@@ -679,7 +570,7 @@ async function deleteCard() {
     await kt.deleteStudent(openId, false);
     closeCard();
     await refreshList();
-    ktToast("Klient „" + name + "“ smazán.");
+    showToast("Klient „" + name + "“ smazán.");
   } catch (e) {
     $("cardSaved").textContent = "Chyba: " + (e.message || e);
   } finally {
@@ -692,8 +583,7 @@ function exportCsv() {
   const cols = ["Klient", "Telefon", "Kategorie", "Třída/ročník", "Škola", "Předměty", "Lektor/ka",
     "Cena Kč/hod", "Způsob platby", "Zaplaceno hodin", "Zaplaceno Kč",
     "Vyčerpáno hodin", "Zůstatek hodin", "Neodučeno Kč", "Upozornění", "Kontaktováno", "Problémový", "Stav", "Poznámka"];
-  const esc = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
-  const lines = [cols.map(esc).join(";")];
+  const lines = [cols];
   visibleRows().forEach((r) => {
     lines.push([
       r.name, r.phone, r.category, r.grade, r.school, r.subjects, r.lector_name,
@@ -703,15 +593,9 @@ function exportCsv() {
       Number(r.balance_hours) <= 0 ? "NÍZKÝ KREDIT" : "ok",
       r.contacted ? "ano" : "", r.problem ? "ano" : "",
       r.status === "former" ? "bývalý" : "aktivní", r.note,
-    ].map(esc).join(";"));
+    ]);
   });
-  // BOM kvůli češtině v Excelu
-  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "kartoteka-" + new Date().toISOString().slice(0, 10) + ".csv";
-  a.click();
-  URL.revokeObjectURL(a.href);
+  downloadCsv("kartoteka-" + new Date().toISOString().slice(0, 10) + ".csv", lines);
 }
 
 // ---------- Hromadný import ----------
@@ -751,10 +635,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("backLink").href = "index.html" + location.search;
 
   // Tlačítko se váže hned – nepřihlášenému se schová, odhlašovat nemá co.
-  $("ktLogout").onclick = () => pageLogout($("ktLogout"), DbKt._c());
+  $("ktLogout").onclick = () => pageLogout($("ktLogout"));
 
   const badge = $("storeBadge");
-  const session = await DbKt.session();
+  const session = await currentUser();
   if (!session) {
     $("lockedBox").classList.remove("hidden");
     $("mainBox").classList.add("hidden");

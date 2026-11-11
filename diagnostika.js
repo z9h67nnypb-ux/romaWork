@@ -168,51 +168,25 @@ function overallAssessment(pct) {
 }
 
 const ORG_NAME = "PoraDys – Vzdělávací centrum Kladno";
-const $ = (id) => document.getElementById(id);
+// Společné pomůcky ($, db, escapeHtml, fmtDateCz…) jsou ve spolecne.js.
 
-function escapeHtml(s) {
-  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-function fmtDateCz(iso) {
-  if (!iso) return "";
-  const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number);
-  return d + ". " + m + ". " + y;
-}
 function today() { return new Date().toISOString().slice(0, 10); }
 // Česká shoda po číslovce: 1 test / 2–4 testy / 5+ testů
-function testWord(n) { return n === 1 ? "test" : n >= 2 && n <= 4 ? "testy" : "testů"; }
+function testWord(n) { return plural(n, "test", "testy", "testů"); }
 
 // ---------------------------------------------------------------------------
 // Úložiště: Supabase (tabulky students a diagnostics)
 // ---------------------------------------------------------------------------
-const CFG = window.APP_CONFIG || {};
 const DbStore = {
-  client: null,
-  _c() {
-    if (!this.client) this.client = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
-    return this.client;
-  },
-  // Vrátí { name, role } přihlášeného, nebo null když nikdo přihlášený není.
-  async me() {
-    const c = this._c();
-    const { data } = await c.auth.getSession();
-    if (!data.session) return null;
-    const user = data.session.user;
-    const { data: p } = await c.from("profiles").select("*").eq("id", user.id).maybeSingle();
-    // Účet, kterému administrátor odebral přístup (profiles.active = false),
-    // se sem nesmí dostat ani se starou session z prohlížeče.
-    if (p && p.active === false) { try { await c.auth.signOut(); } catch (e) { console.error(e); } return null; }
-    return { name: (p && p.name) || user.email, role: (p && p.role) || "lektor" };
-  },
   async listStudents() {
-    const { data, error } = await this._c().from("students")
+    const { data, error } = await db().from("students")
       .select("id, name, school, grade, category, subjects, lector_name, phone, status")
       .order("name");
     if (error) throw error;
     return data;
   },
   async listTests() {
-    const { data, error } = await this._c().from("diagnostics")
+    const { data, error } = await db().from("diagnostics")
       .select("id, student_id, student_name, subject, grade, taken_at, note, scores")
       .not("student_id", "is", null)
       .order("taken_at", { ascending: true });
@@ -220,12 +194,12 @@ const DbStore = {
     return data.map(fromDbRow);
   },
   async addStudent(fields) {
-    const { data, error } = await this._c().from("students").insert(fields).select("*").single();
+    const { data, error } = await db().from("students").insert(fields).select("*").single();
     if (error) throw error;
     return data;
   },
   async addTest(entry, ev, plan) {
-    const { data, error } = await this._c().from("diagnostics").insert({
+    const { data, error } = await db().from("diagnostics").insert({
       student_id: entry.student_id,
       student_name: entry.student_name,
       subject: entry.subject,
@@ -241,7 +215,7 @@ const DbStore = {
     return fromDbRow(data);
   },
   async removeTest(id) {
-    const { error } = await this._c().from("diagnostics").delete().eq("id", id);
+    const { error } = await db().from("diagnostics").delete().eq("id", id);
     if (error) throw error;
   },
 
@@ -250,14 +224,14 @@ const DbStore = {
   // list ke „Zlomkům" jednou a od té chvíle ho u sebe vidí každý žák, kterému
   // zlomky podle testu nejdou.
   async listMaterials() {
-    const { data, error } = await this._c().from("materials")
+    const { data, error } = await db().from("materials")
       .select("id, subject, area_key, title, note, storage_path, url, file_name, file_size, created_at")
       .order("created_at");
     if (error) throw error;
     return data || [];
   },
   async addMaterial(row, file) {
-    const c = this._c();
+    const c = db();
     let storage_path = null;
     if (file) {
       // Cesta drží předmět a oblast, ať se v úložišti dá vyznat i ručně.
@@ -285,7 +259,7 @@ const DbStore = {
     return data;
   },
   async removeMaterial(m) {
-    const c = this._c();
+    const c = db();
     const { error } = await c.from("materials").delete().eq("id", m.id);
     if (error) throw new Error(dbErrorCz(error));
     // Soubor až po řádku: kdyby se smazání řádku nepovedlo, ať nezmizí obsah.
@@ -298,7 +272,7 @@ const DbStore = {
   // někdo klikne, a po chvíli propadne.
   async materialUrl(m) {
     if (m.url) return m.url;
-    const { data, error } = await this._c().storage.from(MAT_BUCKET)
+    const { data, error } = await db().storage.from(MAT_BUCKET)
       .createSignedUrl(m.storage_path, 300);
     if (error) throw new Error(storageErrorCz(error.message));
     return data.signedUrl;
@@ -1380,45 +1354,6 @@ function printReport() {
 }
 
 // ---------------------------------------------------------------------------
-// Odhlášení
-// ---------------------------------------------------------------------------
-// Odhlášení. Session je společná pro rozvrh, kartotéku i diagnostiku, takže
-// se ruší stejně jako v rozvrhu; pak se jde na rozvrh, kde naskočí přihlášení.
-// signOut() jde po síti a umí se při výpadku zaseknout, ne spadnout – proto
-// se na něj čeká jen omezeně a session se tak jako tak smaže z prohlížeče.
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("Vypršel čas čekání na server.")), ms)),
-  ]);
-}
-
-function clearLocalAuth() {
-  try { sessionStorage.removeItem("poradys_user"); } catch (e) { /* privátní režim */ }
-  try {
-    Object.keys(localStorage)
-      .filter((k) => /^sb-.*-auth-token/.test(k))
-      .forEach((k) => localStorage.removeItem(k));
-  } catch (e) { /* privátní režim */ }
-}
-
-async function pageLogout(btn, client) {
-  if (btn) btn.disabled = true;
-  // Ze stránky stejně odcházíme, tak se na server čeká jen chvilku – když
-  // neodpoví, odhlásí se to lokálně a jde se dál. Zaseknout se to nesmí.
-  if (client) {
-    try {
-      const { error } = await withTimeout(client.auth.signOut(), 2500);
-      if (error) throw error;
-    } catch (e) {
-      console.error(e);
-    }
-  }
-  clearLocalAuth();
-  location.href = "index.html" + location.search;
-}
-
-// ---------------------------------------------------------------------------
 // Inicializace
 // ---------------------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", async () => {
@@ -1426,7 +1361,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("lockedLink").href = "index.html" + location.search;
 
   let me = null;
-  try { me = await Store.me(); } catch (e) { console.error(e); }
+  try { me = await currentUser(); } catch (e) { console.error(e); }
   if (!me) {
     $("lockedBox").classList.remove("hidden");
     return;
@@ -1434,7 +1369,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   state.role = ["admin", "auditor"].includes(me.role) ? me.role : "lektor";
   state.userName = me.name || "";
   $("mainBox").classList.remove("hidden");
-  $("diagLogout").onclick = () => pageLogout($("diagLogout"), DbStore._c());
+  $("diagLogout").onclick = () => pageLogout($("diagLogout"));
 
   const badge = $("storeBadge");
   badge.textContent = "databáze";

@@ -12,31 +12,11 @@
 // lektora (k lekci nebo k zápisu „lektor u stolu"), appka na něj v `lectors`
 // založí řádek. Tady se pak jen dovyplní zbytek údajů.
 //
-// Tahle stránka nahradila zrušené tlačítko „Výkaz hodin" v rozvrhu – čísla
-// jsou pořád stejná, jen stojí vedle zbytku údajů o lektorovi.
+// Společné pomůcky ($, db, escapeHtml, fmtH, showToast…) jsou ve spolecne.js.
 // ---------------------------------------------------------------------------
 
-const CFG = window.APP_CONFIG || {};
-const $ = (id) => document.getElementById(id);
-
-function escapeHtml(s) {
-  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-function fmtDateCz(iso) {
-  if (!iso) return "";
-  const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number);
-  return d + ". " + m + ". " + y;
-}
-// Hodiny bez zbytečných nul: 12 / 12,5
-function fmtH(n) {
-  const v = Math.round(Number(n || 0) * 100) / 100;
-  return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1).replace(".", ","));
-}
-const MONTHS = ["Leden", "Únor", "Březen", "Duben", "Květen", "Červen",
-  "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec"];
-
-function lectorWord(n) { return n === 1 ? "lektor" : n >= 2 && n <= 4 ? "lektoři" : "lektorů"; }
-function dayWord(n) { return n === 1 ? "den" : n >= 2 && n <= 4 ? "dny" : "dní"; }
+function lectorWord(n) { return plural(n, "lektor", "lektoři", "lektorů"); }
+function dayWord(n) { return plural(n, "den", "dny", "dní"); }
 
 // Klíče od pobočky – jedna hodnota ze tří (viz migrace_kartoteka_lektoru.sql).
 const KEY_SETS = [
@@ -106,25 +86,8 @@ function contractRange(r) {
 
 // ---------- Provider: SUPABASE ----------
 const DbLek = {
-  client: null,
-  _c() {
-    if (!this.client) this.client = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
-    return this.client;
-  },
-  // Vrátí { name, role } přihlášeného, nebo null. Roli je nutné ověřit tady,
-  // ne jen schováním tlačítka v rozvrhu – na stránku se dá jít i adresou.
-  async session() {
-    const c = this._c();
-    const { data } = await c.auth.getSession();
-    if (!data || !data.session) return null;
-    const { data: p } = await c.from("profiles")
-      .select("*").eq("id", data.session.user.id).maybeSingle();
-    // Odebraný přístup (profiles.active = false) session rovnou zneplatní.
-    if (p && p.active === false) { try { await c.auth.signOut(); } catch (e) { console.error(e); } return null; }
-    return { name: (p && p.name) || data.session.user.email, role: (p && p.role) || "lektor" };
-  },
   async list() {
-    const { data, error } = await this._c().from("lectors").select("*").order("name");
+    const { data, error } = await db().from("lectors").select("*").order("name");
     if (error) throw error;
     return data || [];
   },
@@ -132,7 +95,7 @@ const DbLek = {
   // – tak je počítá pohled, který sčítá work_log podle work_date).
   // `month` je 0-based jako v JS Date, pohled má 1-based.
   async monthHours(year, month) {
-    const { data, error } = await this._c().from("lector_monthly_hours")
+    const { data, error } = await db().from("lector_monthly_hours")
       .select("lector_id, lessons, hours, payout_czk")
       .eq("year", year).eq("month", month + 1);
     if (error) throw error;
@@ -142,7 +105,7 @@ const DbLek = {
   },
   // Historie po měsících pro jednoho lektora (do karty).
   async lectorHours(id) {
-    const { data, error } = await this._c().from("lector_monthly_hours")
+    const { data, error } = await db().from("lector_monthly_hours")
       .select("year, month, lessons, hours, payout_czk")
       .eq("lector_id", id)
       .order("year", { ascending: false })
@@ -158,7 +121,7 @@ const DbLek = {
   async monthLessons(id, year, month) {
     const iso = (y, m) => y + "-" + String(m + 1).padStart(2, "0") + "-01";
     const next = new Date(year, month + 1, 1);
-    const { data, error } = await this._c().from("work_log")
+    const { data, error } = await db().from("work_log")
       .select("work_date, minutes, subject, lessons(starts_at, ends_at, attendance(students(name)))")
       .eq("lector_id", id)
       .gte("work_date", iso(year, month))
@@ -178,25 +141,8 @@ const DbLek = {
       };
     }).sort((x, y) => x.date - y.date);
   },
-  // Začátek smlouvy a způsob výuky přidává migrace_smlouva_a_mazani.sql.
-  // Na databázi bez ní by uložení karty spadlo celé – tak se ty dva sloupce
-  // vynechají, zbytek se uloží a saveCard na to upozorní (missingCols).
-  missingCols: false,
   async saveLector(fields, id) {
-    try {
-      return await this._saveLector(fields, id);
-    } catch (e) {
-      const m = String((e && e.message) || e);
-      if (!/contract_from|teaching_mode/.test(m)) throw e;
-      this.missingCols = true;
-      const rest = Object.assign({}, fields);
-      delete rest.contract_from;
-      delete rest.teaching_mode;
-      return await this._saveLector(rest, id);
-    }
-  },
-  async _saveLector(fields, id) {
-    const c = this._c();
+    const c = db();
     if (id) {
       const { error } = await c.from("lectors").update(fields).eq("id", id);
       if (error) throw error;
@@ -209,7 +155,7 @@ const DbLek = {
   // Smaže lektora i s hodinami a zápisy u stolu (funkce delete_lector).
   // dryRun = jen spočítá, co by zmizelo – do potvrzovacího okna.
   async deleteLector(id, dryRun) {
-    const { data, error } = await this._c().rpc("delete_lector", { p_lector: id, p_dry_run: !!dryRun });
+    const { data, error } = await db().rpc("delete_lector", { p_lector: id, p_dry_run: !!dryRun });
     if (error) throw new Error(rpcErrorCz(error));
     return data || {};
   },
@@ -249,6 +195,8 @@ function visibleRows() {
 }
 
 function monthLabel() { return MONTHS[month.getMonth()] + " " + month.getFullYear(); }
+// Vybraný měsíc do názvu souboru: „2026-11".
+function monthFile() { return month.getFullYear() + "-" + String(month.getMonth() + 1).padStart(2, "0"); }
 
 // ---------- Přehled ----------
 function renderTable() {
@@ -359,55 +307,7 @@ function shiftMonth(delta) {
   refreshHours();
 }
 
-// ---------- Odhlášení (stejné jako v kartotéce klientů) ----------
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("Vypršel čas čekání na server.")), ms)),
-  ]);
-}
-
-function clearLocalAuth() {
-  try { sessionStorage.removeItem("poradys_user"); } catch (e) { /* privátní režim */ }
-  try {
-    Object.keys(localStorage)
-      .filter((k) => /^sb-.*-auth-token/.test(k))
-      .forEach((k) => localStorage.removeItem(k));
-  } catch (e) { /* privátní režim */ }
-}
-
-async function pageLogout(btn, client) {
-  if (btn) btn.disabled = true;
-  if (client) {
-    try {
-      const { error } = await withTimeout(client.auth.signOut(), 2500);
-      if (error) throw error;
-    } catch (e) {
-      console.error(e);
-    }
-  }
-  clearLocalAuth();
-  location.href = "index.html" + location.search;
-}
-
-let _toastTimer = null;
-function ktToast(msg) {
-  const t = $("toast");
-  if (!t) return;
-  t.textContent = msg;
-  t.classList.remove("hidden");
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => t.classList.add("hidden"), 4000);
-}
-
 // ---------- Karta lektora ----------
-function fieldHtml(label, inner, cls) {
-  return '<div class="field' + (cls ? " " + cls : "") + '"><label>' + label + "</label>" + inner + "</div>";
-}
-function inp(id, val, ph) {
-  return '<input type="text" id="' + id + '" value="' + escapeHtml(val || "") + '"' + (ph ? ' placeholder="' + escapeHtml(ph) + '"' : "") + ">";
-}
-
 async function openCardPanel(id) {
   openId = id;
   openHistory = [];
@@ -536,8 +436,7 @@ function renderCard() {
   if (csvBtn) csvBtn.onclick = exportLessonsCsv;
 }
 
-function pad2(n) { return String(n).padStart(2, "0"); }
-function hhmmCz(d) { return d.getHours() + ":" + pad2(d.getMinutes()); }
+function hhmmCz(d) { return d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0"); }
 // „14. 10. 15:00–16:30"; u prastarých záznamů bez lekce jen datum.
 function lessonWhen(x) {
   const den = x.date.getDate() + ". " + (x.date.getMonth() + 1) + ".";
@@ -545,25 +444,18 @@ function lessonWhen(x) {
 }
 
 function exportLessonsCsv() {
-  const esc = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
   const czNum = (v) => (Math.round(v * 100) / 100).toString().replace(".", ",");
-  const lines = [["Datum", "Od", "Do", "Žák", "Předmět", "Hodin"].map(esc).join(";")];
+  const lines = [["Datum", "Od", "Do", "Žák", "Předmět", "Hodin"]];
   openLessons.forEach((x) => {
     lines.push([
       x.date.getDate() + ". " + (x.date.getMonth() + 1) + ". " + x.date.getFullYear(),
       x.hasTime ? hhmmCz(x.date) : "", x.hasTime ? hhmmCz(x.end) : "",
       x.students, x.subject, czNum(x.hours),
-    ].map(esc).join(";"));
+    ]);
   });
-  lines.push(["Celkem", "", "", "", "", czNum(openLessons.reduce((s, x) => s + x.hours, 0))].map(esc).join(";"));
-  // BOM kvůli češtině v Excelu
-  const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  lines.push(["Celkem", "", "", "", "", czNum(openLessons.reduce((s, x) => s + x.hours, 0))]);
   const jmeno = String((openLector && openLector.name) || "lektor").replace(/[^\p{L}\p{N}]+/gu, "-");
-  a.download = "hodiny-" + jmeno + "-" + month.getFullYear() + "-" + pad2(month.getMonth() + 1) + ".csv";
-  a.click();
-  URL.revokeObjectURL(a.href);
+  downloadCsv("hodiny-" + jmeno + "-" + monthFile() + ".csv", lines);
 }
 
 async function saveCard() {
@@ -591,10 +483,6 @@ async function saveCard() {
   }
   const btn = $("cardSave");
   btn.disabled = true;
-  // Upozornění, když databáze ještě nezná nové sloupce (viz DbLek.saveLector).
-  const migrWarn = () => lek.missingCols
-    ? " Smlouva od a způsob výuky se neuložily – v databázi chybí migrace_smlouva_a_mazani.sql."
-    : "";
   try {
     const isNew = !openId;
     const id = await lek.saveLector(fields, openId);
@@ -602,14 +490,14 @@ async function saveCard() {
     if (isNew) {
       closeCard();
       await refreshList();
-      ktToast("Lektor „" + name + "“ uložen." + migrWarn());
+      showToast("Lektor „" + name + "“ uložen.");
       return;
     }
     await refreshList();
     openLector = rows.find((r) => r.id === id) || Object.assign({ id }, fields);
     try { openHistory = await lek.lectorHours(id); } catch (e) { console.error(e); }
     renderCard();
-    $("cardSaved").textContent = "Uloženo ✓" + migrWarn();
+    $("cardSaved").textContent = "Uloženo ✓";
   } catch (e) {
     // Jméno lektora je v databázi unikátní – páruje se podle něj rozvrh
     // i výkaz hodin, takže dvě karty se stejným jménem by hodiny rozpůlily.
@@ -626,10 +514,8 @@ async function saveCard() {
 // Nejdřív se databáze zeptá „nanečisto", co by zmizelo, a to se ukáže
 // v potvrzení. Odučené hodiny jsou podklad k výplatám – kdo je smaže, přijde
 // o ně nadobro, tak to musí být v okně napsané černé na bílém.
-// Tvar podle počtu: [1, 2–4, 5 a víc]. Čeština s číslem mění i sloveso,
-// takže se skloňuje celá věta, ne jen podstatné jméno.
-function plural(n, forms) { return n === 1 ? forms[0] : n >= 2 && n <= 4 ? forms[1] : forms[2]; }
-function lessonWordCz(n) { return plural(n, ["lekce", "lekce", "lekcí"]); }
+// Čeština s číslem mění i sloveso, takže se skloňuje celá věta, ne jen
+// podstatné jméno.
 
 async function deleteCard() {
   if (!openId) return;
@@ -641,19 +527,19 @@ async function deleteCard() {
     const info = await lek.deleteLector(openId, true);
     const co = [];
     if (info.work_rows) {
-      co.push("• odučené hodiny: " + fmtH(info.hours) + " h (" + info.work_rows + " " + lessonWordCz(info.work_rows) +
+      co.push("• odučené hodiny: " + fmtH(info.hours) + " h (" + info.work_rows + " " + plural(info.work_rows, "lekce", "lekce", "lekcí") +
         ") – zmizí i z podkladů k výplatám");
     }
     if (info.future_lessons) {
       const f = info.future_lessons;
-      co.push("• " + f + " " + plural(f, [
-        "lekce naplánovaná dopředu zůstane", "lekce naplánované dopředu zůstanou", "lekcí naplánovaných dopředu zůstane",
-      ]) + " v rozvrhu bez lektora – přidělte " + (f === 1 ? "ji" : "je") + " jinému");
+      co.push("• " + f + " " + plural(f,
+        "lekce naplánovaná dopředu zůstane", "lekce naplánované dopředu zůstanou", "lekcí naplánovaných dopředu zůstane"
+      ) + " v rozvrhu bez lektora – přidělte " + (f === 1 ? "ji" : "je") + " jinému");
     }
     if (info.shifts) {
-      co.push("• " + info.shifts + " " + plural(info.shifts, [
-        "zápis „lektor u stolu“ se smaže", "zápisy „lektor u stolu“ se smažou", "zápisů „lektor u stolu“ se smaže",
-      ]));
+      co.push("• " + info.shifts + " " + plural(info.shifts,
+        "zápis „lektor u stolu“ se smaže", "zápisy „lektor u stolu“ se smažou", "zápisů „lektor u stolu“ se smaže"
+      ));
     }
     const msg =
       "Smazat lektora " + (info.name || l.name) + " úplně?\n\n" +
@@ -665,7 +551,7 @@ async function deleteCard() {
     await lek.deleteLector(openId, false);
     closeCard();
     await refreshList();
-    ktToast("Lektor „" + (info.name || l.name) + "“ smazán." +
+    showToast("Lektor „" + (info.name || l.name) + "“ smazán." +
       (info.has_account ? " Přihlašovací účet má pořád – zrušte ho v rozvrhu v Účtech." : ""));
   } catch (e) {
     $("cardSaved").textContent = "Chyba: " + (e.message || e);
@@ -680,8 +566,7 @@ function exportCsv() {
     "Klíče", "Podepsal daně", "Hodinová sazba Kč/h",
     "Odučeno lekcí (" + monthLabel() + ")", "Odučeno hodin (" + monthLabel() + ")",
     "Stav", "Poznámka"];
-  const esc = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
-  const lines = [cols.map(esc).join(";")];
+  const lines = [cols];
   visibleRows().forEach((r) => {
     const h = hours[r.id];
     lines.push([
@@ -690,15 +575,9 @@ function exportCsv() {
       keyLabel(r.key_set), r.tax_signed ? "ano" : "ne", r.hourly_rate || "",
       (h && h.lessons) || 0, fmtH(h && h.hours),
       r.active === false ? "bývalý" : "aktivní", r.note,
-    ].map(esc).join(";"));
+    ]);
   });
-  // BOM kvůli češtině v Excelu
-  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "lektori-" + month.getFullYear() + "-" + String(month.getMonth() + 1).padStart(2, "0") + ".csv";
-  a.click();
-  URL.revokeObjectURL(a.href);
+  downloadCsv("lektori-" + monthFile() + ".csv", lines);
 }
 
 // ---------- Inicializace ----------
@@ -706,10 +585,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("backLink").href = "index.html" + location.search;
 
   // Tlačítko se váže hned – nepřihlášenému se schová, odhlašovat nemá co.
-  $("ktLogout").onclick = () => pageLogout($("ktLogout"), DbLek._c());
+  $("ktLogout").onclick = () => pageLogout($("ktLogout"));
 
   const badge = $("storeBadge");
-  const session = await DbLek.session();
+  const session = await currentUser();
   if (!session) {
     $("lockedBox").classList.remove("hidden");
     $("mainBox").classList.add("hidden");

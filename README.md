@@ -306,7 +306,7 @@ Plán automatizace (zatím nenaprogramováno):
 | `styles.css` | Vzhled |
 | `config.js` | Adresa a veřejný klíč Supabase + rozsah dne |
 | `app.js` | Logika rozvrhu (vykreslování, detail, ukládání, účty lektorů) |
-| `opakovani.js` | Výpočet termínů pravidelných (opakovaných) lekcí |
+| `spolecne.js` | Pomůcky společné všem stránkám (přihlášení, hlášky, export do CSV) |
 | `schema.sql` | Databázové schéma pro Supabase včetně RLS pravidel |
 | `migrace_*.sql` | Postupné úpravy schématu pro už běžící databázi |
 | `migrace_prava_ostry_provoz.sql` | Ostrá přístupová práva (RLS) pro starší databázi |

@@ -38,22 +38,8 @@ body.app-schedule #viewContainer {
   flex-direction: column;
 }
 /* Lišty si drží svou výšku, zmenšuje se jen plocha rozvrhu. */
-body.app-schedule > .topbar,
 body.app-schedule > .toolbar,
 body.app-schedule > .admin-hint { flex: 0 0 auto; }
-
-/* Topbar (název + legenda + kalendář) byl zrušen – bral skoro 180 px výšky,
-   které teď dostane samotná mřížka rozvrhu. Zbytky stylů drží ostatní
-   stránky, které topbar používají. */
-.topbar {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  padding: 8px 16px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
-}
 
 /* ---------- Horní pás: ovládání vlevo, kalendář vpravo ---------- */
 .topband {
@@ -172,7 +158,6 @@ body.app-schedule > .admin-hint { flex: 0 0 auto; }
 /* Skupina v detailu lekce u lektora – každý žák na vlastním řádku. */
 .group-student + .group-student { margin-top: 3px; }
 
-.role-switch { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
 /* Rozbalovací seznamy v liště (učebna, režim) – bez popisků, význam nese
    vybraná hodnota a tooltip. Popisky braly šířku, kterou potřebují tlačítka. */
 .toolbar select {
@@ -427,16 +412,6 @@ body.app-schedule .day-scroll { max-height: none; }
 .detail-body { padding: 16px 18px; overflow-y: auto; flex: 1; }
 .meta-row { display: flex; gap: 8px; margin-bottom: 8px; font-size: 13px; }
 .meta-row .k { width: 90px; color: var(--muted); flex: 0 0 auto; }
-.badge {
-  display: inline-block;
-  font-size: 11px;
-  padding: 1px 7px;
-  border-radius: 10px;
-  background: #eef;
-  color: #335;
-}
-.badge.online { background: #e3f0ff; color: #1565c0; }
-.badge.offline { background: #eee; color: #555; }
 
 .field { margin-top: 16px; }
 .field label { display: block; font-weight: 600; margin-bottom: 5px; font-size: 13px; }
@@ -563,19 +538,9 @@ body.app-schedule .day-scroll { max-height: none; }
 }
 .login-card .save:hover { background: #244e9e; }
 .login-error { color: #c62828; font-size: 13px; min-height: 16px; margin-top: 6px; }
-.login-hint {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #555;
-  background: #f3f6fc;
-  border: 1px solid #dce6f5;
-  border-radius: 6px;
-  padding: 8px 10px;
-}
 
 /* ---------- User badge / hint / toast ---------- */
 .user-badge { font-size: 12px; color: var(--text); font-weight: 600; }
-.user-badge .role { color: var(--muted); font-weight: 400; }
 /* Nápověda je sbalená (<details>), rozbalí se jen když ji někdo chce. */
 .admin-hint {
   background: #eef3fb;

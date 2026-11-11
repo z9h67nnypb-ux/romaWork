@@ -10,7 +10,7 @@
        Počítače se to netýká, prohlížeč na desktopu značku ignoruje. -->
   <meta name="viewport" content="width=1200" />
   <title>Diagnostika – PoraDys</title>
-  <link rel="stylesheet" href="styles.css?v=59" />
+  <link rel="stylesheet" href="styles.css?v=60" />
   <style>
     /* Styly jen pro stránku diagnostiky */
     .diag-wrap { max-width: 1180px; margin: 0 auto; padding: 14px 20px 60px; }
@@ -307,7 +307,6 @@
       body { background: #fff; }
       .diag-wrap, .diag-modal { display: none !important; }
       #printArea { display: block !important; }
-      #printArea .page-break { break-before: page; page-break-before: always; }
       #printArea .avoid-break { break-inside: avoid; page-break-inside: avoid; }
       /* Na A4 na šířku dvou sloupců není místo – oba bloky pod sebe. */
       #printArea .res-grid { grid-template-columns: 1fr; }
@@ -345,8 +344,7 @@
          musí chovat jako úzké okno – všechno pod sebe. Pravidlo pro úzká
          okna (max-width: 700px) se sem nedostane, protože stránka hlásí
          šířku 1200 px. */
-      .res-grid,
-      .card-main { grid-template-columns: 1fr; }
+      .res-grid { grid-template-columns: 1fr; }
 
       /* Dialog je vycentrovaný přes celou obrazovku; po zvětšení by pevných
          460 px přeteklo displej. */
@@ -567,7 +565,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ?v=N musí být stejné ve všech třech stránkách – viz index.html -->
-  <script src="config.js?v=59"></script>
-  <script src="diagnostika.js?v=59"></script>
+  <script src="config.js?v=60"></script>
+  <script src="spolecne.js?v=60"></script>
+  <script src="diagnostika.js?v=60"></script>
 </body>
 </html>
